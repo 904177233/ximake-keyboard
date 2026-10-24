@@ -16,7 +16,7 @@ import SwiftUI
 final class PlaygroundEngine: ObservableObject {
 
     /// 结果卡状态；nil 表示还没有发起过请求。
-    @Published private(set) var state: AIResultCard.State?
+    @Published private(set) var state: AIResultCard.ResultState?
 
     /// 是否正在执行（流式或绘制中）。
     @Published private(set) var isRunning = false

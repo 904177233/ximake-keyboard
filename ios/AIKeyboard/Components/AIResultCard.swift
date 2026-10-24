@@ -124,7 +124,11 @@ struct ImageResultViewData: Equatable {
 struct AIResultCard: View {
 
     /// 结果状态。
-    enum State: Equatable {
+    ///
+    /// 命名说明：**不能叫 `State`**。嵌套在 `View` 里的 `enum State` 会遮蔽
+    /// SwiftUI 的 `@State` 属性包装器，导致 `@State private var ...` 报
+    /// `enum 'State' cannot be used as an attribute`（CI 实测）。
+    enum ResultState: Equatable {
         /// 流式输出中。
         case streaming(String)
         /// 已完成。
@@ -138,7 +142,7 @@ struct AIResultCard: View {
     }
 
     var feature: AIFeature
-    var state: State
+    var state: ResultState
     var providerName: String
     var canRetry: Bool
     var onInsert: (() -> Void)?
@@ -153,7 +157,7 @@ struct AIResultCard: View {
 
     init(
         feature: AIFeature,
-        state: State,
+        state: ResultState,
         providerName: String = "",
         canRetry: Bool = true,
         onInsert: (() -> Void)? = nil,

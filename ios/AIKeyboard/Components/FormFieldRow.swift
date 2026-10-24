@@ -30,7 +30,7 @@ struct FormFieldRow<Content: View>: View {
         title: String,
         isRequired: Bool = false,
         hint: String? = nil,
-        @ViewBuilder content: () -> Content
+        @ViewBuilder content: @escaping () -> Content
     ) {
         self.title = title
         self.isRequired = isRequired

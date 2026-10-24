@@ -296,7 +296,7 @@ private struct PrimaryButtonPressStyle: ButtonStyle {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .opacity(configuration.isPressed ? 0.85 : 1)
-            .animation(Theme.Motion.fast, value: configuration.isPressed)
+            .animation(Theme.Motion.fastAnimation, value: configuration.isPressed)
     }
 }
 

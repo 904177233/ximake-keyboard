@@ -233,7 +233,7 @@ private struct ChipPressStyle: ButtonStyle {
         configuration.label
             .scaleEffect(configuration.isPressed && isActive ? 0.96 : 1)
             .brightness(configuration.isPressed && isActive ? -0.06 : 0)
-            .animation(Theme.Motion.fast, value: configuration.isPressed)
+            .animation(Theme.Motion.fastAnimation, value: configuration.isPressed)
     }
 }
 

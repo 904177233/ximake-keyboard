@@ -68,7 +68,7 @@ extension PlaygroundView {
     // MARK: - 结果
 
     /// 结果卡片（流式 / 完成 / 失败 / 绘制中 / 出图五种状态）。
-    func resultSection(state: AIResultCard.State) -> some View {
+    func resultSection(state: AIResultCard.ResultState) -> some View {
         AIResultCard(
             feature: feature,
             state: state,
@@ -193,7 +193,7 @@ extension PlaygroundView {
     }
 
     /// 复制结果到剪贴板。
-    func copyResult(_ state: AIResultCard.State) {
+    func copyResult(_ state: AIResultCard.ResultState) {
         switch state {
         case .done(let text), .streaming(let text):
             guard !text.isEmpty else { return }
@@ -220,7 +220,7 @@ extension PlaygroundView {
     }
 
     /// 保存为快捷短语。
-    func saveAsPhrase(_ state: AIResultCard.State) {
+    func saveAsPhrase(_ state: AIResultCard.ResultState) {
         guard case .done(let text) = state, !text.isEmpty else { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         PhraseStore.add(text: trimmed)

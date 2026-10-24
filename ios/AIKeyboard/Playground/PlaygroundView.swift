@@ -182,7 +182,7 @@ struct PlaygroundView: View {
     var featureChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: AppMetrics.blockGap) {
-                ForEach(AIFeature.allCases) { item in
+                ForEach(AIFeature.allCases, id: \.rawValue) { item in
                     PillChip(
                         item.title,
                         systemImage: FeatureGlyph.symbol(for: item),
