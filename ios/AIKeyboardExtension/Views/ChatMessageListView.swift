@@ -23,6 +23,12 @@ struct ChatMessageListView: View {
     /// 是否展示空态（只有开场白且空闲）。
     let isEmptyState: Bool
 
+    /// 消息区高度（竖屏 180 / 横屏 108，design/04 §3.11）。
+    ///
+    /// 由 `ChatPanelView` 按 `isLandscape` 传入：横屏键盘总高只有 340，
+    /// 若这里仍硬写 180，四段分区会算成 438 而溢出。
+    var messageHeight: CGFloat = KMLayout.aiChatMessageHeight
+
     /// 底部滚动锚点 ID。
     private let bottomAnchor: String = "chat.bottom.anchor"
 
@@ -58,7 +64,7 @@ struct ChatMessageListView: View {
                 proxy.scrollTo(bottomAnchor, anchor: .bottom)
             }
         }
-        .frame(height: KMLayout.aiChatMessageHeight)
+        .frame(height: messageHeight)
         .background(Theme.keyboardBackground)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text("对话消息"))

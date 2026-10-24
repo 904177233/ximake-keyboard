@@ -171,6 +171,17 @@ enum KMLayout {
     /// 180 —— 对话消息区高度（竖屏）。
     static let aiChatMessageHeight: CGFloat = 180  // TOKEN: sizing.aiChatMessageHeight
 
+    /// 108 —— 对话消息区高度（横屏，规范 §3.11「消息区 108 只能显示 1–2 条，属可接受降级」）。
+    static let aiChatLandscapeMessageHeight: CGFloat = 108  // TOKEN: design §3.11
+
+    /// 156 —— 横屏键区总高 = 4 × 34.5 + 3 × 6（规范 §3.11）。
+    ///
+    /// 竖屏 `keyRowsHeight` 是 174 = 4 × 39 + 3 × 6；横屏行高降到 34.5，
+    /// 若不换这个值，横屏对话页的 340 会被四段分区撑爆（40+180+44+174 = 438）。
+    static let landscapeKeyRowsHeight: CGFloat =
+        landscapeRowHeight * CGFloat(Theme.Sizing.keyboardRowCount)
+        + keyGap * CGFloat(Theme.Sizing.keyboardRowCount - 1)
+
     /// 44 —— 对话输入行高度（= 候选栏高度，组合态原地换候选行不跳高）。
     static let aiChatInputHeight: CGFloat = Theme.Sizing.candidateBarHeight
 

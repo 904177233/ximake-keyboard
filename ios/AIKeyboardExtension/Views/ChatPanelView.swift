@@ -29,7 +29,11 @@ struct ChatPanelView: View {
     var body: some View {
         VStack(spacing: 0) {
             topBar
-            ChatMessageListView(model: model, isEmptyState: showsEmptyState)
+            ChatMessageListView(
+                model: model,
+                isEmptyState: showsEmptyState,
+                messageHeight: messageAreaHeight
+            )
             inputRow
             keyArea
         }
@@ -56,6 +60,26 @@ struct ChatPanelView: View {
         model.chatMessages.count <= 1 && model.chatPhase == .idle
     }
 
+    // MARK: - 横竖屏尺寸
+
+    /// 标题条高度：竖屏 40、横屏 32（design/04 §3.11）。
+    private var topBarHeight: CGFloat {
+        model.isLandscape ? KMLayout.aiChatLandscapeTopBarHeight : KMLayout.aiChatTopBarHeight
+    }
+
+    /// 键区高度：竖屏 174（4 × 39 + 3 × 6）、横屏 156（4 × 34.5 + 3 × 6）。
+    ///
+    /// 这两步都必须跟着 `isLandscape` 走 —— `keyboardHeight(.aiChat)` 横屏返回
+    /// 200 + 140 = 340，若仍用竖屏的 40 / 174，四段分区会算成 438，超出 98pt。
+    private var keyAreaHeight: CGFloat {
+        model.isLandscape ? KMLayout.landscapeKeyRowsHeight : KMLayout.keyRowsHeight
+    }
+
+    /// 消息区高度：竖屏 180、横屏 108（design/04 §3.11）。横屏只显示 1–2 条，属可接受降级。
+    private var messageAreaHeight: CGFloat {
+        model.isLandscape ? KMLayout.aiChatLandscapeMessageHeight : KMLayout.aiChatMessageHeight
+    }
+
     // MARK: - 标题条（40pt）
 
     /// 标题条：左关闭 / 中标题 + 状态点 / 右新对话。
@@ -63,7 +87,7 @@ struct ChatPanelView: View {
         HStack(spacing: 0) {
             Button(action: { model.closeAIChat() }) {
                 KMIconGlyph(symbol: "xmark", fallback: "✕", size: 15, weight: .semibold, tint: Theme.textSecondary)
-                    .frame(width: 44, height: KMLayout.aiChatTopBarHeight)
+                    .frame(width: 44, height: topBarHeight)
                     .contentShape(Rectangle())
             }
             .buttonStyle(KMPressableStyle(scale: 0.92, duration: Theme.Motion.fast))
@@ -89,13 +113,13 @@ struct ChatPanelView: View {
                     weight: .regular,
                     tint: Theme.textSecondary
                 )
-                .frame(width: 44, height: KMLayout.aiChatTopBarHeight)
+                .frame(width: 44, height: topBarHeight)
                 .contentShape(Rectangle())
             }
             .buttonStyle(KMPressableStyle(scale: 0.92, duration: Theme.Motion.fast))
             .accessibilityLabel(Text("开始新对话"))
         }
-        .frame(height: KMLayout.aiChatTopBarHeight)
+        .frame(height: topBarHeight)
         .background(Theme.keyboardBackground)
         .overlay(alignment: .bottom) {
             Rectangle()
@@ -256,6 +280,11 @@ struct ChatPanelView: View {
     // MARK: - 键区（174pt）
 
     /// 标准键区：与字母页完全同一套（design/04 §3.9），onTap 统一走 `model.tap(_:)`。
+    ///
+    /// 高度必须正好是 `keyRowsHeight`（竖屏 174 / 横屏 156）。这两个值本身已经含了
+    /// 4 行行高与 3 条行间距，而 `KeyRowsView` 内部也固定为该值，外层再加就会把四段
+    /// 分区总和顶爆（竖屏 438 → 456、横屏 340 → 438），导致最底一排键被裁掉。
+    /// 四段分区：40/32（标题条）+ 180/108（消息区）+ 44（输入行）+ 174/156（键区）。
     private var keyArea: some View {
         KeyRowsView(
             layoutMode: model.layoutMode,
@@ -263,6 +292,6 @@ struct ChatPanelView: View {
             isLandscape: model.isLandscape,
             onTap: { key in model.tap(key) }
         )
-        .frame(height: KMLayout.keyRowsHeight + KMLayout.keyGap * 3)
+        .frame(height: keyAreaHeight)
     }
 }
