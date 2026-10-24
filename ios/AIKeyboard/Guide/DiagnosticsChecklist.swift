@@ -134,14 +134,24 @@ extension DiagnosticsView {
             )
         )
 
-        // 6. 本地词库
+        // 6. 本地词库（含「词库来源」，真机排查首选依据）
         if let info = appState.dictionaryInfo {
+            // 词库没打进包时 `PinyinDictionary` 会静默回退到 50 条内置词表，
+            // 必须显式报 warning，否则用户只看到"能打字但没中文候选"。
+            let dictionaryState: CheckState = info.isUsingBuiltin ? .warning : .ok
+            var dictionaryDetail = "词库来源：\(info.sourceDescription)\n"
+            dictionaryDetail += "路径：\(info.relativePath)\n"
+            dictionaryDetail += "词库 v\(info.version) · \(info.wordCount) 条 · 加载 "
+            dictionaryDetail += String(format: "%.1f", info.loadDurationMilliseconds) + "ms"
+            if info.isUsingBuiltin {
+                dictionaryDetail += "\n词库没有打进当前安装包，中文候选会非常少。请在电脑上重新安装完整安装包。"
+            }
             items.append(
                 CheckItem(
                     id: "dictionary",
                     title: "本地词库",
-                    state: .ok,
-                    detail: "词库 v\(info.version) · \(info.formattedWordCount) 词条，全部在本机。",
+                    state: dictionaryState,
+                    detail: dictionaryDetail,
                     actionTitle: nil,
                     action: nil
                 )
@@ -152,7 +162,7 @@ extension DiagnosticsView {
                     id: "dictionary",
                     title: "本地词库",
                     state: .warning,
-                    detail: "没有读到内置词库，拼音输入可能不可用。",
+                    detail: "没有读到内置词库，拼音输入可能不可用。请在电脑上重新安装完整安装包。",
                     actionTitle: nil,
                     action: nil
                 )

@@ -87,14 +87,18 @@ targets:
       # ② Shared 源码：同时进 App 与 Extension 两个 target（docs/02 §2 约定）
       - path: Shared
         excludes:
-          - "Resources/**"          # 资源单独作为 folder reference 加，避免重复
+          - "dict/**"               # 词库单独作为 folder reference 加，避免重复
       # ③ 图片资源 / 颜色资源：只进 App
       - path: Resources/Assets.xcassets
         buildPhase: resources
       # ④ 词库等运行时资源：作为 **folder reference（蓝色文件夹）** 加入，
       #    这样 Bundle.main.url(forResource:withExtension:subdirectory:) 能直接寻址，
       #    且新增词库文件不需要改工程文件。
-      - path: Shared/Resources
+      #    ⚠️ 目录名必须是 `Shared/dict`，**绝不能是 `Shared/Resources`**：folder reference
+      #    会把文件夹名原样复制到 bundle 根，而 iOS 27 的 installd / IXPlaceholder 拒绝
+      #    app bundle 根目录下存在名为 Resources 的目录（真机实测：空目录也会导致安装失败，
+      #    报 IXErrorDomain Code=13 Missing bundle ID）。
+      - path: Shared/dict
         type: folder
         buildPhase: resources
     dependencies:
@@ -142,9 +146,9 @@ targets:
       # ② Shared 源码：与 App 共用（同一份代码编进两个 target，无需 framework）
       - path: Shared
         excludes:
-          - "Resources/**"
+          - "dict/**"
       # ③ 词库资源：扩展也要能读到（完全访问开启后联网 + 本地词库）
-      - path: Shared/Resources
+      - path: Shared/dict
         type: folder
         buildPhase: resources
       # 注意：**没有** Resources/Assets.xcassets —— 资源目录只进 App，

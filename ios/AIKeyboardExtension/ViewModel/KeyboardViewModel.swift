@@ -111,6 +111,43 @@ public final class KeyboardViewModel: ObservableObject {
     /// 面板是否展示「仅取最近 200 字作为上下文」小字。
     @Published public internal(set) var showsContextTruncationHint: Bool = false
 
+    // MARK: - AI 对话（全场模式，design/04 §3.12 状态机）
+
+    /// 对话面板是否展开（等价于 `page == .aiChat`，视图层单独订阅以减少组合刷新）。
+    @Published public internal(set) var isChatOpen: Bool = false
+
+    /// 对话输入行草稿（自绘输入，不走系统键盘）。
+    @Published public internal(set) var chatDraft: String = ""
+
+    /// 对话消息列表（跨「关闭→再次进入」保留）。
+    @Published public internal(set) var chatMessages: [KMChatMessage] = []
+
+    /// 当前是否有对话请求在飞（thinking / streaming / imageGenerating 统一为 true）。
+    @Published public internal(set) var chatIsBusy: Bool = false
+
+    /// 对话阶段（用于标题条状态点、发送按钮形态）。
+    @Published public internal(set) var chatPhase: KMChatPhase = .idle
+
+    /// 对话本轮已生成文本（流式追加用；消息列表里的最后一条同步更新）。
+    @Published public internal(set) var chatStreamingText: String = ""
+
+    /// 对话错误详情（失败气泡用；成功后置 nil）。
+    @Published public internal(set) var chatErrorDetail: KMAIErrorDetail?
+
+    /// 生图进度（对话内的生图消息）。
+    @Published public internal(set) var chatImageProgress: KMImageProgress?
+
+    /// 对话生图缩略图（≤512pt PNG）。
+    @Published public internal(set) var chatImageThumbnailData: Data?
+
+    // MARK: - 智能联想（design/04 §4）
+
+    /// 联想胶囊文案（≤3 条、每条 ≤12 字）。
+    @Published public internal(set) var suggestionChips: [String] = []
+
+    /// 联想请求是否在飞（仅内部用于防重入，不驱动 UI 占位）。
+    @Published public internal(set) var suggestIsLoading: Bool = false
+
     // MARK: - 数据
 
     /// 配置快照（Provider / 语气 / 短语开关等）。
@@ -170,6 +207,35 @@ public final class KeyboardViewModel: ObservableObject {
 
     /// 生图原图（仅本次会话内保留，切页 / 消失时立即清空，不入 `@Published` 以免大对象触发视图重算）。
     var lastImageOriginalData: Data?
+
+    // MARK: - 对话 / 联想内部状态（不参与视图刷新）
+
+    /// 对话流式请求任务。
+    var chatTask: Task<Void, Never>?
+
+    /// 对话生图进度定时任务。
+    var chatImageProgressTask: Task<Void, Never>?
+
+    /// 对话生图原图（≤1 张，上屏前若需原图再取；不入 `@Published`）。
+    var chatImageOriginalData: Data?
+
+    /// 联想防抖任务。
+    var suggestDebounceTask: Task<Void, Never>?
+
+    /// 联想请求任务（新请求前先取消）。
+    var suggestTask: Task<Void, Never>?
+
+    /// 联想请求序号（用于丢弃过期响应）。
+    var suggestRequestID: UUID = UUID()
+
+    /// 最近一次发起联想请求的时间（节流用）。
+    var suggestLastRequestAt: Date = .distantPast
+
+    /// 联想解析失败后的冷却截止时间（失败后 5s 内不再重试）。
+    var suggestCooldownUntil: Date = .distantPast
+
+    /// 本地联想索引（ime-core 的 `LocalSuggestionIndex`，与宿主共享学习数据）。
+    let localSuggestions: LocalSuggestionIndex = LocalSuggestionIndex(store: .shared)
 
     /// 面板是否处于「编辑 AI 结果后插入」模式。
     @Published public internal(set) var isEditingAIResult: Bool = false
@@ -253,6 +319,29 @@ public final class KeyboardViewModel: ObservableObject {
     /// 副作用（写输入框 / 切页 / 调 AI）全部在此集中处理。
     /// - Parameter key: 按键动作。
     public func tap(_ key: KeyboardKey) {
+        // AI 对话页：字符 / 退格 / 空格 / 回车写入 `chatDraft`，不碰宿主输入框（design/04 §3.8–§3.9）。
+        if page == .aiChat {
+            switch key {
+            case let .character(text):
+                appendChatDraft(text)
+                return
+            case .backspace:
+                deleteChatDraftCharacter()
+                return
+            case .space:
+                appendChatDraft(" ")
+                return
+            case .newline:
+                sendChatMessage()
+                return
+            case .shift:
+                handleShift()
+                return
+            default:
+                break
+            }
+        }
+
         // AI 面板编辑态：字符、退格、空格优先写入面板缓冲。
         if page == .aiPanel, isPanelEditing {
             switch key {
@@ -329,6 +418,8 @@ public final class KeyboardViewModel: ObservableObject {
         clearComposing()
         refreshPredictions()
         KMHaptics.candidate()
+        // 上屏后启动 AI 联想防抖（design/04 §4.4 触发时机 A）。
+        scheduleSuggestions()
     }
 
     /// 候选栏长按（上屏并保持候选栏，供后续继续挑词）。
@@ -367,6 +458,7 @@ public final class KeyboardViewModel: ObservableObject {
     /// - Parameter target: 目标页面。
     public func go(to target: Page) {
         guard page != target else { return }
+        let leavingChat = page == .aiChat
         overlay = .none
         let wasExpanded = page.isExpanded
         page = target
@@ -377,6 +469,16 @@ public final class KeyboardViewModel: ObservableObject {
             lastAIErrorDetail = nil
             imageThumbnailData = nil
             replySuggestions = []
+        }
+        if leavingChat {
+            // 离开对话：停掉在飞请求与定时任务，但**保留 chatMessages**（设计 §3.1）。
+            suspendChatTasks()
+            isChatOpen = false
+        }
+        if target == .aiChat {
+            isChatOpen = true
+            refreshAvailability()
+            prepareChatSessionIfNeeded()
         }
         if target == .aiPanel {
             reloadContextPreview()
@@ -394,6 +496,9 @@ public final class KeyboardViewModel: ObservableObject {
         }
         if wasExpanded != target.isExpanded || target.isExpanded {
             onHeightChangeNeeded?()
+        }
+        if target != .letters && target != .numbers {
+            clearSuggestions()
         }
     }
 
@@ -459,115 +564,5 @@ public final class KeyboardViewModel: ObservableObject {
     /// 关闭 Toast。
     public func clearToast() {
         toastMessage = nil
-    }
-
-    // MARK: - 私有实现
-
-    /// 字符按键：英文直通；中文走拼音组字。
-    private func handleCharacter(_ text: String) {
-        guard !text.isEmpty else { return }
-        if shiftState == .on {
-            shiftState = .off
-        }
-        // 字母 → 进入拼音组字；数字 / 符号 / 表情 → 直接上屏。
-        if text.count == 1, let scalar = text.unicodeScalars.first,
-           CharacterSet.lowercaseLetters.contains(scalar) || CharacterSet.uppercaseLetters.contains(scalar) {
-            composing += text.lowercased()
-            updateMarkedText()
-            refreshCandidates()
-            return
-        }
-        commitLiteral(text)
-    }
-
-    /// 退格：优先删组字，其次删宿主文本。
-    private func handleBackspace() {
-        if !composing.isEmpty {
-            composing.removeLast()
-            if composing.isEmpty {
-                clearComposing()
-            } else {
-                updateMarkedText()
-                refreshCandidates()
-            }
-            return
-        }
-        proxy?.deleteBackward()
-    }
-
-    /// Shift 循环：off → on → locked → off。
-    private func handleShift() {
-        switch shiftState {
-        case .off:
-            shiftState = .on
-        case .on:
-            shiftState = .locked
-        case .locked:
-            shiftState = .off
-        }
-    }
-
-    /// 上屏固定文本（数字 / 符号 / 空格 / 换行）。
-    private func commitLiteral(_ text: String) {
-        if !composing.isEmpty {
-            clearComposing()
-        }
-        insertText(text)
-        lastCommittedText = text
-    }
-
-    /// 同步拼音组字到宿主输入框（marked text）。
-    private func updateMarkedText() {
-        let range = NSRange(location: (composing as NSString).length, length: 0)
-        proxy?.setMarkedText(composing, selectedRange: range)
-    }
-
-    /// 重新计算候选列表。
-    private func refreshCandidates() {
-        guard !composing.isEmpty else {
-            candidates = []
-            highlightedCandidateIndex = 0
-            candidatePageIndex = 0
-            return
-        }
-        let limit = Self.candidatePageSize * 3
-        candidates = engine.candidates(for: composing, limit: limit)
-        highlightedCandidateIndex = 0
-        candidatePageIndex = 0
-    }
-
-    /// 上屏后刷新联想候选。
-    private func refreshPredictions() {
-        let predictions = engine.predictNext(after: lastCommittedText, limit: 6)
-        guard !predictions.isEmpty else {
-            candidates = []
-            candidatePageIndex = 0
-            return
-        }
-        candidates = predictions
-        highlightedCandidateIndex = 0
-        candidatePageIndex = 0
-    }
-
-    /// 刷新短语列表。
-    func refreshPhrases() {
-        phrases = engine.phrases
-    }
-
-    /// 刷新剪贴板历史。
-    func refreshClipboard() {
-        clipboardItems = snapshot.enableClipboardHistory ? engine.clipboardItems : []
-    }
-
-    // MARK: - 工具
-
-    /// 取字符串末尾若干字符。
-    /// - Parameters:
-    ///   - text: 原文本。
-    ///   - limit: 最多保留的字符数。
-    /// - Returns: 截断后的尾部文本。
-    static func tail(of text: String, limit: Int) -> String {
-        guard text.count > limit else { return text }
-        return String(text.suffix(limit))
     }
 }

@@ -99,7 +99,7 @@
 │   │   ├── Prompts/               ← Prompt 模板与内置库
 │   │   ├── IMECore/              ← 拼音引擎、词库、用户学习
 │   │   ├── Theme/                ← Theme.swift（设计令牌的代码实现）
-│   │   └── Resources/dict/       ← base_dict.tsv、phrases.tsv、dict_meta.json
+│   │   └── dict/                 ← base_dict.tsv、phrases.tsv、dict_meta.json（bundle 根 `dict/`；禁止叫 Resources）
 │   │
 │   └── Resources/Assets.xcassets ← App 图标与强调色
 │

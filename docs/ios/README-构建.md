@@ -62,7 +62,7 @@ ios/
 ├── project.yml                      ← 人类可读的工程声明（参考文件，不参与构建）
 ├── Config/                          ← xcconfig / Info.plist / entitlements（**改这里，不改进 pbxproj**）
 ├── Resources/Assets.xcassets/       ← AppIcon + AccentColor（脚本生成）
-├── Shared/                          ← 两个 target 共用的 Swift 源码 + Resources/dict 词库
+├── Shared/                          ← 两个 target 共用的 Swift 源码 + dict/ 词库
 ├── AIKeyboard/                      ← 宿主 App（SwiftUI）
 └── AIKeyboardExtension/             ← 键盘扩展（KeyboardViewController）
 ```
@@ -71,8 +71,8 @@ ios/
 
 | target | 产品 | Bundle ID 占位 | 源码来源 | 资源 |
 |---|---|---|---|---|
-| `AIKeyboard` | `AIKeyboard.app`（`com.apple.product-type.application`） | `com.example.moyu` | `ios/AIKeyboard/**` + `ios/Shared/**` | `Resources/Assets.xcassets`（AppIcon）+ `Shared/Resources`（词库，folder reference） |
-| `AIKeyboardExtension` | `AIKeyboardExtension.appex`（`com.apple.product-type.app-extension`） | `com.example.moyu.keyboard` | `ios/AIKeyboardExtension/**` + `ios/Shared/**` | `Shared/Resources`（folder reference） |
+| `AIKeyboard` | `AIKeyboard.app`（`com.apple.product-type.application`） | `com.example.moyu` | `ios/AIKeyboard/**` + `ios/Shared/**` | `Resources/Assets.xcassets`（AppIcon）+ `Shared/dict`（词库，folder reference） |
+| `AIKeyboardExtension` | `AIKeyboardExtension.appex`（`com.apple.product-type.app-extension`） | `com.example.moyu.keyboard` | `ios/AIKeyboardExtension/**` + `ios/Shared/**` | `Shared/dict`（folder reference） |
 
 App 通过 **"Embed Foundation Extensions"** Copy Files 阶段（`dstSubfolderSpec = 13`、`dstPath = ""`）把 `.appex` 嵌进 App 包内的 `PlugIns` 目录，并依赖（`PBXTargetDependency`）Extension target。**这个阶段丢了，键盘装上去也不会出现在「设置 › 通用 › 键盘」里** —— 这是最常见的翻车点。
 
@@ -116,11 +116,15 @@ AIKeyboard
 ├── AIKeyboard            ← 宿主 App：App / Main / Settings / Playground / Guide / Components / Support
 ├── Config                ← xcconfig / plist / entitlements
 ├── Resources             ← Assets.xcassets
-├── Shared                ← IMECore / Models / Networking / Prompts / Storage / Theme / Resources
+├── Shared                ← IMECore / Models / Networking / Prompts / Storage / Theme / dict
 └── Products
     ├── AIKeyboard.app
     └── AIKeyboardExtension.appex
 ```
+
+> 运行时 bundle 结构（**重新构建**出的 IPA 解包后）：`Payload/AIKeyboard.app/dict/{base_dict.tsv,phrases.tsv,dict_meta.json}` 与 `Payload/AIKeyboard.app/PlugIns/AIKeyboardExtension.appex/dict/{...}`。
+> **词库目录在 bundle 根下必须叫 `dict`，不能叫 `Resources`**（见 §5.2 的说明：iOS 27 installd 会拒绝根目录下的 `Resources`）。
+> ⚠️ 如果你手上的 `dist/AIKeyboard-unsigned.ipa` 是 2025-10 之前构建的，它还是旧布局（bundle 根下有 `Payload/AIKeyboard.app/Resources/dict/`，装到 iOS 27 上会失败），必须重新跑发布流程/CI 得到新包。
 
 顶部的 scheme 选择器应当有 **AIKeyboard** 与 **AIKeyboardExtension** 两项（这两个 scheme 是 shared 的，已提交在 `xcshareddata/xcschemes/` 里，所以谁打开都能看到）。
 
@@ -321,7 +325,7 @@ python scripts/watch_gen.py --dry-run --interval 5
 > 目录还没落盘时，`validate_project.py` 和生成器都会给 **WARNING**（不是错误）而不是崩溃，例如：
 > `EXT-SOURCE-MISSING ios/AIKeyboardExtension/ 下还没有任何 .swift`、
 > `SOURCES-EMPTY AIKeyboardExtension 的 Sources 阶段为空 → 该 target 无法编译`、
-> `APP-RESOURCES-SHARED App 的 Resources 阶段没有 Shared/Resources`（磁盘上该目录还不存在时才是 WARNING；
+> `APP-RESOURCES-SHARED App 的 Resources 阶段没有 Shared/dict`（磁盘上该目录还不存在时才是 WARNING；
 > 目录存在却没被工程引用则仍是 P0 错误）。
 > 只有「目录确实存在、工程却没引用」才是真正的结构缺陷。
 
@@ -369,10 +373,16 @@ python scripts/watch_gen.py --dry-run --interval 5
 | `ios/AIKeyboardExtension/`（整个文件夹） | 只勾 **AIKeyboardExtension** | 同上 |
 | `ios/Shared/`（整个文件夹） | **两个都勾**（AIKeyboard + AIKeyboardExtension） | 同上 |
 
-> 💡 `ios/Shared/` 里同时有 `.swift` 和 `Resources/dict/*.tsv`。
-> 拖进去后，选中 `Shared/Resources` 这个**文件夹**，在右侧 File Inspector 里把 **Type** 改成
+> 💡 `ios/Shared/` 里同时有 `.swift` 和 `dict/*.tsv`。
+> 拖进去后，选中 `Shared/dict` 这个**文件夹**，在右侧 File Inspector 里把 **Type** 改成
 > **Folder**（蓝色文件夹图标）→ 这样它会作为 folder reference 整个拷进两个 target 的 Bundle，
 > `Bundle.main.url(forResource: "base_dict", withExtension: "tsv", subdirectory: "dict")` 才能找到词库。
+>
+> ⚠️ **词库文件夹必须叫 `dict`，绝对不能叫 `Resources`。** folder reference 会把文件夹名
+> 原样复制到 bundle 根目录：叫 `dict` 就得到 bundle 根下的 `dict/`（正常）；叫 `Resources`
+> 就会得到 bundle 根下的 `Resources/`，而 **iOS 27 的 installd / IXPlaceholder 会拒绝
+> app bundle 根目录下存在名为 `Resources` 的目录**——真机实测即使该目录是空的也会让安装失败，
+> 报 `IXErrorDomain Code=13 Missing bundle ID`，很多人会误判成签名或证书问题。
 
 再拖入资源与配置文件：
 

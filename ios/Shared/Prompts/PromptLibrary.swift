@@ -3,14 +3,18 @@
 //  ios/Shared/Prompts
 //
 //  模块职责：提示词模板的统一入口——内置模板查询、自定义模板的读写（持久化到 SharedStore）、
-//            模板 → `[ChatMessage]` 的渲染，以及生图提示词增强请求的构造。
+//            模板 → `[ChatMessage]` 的渲染，以及生图提示词增强 / AI 对话 / 智能联想
+//            三类专用请求的构造与联想结果解析。
 //  依赖：Foundation、`Models`（AIFeature / ChatMessage / ChatRequest）、`Storage`（SharedStore）。
-//  使用方：键盘扩展 AI 面板、宿主 App 的 PlaygroundView / PromptLibraryView、
+//  使用方：键盘扩展 AI 面板、键盘 AI 对话面板（`chatRequest(...)`）、
+//          候选栏智能联想（`suggestionRequest(...)` / `parseSuggestionCandidates(_:)`）、
+//          宿主 App 的 PlaygroundView / PromptLibraryView、
 //          `ios/AIKeyboard/Support/SharedBridge.swift`（PromptCatalog）。
 //
 //  存储键：`moyu.prompts.custom.v1`（JSON 数组，见 `SharedStore`）。
 //  渲染约定：见 `PromptTemplate` 的文档；「回复建议」输出格式为恰好 N 条、每条一行、
 //            行首 `1.` `2.` `3.`（N 由 `{{reply_count}}` 注入，默认 3）。
+//            「智能联想」输出格式为 JSON 数组（design/04 §4.4），解析失败静默为空。
 //
 
 import Foundation
@@ -38,7 +42,7 @@ public enum PromptLibrary {
 
     // MARK: - 内置模板
 
-    /// 全部内置模板（14 条，见 `BuiltInPrompts.all`）。
+    /// 全部内置模板（16 条，见 `BuiltInPrompts.all`）。
     public static var builtIn: [PromptTemplate] {
         BuiltInPrompts.all
     }
@@ -287,6 +291,216 @@ public enum PromptLibrary {
             stream: true
         )
         return request
+    }
+
+    // MARK: - AI 对话（design/04 §3）
+
+    /// 对话单次回答的 token 上限（中文约 300~400 字，够键盘内对话用）。
+    public static let chatMaxTokens: Int = 512
+
+    /// 对话的系统提示词（`builtin.chat.assistant` 渲染后的成品）。
+    ///
+    /// 给「不想用 `chatRequest`、要自己拼多轮」的调用方取现成人设用；
+    /// 优先推荐直接用 `chatRequest(text:context:history:)`。
+    public static var chatSystemPrompt: String {
+        BuiltInPrompts.chatAssistant.renderSystemPrompt()
+    }
+
+    /// 构造 AI 对话的一轮请求（单轮问答，多轮历史由调用方拼进 `history`）。
+    ///
+    /// 为什么单开这个方法而不是复用 `render(...)`：
+    /// 1. 对话需要**多轮历史**（`[user, assistant, …, user]`），`render` 只产出 `[system, user]`；
+    /// 2. 对话的 `maxTokens` 要比改写类大（默认 512），而 `PromptTemplate` 没有 `maxTokens` 字段
+    ///    （docs/02 §4.4 的字段是冻结契约，不能加），只能在请求构造处注入；
+    /// 3. 对话不需要 `tone / targetLanguage / replyCount` 这些改写类占位符。
+    ///
+    /// - Parameters:
+    ///   - text: 用户这一轮说的话。
+    ///   - context: 聊天窗口里的上文（可空；为空时模板里的「（聊天窗口上文）」整段消失）。
+    ///   - history: **本轮之前**的对话轮次（按时间正序，可含 system / user / assistant）。
+    ///     若调用方把本轮用户消息也塞进了 `history`（末尾已与 `text` 渲染结果相同），
+    ///     这里会自动跳过追加，避免出现两条一样的 user 消息。
+    ///   - maxTokens: 单次回答上限，默认 `chatMaxTokens`(512)。
+    /// - Returns: `stream: true` 的 `ChatRequest`；`messages` = `[system] + history + [user]`。
+    public static func chatRequest(
+        text: String,
+        context: String = "",
+        history: [ChatMessage] = [],
+        maxTokens: Int = PromptLibrary.chatMaxTokens
+    ) -> ChatRequest {
+        let template = BuiltInPrompts.chatAssistant
+        let system = template.renderSystemPrompt(
+            text: text,
+            context: context,
+            tone: "自然",
+            targetLanguage: "英文"
+        )
+        let userContent = template.renderUserContent(
+            text: text,
+            context: context,
+            tone: "自然",
+            targetLanguage: "英文"
+        )
+        let finalUserContent = userContent.isEmpty ? "你好" : userContent
+        var messages: [ChatMessage] = []
+        if !system.isEmpty {
+            messages.append(.system(system))
+        }
+        // 历史里若已含 system（例如上次请求原样回传），去掉重复的那条，避免两家 system。
+        let historyWithoutSystem = history.filter { $0.role != .system }
+        messages.append(contentsOf: historyWithoutSystem)
+        // 调用方把本轮也放进 history 的写法：末尾已是同一条 user 就不再追加。
+        let alreadyAppended = historyWithoutSystem.last.map {
+            $0.role == .user && $0.content == finalUserContent
+        } ?? false
+        if !alreadyAppended {
+            messages.append(.user(finalUserContent))
+        }
+        return ChatRequest(
+            messages: messages,
+            temperature: template.temperature,
+            maxTokens: maxTokens,
+            stream: true
+        )
+    }
+
+    // MARK: - 智能联想（design/04 §4）
+
+    /// 智能联想的输出上限（`maxTokens = 120`）。三条 12 字短句 + JSON 括号足够。
+    public static let suggestionMaxTokens: Int = 120
+
+    /// 构造智能联想请求（`stream: false`，一次拿完更省事、也便于 1.5s 超时控制）。
+    ///
+    /// - Parameters:
+    ///   - context: 聊天窗口里的上文（design/04 §4.4：≤ 200 字，由调用方裁剪）。
+    ///   - text: 用户已经输入的内容。
+    ///   - maxTokens: 输出上限，默认 `suggestionMaxTokens`(120)。
+    /// - Returns: `stream: false` 的 `ChatRequest`（temperature 0.9）。
+    public static func suggestionRequest(
+        context: String,
+        text: String,
+        maxTokens: Int = PromptLibrary.suggestionMaxTokens
+    ) -> ChatRequest {
+        let template = BuiltInPrompts.suggestionNext
+        let messages = render(
+            template,
+            text: text,
+            context: context,
+            tone: "自然",
+            targetLanguage: "英文"
+        )
+        return ChatRequest(
+            messages: messages,
+            temperature: template.temperature,
+            maxTokens: maxTokens,
+            stream: false
+        )
+    }
+
+    /// 联想结果的最大条数（design/04 §4.3：候选栏最多 3 个胶囊）。
+    public static let suggestionMaxCount: Int = 3
+
+    /// 联想结果单条最大字数（design/04 §4.3：≤ 12 字）。
+    public static let suggestionMaxCharacters: Int = 12
+
+    /// 解析智能联想的模型输出为候选数组（design/04 §4.4「返回解析」）。
+    ///
+    /// 容错策略（**失败必须完全静默**，绝不抛错、绝不弹提示）：
+    /// - ① 优先按 JSON 数组解析（模型照要求输出时走这条路）；
+    /// - ② JSON 失败但输出里仍有 `[ ... ]` 时，按中英文逗号切分括号内内容再逐项清洗
+    ///   （覆盖全角引号 `“”`、全角逗号 `，`、单引号等「非法 JSON」的常见形态）；
+    /// - ③ 仍失败则逐行宽松解析（去 ``` 代码块标记、去 `1.` `2.` `1、` `-` `*` 等序号、去包裹引号）；
+    /// - 最后统一过滤空串、超长（> `suggestionMaxCharacters`）、与前面重复的项，
+    ///   截断到 `suggestionMaxCount` 条；不足 1 条返回空数组（调用方据此退回传统联想）。
+    ///
+    /// - Parameter raw: 模型原始输出。
+    /// - Returns: 可直接显示的候选短句（0...3 条）。
+    public static func parseSuggestionCandidates(_ raw: String) -> [String] {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+
+        var candidates: [String] = []
+
+        let bracketStart = trimmed.firstIndex(of: "[")
+        let bracketEnd = trimmed.lastIndex(of: "]")
+        let hasBracketPair: Bool = {
+            guard let start = bracketStart, let end = bracketEnd else { return false }
+            return start < end
+        }()
+
+        // ① 标准形态：JSON 数组（容忍前后有 ``` 代码块标记或说明文字）。
+        if let start = bracketStart, let end = bracketEnd, start < end {
+            let jsonText = String(trimmed[start...end])
+            if let data = jsonText.data(using: .utf8),
+               let array = try? JSONDecoder().decode([String].self, from: data) {
+                candidates = array
+            }
+        }
+
+        // ② 非法 JSON（全角引号/全角逗号/单引号）：按中英文逗号切分括号内内容。
+        if candidates.isEmpty, hasBracketPair,
+           let start = bracketStart, let end = bracketEnd {
+            let inner = String(trimmed[trimmed.index(after: start)..<end])
+            guard inner.contains(",") || inner.contains("，") else {
+                // 单个元素（无分隔符）直接整体清洗。
+                let single = cleanSuggestionItem(inner)
+                if !single.isEmpty { candidates = [single] }
+                return finalizeSuggestionCandidates(candidates)
+            }
+            let normalized = inner.replacingOccurrences(of: "，", with: ",")
+            let parts = normalized.split(separator: ",", omittingEmptySubsequences: true)
+            // 只接受 1...8 项，避免把一句带逗号的长句误切成多段。
+            if !parts.isEmpty, parts.count <= 8 {
+                candidates = parts.map { cleanSuggestionItem(String($0)) }
+                    .filter { !$0.isEmpty }
+            }
+        }
+
+        // ③ 宽松兜底：逐行清洗。
+        if candidates.isEmpty {
+            for line in trimmed.split(separator: "\n", omittingEmptySubsequences: true) {
+                let cleaned = cleanSuggestionItem(String(line))
+                if !cleaned.isEmpty {
+                    candidates.append(cleaned)
+                }
+            }
+        }
+
+        return finalizeSuggestionCandidates(candidates)
+    }
+
+    /// 清洗单条联想候选：去代码块标记、行首序号、包裹引号与行尾逗号/方括号。
+    private static func cleanSuggestionItem(_ raw: String) -> String {
+        var cleaned = raw
+            .replacingOccurrences(of: "```json", with: "")
+            .replacingOccurrences(of: "```", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        // 去掉行首序号：1. / 1、/ 1) / - / * / •
+        for prefix in ["1.", "2.", "3.", "4.", "1、", "2、", "3、", "4、",
+                       "1)", "2)", "3)", "4)", "-", "*", "•"] {
+            if cleaned.hasPrefix(prefix) {
+                cleaned = String(cleaned.dropFirst(prefix.count))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                break
+            }
+        }
+        let junk = CharacterSet(charactersIn: "\"“”「」『』‘’,，[]、")
+        return cleaned.trimmingCharacters(in: junk)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// 统一过滤与去重（保持顺序），截断到 `suggestionMaxCount` 条。
+    private static func finalizeSuggestionCandidates(_ candidates: [String]) -> [String] {
+        var result: [String] = []
+        for candidate in candidates {
+            let item = cleanSuggestionItem(candidate)
+            guard !item.isEmpty else { continue }
+            guard item.count <= suggestionMaxCharacters else { continue }
+            guard !result.contains(item) else { continue }
+            result.append(item)
+            if result.count >= suggestionMaxCount { break }
+        }
+        return result
     }
 
     // MARK: - 自定义模板持久化

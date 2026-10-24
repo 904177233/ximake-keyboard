@@ -85,6 +85,12 @@ enum FeatureGlyph {
             return "bubble.left.and.bubble.right"
         case .image:
             return "photo.on.rectangle.angled"
+        case .chat:
+            // 「AI 对话」：与 `AIFeature.systemImage` 保持一致；iOS 16 若缺该符号由 fallback 兜底。
+            return "bubble.left.and.text.bubble.right"
+        case .suggestion:
+            // 「智能联想」：与 `AIFeature.systemImage` 保持一致。
+            return "sparkles"
         case .custom:
             return "slider.horizontal.3"
         }
@@ -103,6 +109,10 @@ enum FeatureGlyph {
             return "🧠"
         case .image:
             return "🎨"
+        case .chat:
+            return "💬"
+        case .suggestion:
+            return "✨"
         case .custom:
             return "⚙️"
         }

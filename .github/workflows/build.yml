@@ -129,6 +129,30 @@ jobs:
             exit 1
           fi
 
+      # 词库布局预检：iOS 27 的 installd / IXPlaceholder 会拒绝 app bundle 根目录下存在名为
+      # Resources 的目录（真机实测：即使空目录也会让安装失败，报 IXErrorDomain Code=13
+      # Missing bundle ID）。所以词库必须在 ios/Shared/dict/，不能是 ios/Shared/Resources/dict/。
+      - name: Preflight - dictionary layout
+        run: |
+          set -euo pipefail
+          if [ -d ios/Shared/Resources ]; then
+            echo "::error::发现 ios/Shared/Resources/ 目录。词库必须放在 ios/Shared/dict/（folder reference 会把文件夹名原样复制到 bundle 根，叫 Resources 会让 iOS 27 installd 拒绝安装）。"
+            ls -la ios/Shared/Resources || true
+            exit 1
+          fi
+          if [ ! -d ios/Shared/dict ]; then
+            echo "::error::ios/Shared/dict/ 不存在 —— 词库没落盘，拼音候选只能用内置极小词表。"
+            exit 1
+          fi
+          for f in base_dict.tsv phrases.tsv dict_meta.json; do
+            if [ ! -f "ios/Shared/dict/$f" ]; then
+              echo "::error::ios/Shared/dict/$f 缺失"
+              exit 1
+            fi
+            echo "OK: ios/Shared/dict/$f ($(wc -c < "ios/Shared/dict/$f" | tr -d ' ') bytes)"
+          done
+          echo "OK：词库目录布局正确（ios/Shared/dict/，无 ios/Shared/Resources/）。"
+
       # macOS 是唯一能真正跑 bash 的环境（开发机是 Windows，没有 bash），
       # 所以在这里对壳脚本做语法检查，保证 finalize.sh 交到用户手上时是能跑的。
       - name: Preflight - shell script syntax
@@ -321,6 +345,38 @@ jobs:
           fi
           echo "OK：PlugIns/AIKeyboardExtension.appex 及可执行文件都在。"
 
+          # 关键校验：bundle 根下**不能**有 Resources/ 目录。
+          # iOS 27 的 installd / IXPlaceholder 会拒绝这种包（真机实测：即使目录是空的也会让
+          # 安装失败，报 IXErrorDomain Code=13 Missing bundle ID，很容易被误判成签名问题）。
+          # 词库必须以 folder reference 的形式落到 bundle 根下、文件夹名叫 dict。
+          if [ -e "${BUILD_DIR}/Payload/AIKeyboard.app/Resources" ]; then
+            echo "::error::IPA 的 app bundle 根下出现了 Resources/ 目录 —— iOS 27 installd 会拒绝安装（IXErrorDomain Code=13）。"
+            echo "词库应作为 folder reference 打包成 Payload/AIKeyboard.app/dict/，不能是 Resources/dict/。"
+            mkdir -p "${BUILD_DIR}/ipa_check"
+            find "${BUILD_DIR}/Payload/AIKeyboard.app/Resources" -maxdepth 2 -print | head -n 40 || true
+            exit 1
+          fi
+          if [ -e "${APPEX}/Resources" ]; then
+            echo "::error::appex 根下出现了 Resources/ 目录 —— 同样会让 installd 拒绝安装。"
+            exit 1
+          fi
+          echo "OK：bundle 根下没有 Resources/ 目录（符合 iOS 27 installd 要求）。"
+
+          # 词库必须真的进包：两个 bundle 都要有 dict/
+          if [ ! -d "${BUILD_DIR}/Payload/AIKeyboard.app/dict" ]; then
+            echo "::error::app bundle 里没有 dict/（词库没被打包，拼音候选会用内置极小词表）。"
+            ls -la "${BUILD_DIR}/Payload/AIKeyboard.app" || true
+            exit 1
+          fi
+          if [ ! -d "${APPEX}/dict" ]; then
+            echo "::error::appex 里没有 dict/（键盘扩展读不到词库）。"
+            ls -la "${APPEX}" || true
+            exit 1
+          fi
+          echo "---- 词库文件 ----"
+          ls -la "${BUILD_DIR}/Payload/AIKeyboard.app/dict" || true
+          ls -la "${APPEX}/dict" || true
+
           # 校验扩展 Info.plist 里的键盘点标识（漏了它系统不认这个键盘）
           if command -v plutil >/dev/null 2>&1; then
             echo "---- Extension-Info.plist 关键键 ----"
@@ -352,7 +408,17 @@ jobs:
             || { echo "::error::IPA 内没有主程序 Payload/AIKeyboard.app/AIKeyboard"; exit 1; }
           unzip -l "${BUILD_DIR}/AIKeyboard-unsigned.ipa" | grep -q 'Payload/AIKeyboard.app/Info.plist' \
             || { echo "::error::IPA 内没有 Payload/AIKeyboard.app/Info.plist"; exit 1; }
-          echo "OK：IPA 结构完整。"
+          # 词库必须以 dict/ 落到两个 bundle 的根下（iOS 27 installd 拒绝 bundle 根下的 Resources/）
+          unzip -l "${BUILD_DIR}/AIKeyboard-unsigned.ipa" | grep -q 'Payload/AIKeyboard.app/dict/base_dict.tsv' \
+            || { echo "::error::IPA 内没有 Payload/AIKeyboard.app/dict/base_dict.tsv"; exit 1; }
+          unzip -l "${BUILD_DIR}/AIKeyboard-unsigned.ipa" | grep -q 'Payload/AIKeyboard.app/PlugIns/AIKeyboardExtension.appex/dict/base_dict.tsv' \
+            || { echo "::error::IPA 内 appex 缺少 dict/base_dict.tsv"; exit 1; }
+          # 反向断言：绝不能出现 bundle 根下的 Resources/ 目录
+          if unzip -l "${BUILD_DIR}/AIKeyboard-unsigned.ipa" | grep -qE 'Payload/AIKeyboard\.app/Resources/|Payload/AIKeyboard\.app/PlugIns/AIKeyboardExtension\.appex/Resources/'; then
+            echo "::error::IPA 里出现了 bundle 根下的 Resources/ 目录 —— iOS 27 installd 会拒绝安装。"
+            exit 1
+          fi
+          echo "OK：IPA 结构完整（词库在 dict/，无 Resources/ 目录）。"
 
       # ---------------------------------------------------------------------
       # 7) 上传产物（保留 7 天，与免费签名 7 天有效期一致）

@@ -1,12 +1,16 @@
 # 墨语输入法 · 词库生成工具（tools/dict）
 
 本目录负责生成墨语输入法使用的三份词库产物，产物直接落盘到
-`ios/Shared/Resources/dict/`，由 `ios/Shared/IMECore/` 的 Swift 引擎在运行时加载。
+`ios/Shared/dict/`，由 `ios/Shared/IMECore/` 的 Swift 引擎在运行时加载。
+
+> ⚠️ 输出目录**必须**是 `ios/Shared/dict/`，**绝不能**是 `ios/Shared/Resources/dict/`。
+> folder reference 会把目录名原样复制到 App bundle 根，一旦出现 `Resources/` 目录，
+> iOS 27 的 installd 会拒绝安装（`IXErrorDomain Code=13 Missing bundle ID`，真机实测空目录也会失败）。
 
 ## 1. 生成命令
 
 ```bash
-# 生成词库（覆盖 ios/Shared/Resources/dict/ 下的三个文件）
+# 生成词库（覆盖 ios/Shared/dict/ 下的三个文件）
 python tools/dict/build_dict.py
 
 # 只做质量自查，不写文件（CI / 评审用）

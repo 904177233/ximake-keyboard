@@ -27,7 +27,7 @@
 
 | 你是谁 | 必读（按顺序） | 可选 |
 |---|---|---|
-| **keyboard-ui**（`ios/AIKeyboardExtension/`） | ① `键盘布局规范.md` ② `组件库.md` §L0–L2 ③ `视觉稿.html` 第 01/02/03/06 屏 | `03-设计与交互规范.md` §2/§7/§10 |
+| **keyboard-ui**（`ios/AIKeyboardExtension/`） | ① `键盘布局规范.md` ② `组件库.md` §L0–L2 ③ `视觉稿.html` 第 01/02/03/06 屏 ④ **`04-AI对话与智能联想规范.md`**（旋钮 / 对话面板 / 智能联想，本次新增） | `03-设计与交互规范.md` §2/§7/§10 |
 | **host-app-ui**（`ios/AIKeyboard/`） | ① `主App界面规范.md` ② `组件库.md` §L0/§L3 ③ `视觉稿.html` 第 04/05/07 屏 | `03-设计与交互规范.md` §2/§5/§11 |
 | **ai-service**（`ios/Shared/Theme/Theme.swift`） | ① `tokens.json` ② `03-设计与交互规范.md` §15（变更流程） | `组件库.md` §L0 令牌映射 |
 | **ios-skeleton**（工程/资源） | ① `appicon/图标方案.md` ② `appicon/generate_icon.py` | — |
@@ -38,19 +38,19 @@
 
 ---
 
-## 2. 文件清单（共 7 件交付物 + 3 类支撑）
+## 2. 文件清单（共 8 件交付物 + 3 类支撑）
 
 ### 2.0 一眼看懂的数字
 
 | 指标 | 数量 |
 |---|---:|
-| `design/` 下文件总数 | **17**（含 appicon/ 9 个） |
-| `tokens.json` 叶子键 | **238**（9 个顶层组；color.light / color.dark 各 36，键集相同） |
-| 组件契约 | **26 个 `public struct`**（其中 19 个是独立组件，7 个是子元素/条目类型）+ 12 个配套 `enum` |
-| 键盘页 / 态 | 7 个页面（letters/numbers/symbols/emoji/aiPanel/result/settings）× 12 个状态 |
+| `design/` 下文件总数 | **19**（含 appicon/ 9 个） |
+| `tokens.json` 叶子键 | **256**（9 个顶层组；color.light / color.dark 各 36，键集相同） |
+| 组件契约 | **26 个 `public struct`**（其中 19 个是独立组件，7 个是子元素/条目类型）+ 12 个配套 `enum`；**另加 3 个**（`KMChatKnob` / `KMKnobGlyph` / `ChatPanelView`，见 `04-AI对话与智能联想规范.md` §2.8/§4.7） |
+| 键盘页 / 态 | **8 个页面**（letters/numbers/symbols/emoji/aiPanel/result/settings/**aiChat**）× **17 个状态**（12 既有 + 5 新增） |
 | 视觉稿 | **7 屏**（≥ 要求的 5 屏），共 **2 张**截图 |
 | App 图标 | **1 套 6 个尺寸**（1024 / 180 / 120 / 80 / 60 / 40） |
-| 设计文档 | 4 份专项 md（键盘布局 / 主App界面 / 组件库 / 图标方案）+ 1 份总纲（03）+ 本索引 |
+| 设计文档 | 5 份专项 md（键盘布局 / 主App界面 / 组件库 / **AI对话与智能联想** / 图标方案）+ 1 份总纲（03）+ 本索引 |
 
 ### 2.1 核心交付（task-1 要求的 6 件）
 
@@ -62,12 +62,15 @@
 | 4 | **`组件库.md`** | 37 KB | 两个 UI | 写任何 `View` 前先查有没有现成组件；命名必须一致 |
 | 5 | **`视觉稿.html`** | 48 KB | 所有人 | 看观感、对比稿；也可当作像素级参考 |
 | 6 | **`appicon/图标方案.md`** + `appicon/generate_icon.py` | 12 KB + 10 KB | ios-skeleton | 生成 App 图标时；脚本直接跑就能出图 |
+| 7 | **`04-AI对话与智能联想规范.md`** | 37 KB | keyboard-ui、ai-service | **本次新增**：旋钮 / 全屏 AI 对话面板 / AI 智能联想。含精确坐标、状态机、15 个 sizing + 3 个 motion 令牌增量、P0 验收清单 |
+| 8 | **`03-设计与交互规范.md`**（镜像） | 39 KB | 所有人 | 设计系统总纲；权威版是 `docs/03-设计与交互规范.md` |
 
 ### 2.2 支撑文件
 
 | 文件 | 说明 |
 |---|---|
 | **`03-设计与交互规范.md`**（镜像） | `docs/03` 的副本，仅供 QA 脚本路径检查；**改内容请改 docs 那份** |
+| **`04-AI对话与智能联想规范.md`**（镜像） | `docs/07` 的副本（`docs/04` 已被《安装与续签指南》占用）；正文逐字相同，权威版在 design |
 | **`preview-overview.png`** | 视觉稿全景截图（3020×930），7 屏并排 |
 | **`preview-keyboard.png`** | 键盘单屏特写（2100×900） |
 | `appicon/icon-1024.png` | App 图标主尺寸（1024×1024，iOS 会自动裁圆角） |
@@ -82,6 +85,7 @@ meta / color / typography / spacing / radius / sizing / motion / shadow / materi
 - `color.light` 与 `color.dark` 各 **36 键**，键集完全相同。
 - `docs/02 §5` 要求的 **20 个颜色键、8 个排版项、6 间距、5 圆角、9 sizing、4 motion、2 shadow 逐字一致，零变更**。
 - 其余为扩展键（只增不改），清单见 `docs/03-设计与交互规范.md` §15.2。
+- 2026-10-25 增量（`04-AI对话与智能联想规范.md` §6）：`sizing` **38 → 53**（`aiChat*` 11 键 + `sugChip*` 4 键）、`motion` **11 → 14**（`suggestDebounce` / `knobPress` / `knobActiveFade`）。**所有新值都已存在于 `Theme.swift`**，所以 `consistency_check.py` 仍全绿。
 
 ---
 
@@ -185,4 +189,5 @@ A：`preview-overview.png` 是 3020×930 的长图，直接双击打开即可（
 
 | 版本 | 日期 | 变更 |
 |---|---|---|
+| v1.1 | 2026-10-25 | 新增 `04-AI对话与智能联想规范.md`（权威版）+ `docs/07-AI对话与智能联想规范.md`（镜像）：AI 对话旋钮（44 命中 / 34 视觉圆，五态）、全场对话面板（438 = 40+180+44+174，保留 174 键区）、AI 智能联想（3 条 ≤12 字，防抖 0.35s，失败静默）。`tokens.json` 由 238 → **256** 叶子：sizing +15、motion +3，**零新增高度令牌、零新增 hex**，QA 仍 `P0=0 P1=0 P2=0`。 |
 | v1.0 | 2026-10-24 | 初版：tokens.json（238 leaves / 9 顶层组）、键盘布局规范、主App界面规范、组件库、视觉稿 + 2 张截图、App 图标方案 + 脚本 + 6 尺寸 PNG、docs/03 设计与交互规范（+ design 镜像）、本索引。 |

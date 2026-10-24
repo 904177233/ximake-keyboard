@@ -276,6 +276,23 @@ struct KeyboardHomeView: View {
                 RowDivider()
 
                 SettingsRow(
+                    icon: IconSpec(
+                        symbol: appState.dictionaryInfo?.isUsingBuiltin == true
+                            ? "exclamationmark.triangle"
+                            : "shippingbox",
+                        tint: appState.dictionaryInfo?.isUsingBuiltin == true
+                            ? Theme.warning
+                            : Theme.textSecondary
+                    ),
+                    title: "词库来源",
+                    subtitle: dictionarySourceHint,
+                    accessory: .value(dictionarySourceValue),
+                    valueTint: dictionarySourceTint
+                )
+
+                RowDivider()
+
+                SettingsRow(
                     icon: IconSpec(symbol: "text.badge.plus", tint: Theme.success),
                     title: "快捷短语",
                     subtitle: "输入触发词即可展开成整段文字",
@@ -304,6 +321,32 @@ struct KeyboardHomeView: View {
     private var dictionaryVersion: String {
         guard let info = appState.dictionaryInfo else { return "未知" }
         return "v\(info.version)"
+    }
+
+    /// 「词库来源」的说明文字：兜底时给一句可执行的引导。
+    private var dictionarySourceHint: String {
+        guard let info = appState.dictionaryInfo else {
+            return "没读到词库信息，到诊断页看看"
+        }
+        if info.isUsingBuiltin {
+            return "请在电脑上重新安装完整安装包"
+        }
+        return "路径：\(info.relativePath)"
+    }
+
+    /// 「词库来源」右侧的短值。
+    private var dictionarySourceValue: String {
+        guard let info = appState.dictionaryInfo else { return "未知" }
+        switch info.source {
+        case .bundled: return "打包词库"
+        case .builtin: return "⚠️ 内置兜底"
+        case .memory: return "内存内置"
+        }
+    }
+
+    /// 「词库来源」值的颜色：兜底时用警示色。
+    private var dictionarySourceTint: Color? {
+        appState.dictionaryInfo?.isUsingBuiltin == true ? Theme.warning : nil
     }
 
     // MARK: - 支持

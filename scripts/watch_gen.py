@@ -10,7 +10,7 @@
 一旦忘了重跑生成器，`scripts/qa/project_check.py` 就会报
 `PBX-UNTRACKED-SOURCE` / `PBX-SHARED-NOT-IN-APP` / `PBX-SHARED-NOT-IN-EXT`。
 
-这个脚本用最朴素的「轮询 mtime」方式盯着那三个目录（以及 `ios/Shared/Resources`），
+这个脚本用最朴素的「轮询 mtime」方式盯着那三个源码目录（以及 `ios/Shared/dict` 词库目录），
 发现变化就自动跑一次生成器 + 结构校验。没有第三方依赖，只用标准库，
 所以在 Windows / macOS / CI 上都能直接跑。
 

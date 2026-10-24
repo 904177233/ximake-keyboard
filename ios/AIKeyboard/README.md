@@ -113,13 +113,13 @@ ios/AIKeyboard/
 
 ### 4.1 集成缝：`Support/SharedBridge.swift`
 
-App 层**不直接**散落调用 Shared API，所有跨层细节收敛在这一个文件（348 行）：
+App 层**不直接**散落调用 Shared API，所有跨层细节收敛在这一个文件（403 行）：
 
 | 封装 | 作用 | 转调 |
 |------|------|------|
 | `PromptCatalog` | 内置/自定义模板 + 渲染成 `[ChatMessage]` | `PromptLibrary.builtIn` / `.templates(feature:)` / `.template(id:)` / `.loadCustom()` / `.saveCustom()` / `.render(...)` / `.upsertCustom` / `.removeCustom` |
 | `PhraseStore` | 快捷短语增删查计数 | `PhraseLibrary(store: SharedStore.shared)` 的 `.items` / `.upsert(_:)` / `.remove(id:)` |
-| `DictionaryInfo` | 词库版本与词条数（诊断页、键盘主页） | `PinyinDictionary.bundled()` 的 `.version` / `.wordCount` |
+| `DictionaryInfo` | 词库版本 / 词条数 / **来源** / 相对路径 / 加载耗时（诊断页、键盘主页） | `IMEKit(store: SharedStore.shared)` 的 `.dictionaryVersion` / `.wordCount` / `.dictionarySource` / `.dictionaryRelativePath` / `.loadDurationMilliseconds` |
 | `ConfigExporter` | 配置导出/导入 | `PasteboardBridge.export(_:includeAPIKeys:)` / `.importSnapshot()` / `.hasImportableContent` / `SharedStore.isAppGroupAvailable` |
 | `ConnectivityProbe` | 网络探针 + 「测试连接」最小流式请求 + 生图 | `URLSession` + `AIClientFactory.makeLLM(config:apiKey:)` / `.makeImage(...)` |
 | `ErrorPresenter` | `AIError` → 中文主文案 + 建议 | `AIError.errorDescription` / `.recoverySuggestion` + `NSURLErrorDomain` 分支 |
@@ -132,7 +132,21 @@ App 层**不直接**散落调用 Shared API，所有跨层细节收敛在这一�
 - **Models**：`ConfigSnapshot` / `AIProviderConfig` / `ModelRef` / `ProviderKind` / `PresetProviders`(+`Preset`) / `AIFeature`。
 - **Prompts**：`PromptTemplate` / `PromptLibrary`。
 - **Networking**：`LLMClient` / `ImageGenerating` / `AIClientFactory` / `AIError` / `ChatMessage` / `ChatRequest` / `ChatDelta` / `ChatResult` / `TokenUsage` / `ImageRequest` / `GeneratedImage`。
-- **IMECore**：`PinyinDictionary`（`bundled()` / `version` / `wordCount`）、`PhraseLibrary`（`init(store:)` / `items` / `upsert(_:)` / `remove(id:)`）、`PhraseItem`（`init(key:text:)` / `init(id:key:text:isPinned:)`）。
+- **IMECore**：`PinyinDictionary`（`bundled()` / `version` / `wordCount` / `loadedPath` / `loadDurationMilliseconds`）、`IMEKit`（`init(store:)` / `dictionaryVersion` / `wordCount` / `dictionarySource` / `dictionaryRelativePath` / `loadDurationMilliseconds` / `DictionarySource`）、`PhraseLibrary`（`init(store:)` / `items` / `upsert(_:)` / `remove(id:)`）、`PhraseItem`（`init(key:text:)` / `init(id:key:text:isPinned:)`）。
+
+### 4.3 词库来源（真机排查「键盘打不出中文」）
+
+`PinyinDictionary` 在**找不到词库文件时会静默回退到 50 条内置小词表**，不报错、不提示 —— 用户只会看到「能敲字母但没有中文候选」。因此 App 侧把「词库来源」做成必看信息，展示三处：
+
+| 位置 | 文件 | 展示形式 |
+|------|------|----------|
+| 键盘主页 · 词库与短语组 | `Main/KeyboardHomeView.swift:287` | `SettingsRow("词库来源")`，右侧短值「打包词库 / ⚠️ 内置兜底 / 内存内置」，追加一行「路径：…」；兜底时值用 `Theme.warning` |
+| 诊断页 · 独立卡片 | `Guide/DiagnosticsView.swift:198` | `SectionHeader("词库来源")` + 图标 + 来源中文 + 相对路径 + `v1.0.0 · 5276 条 · 加载 12.3ms`；兜底时卡内嵌 `warningSoft` 警示块 |
+| 诊断页 · 自检第 6 项 | `Guide/DiagnosticsChecklist.swift:137` | 「本地词库」条目，兜底时状态点降为 `.warning`，明细多行含来源/路径/条数/耗时 |
+
+- 取值统一来自 `Support/SharedBridge.swift` 的 `DictionaryInfo`（内部缓存 `IMEKit` 实例，避免 `refreshDerivedState()` 反复构造）；中文文案由 `DictionaryInfo.sourceDescription` / `isUsingBuiltin` 单点维护。
+- 导出诊断报告（`DiagnosticsView.buildReport()`）也包含 `词库：<summary>`，兜底时追加一行异常说明。
+- 兜底时的引导文案：「正在使用只有 50 条的内置小词表，中文候选会非常少。请在电脑上重新安装完整安装包（App 与键盘扩展的 `dict/` 目录都要带上 base_dict.tsv、phrases.tsv、dict_meta.json）。」
 
 > **SHARED-DEP 缺失清单：空。** 截至本文件写入时，上述符号全部已在 `ios/Shared/` 落盘并通过签名核对（IMECore 的 `PinyinDictionary`/`PhraseLibrary` 最后补齐）。
 > 唯一需要 Shared 侧配合的**非符号约定**是 §5 的心跳键名。
@@ -188,6 +202,8 @@ App 层**不直接**散落调用 Shared API，所有跨层细节收敛在这一�
 5. **生图进度**：`AIResultCard.imageGenerating` 用 `ImageProgress` + `TimelineView(.periodic(from:by:1))` 显示「已等待 N 秒 / 预计 5–20 秒 / 阶段文案」，自绘 `ProgressRing`，**禁止裸 `ProgressView()` 无限转圈**，超 20 秒降级为「仍在绘制，可继续等待」。
 6. **四种降级都有中文文案**：无完全访问（`DiagnosticsView` + 键盘主页 ⚠️）、未配置 Key（设置页「未配置」+ 试验场 `ErrorBanner` + 「去配置」）、无网络（`ConnectivityProbe` → 「网络未连接」）、服务端报错（`ErrorPresenter` → `AIError.errorDescription` + `recoverySuggestion`）。
 7. **API Key 安全**：只在 `ProviderEditorView` 用 `SecureField` 输入并存 `KeychainStore`；列表、诊断报告、配置导出**默认都不含明文 Key**（导出需显式打开开关且提示风险）。
+8. **词库来源可见**：`DictionaryInfo` 带 `source`（`.bundled` / `.builtin` / `.memory`）与 `relativePath`；键盘主页、诊断卡片、诊断自检、导出报告四处都展示。`.builtin`（词库没打进包）用 `Theme.warning` 着色并给「重装完整安装包」引导 —— 这是「键盘能敲字母但没中文候选」的唯一现场证据（详见 §4.3）。
+9. **AIFeature 新增 case 的维护点**：`AIFeature` 有 8 个 case（`.polish/.expand/.translate/.replySuggestion/.image/.chat/.suggestion/.custom`）。两处穷尽 switch 在 `Components/IconGlyph.swift` 的 `FeatureGlyph.symbol(for:)` / `.fallback(for:)`，**Shared 侧再加 case 时必须同步补**，否则编译报 "switch must be exhaustive"。其余页面（`PlaygroundView` 能力胶囊、`PromptEditorView` 类型选择、`PromptLibraryView` 分类）都走 `AIFeature.allCases` 自动跟随，无需改。
 
 ---
 
@@ -203,9 +219,14 @@ $env:PYTHONIOENCODING="utf-8"; python ios/AIKeyboard/selfcheck.py -v   # 详细
 $env:PYTHONIOENCODING="utf-8"; python scripts/qa/static_check.py
 $env:PYTHONIOENCODING="utf-8"; python scripts/qa/consistency_check.py
 $env:PYTHONIOENCODING="utf-8"; python scripts/validate_project.py
+
+# Lead 侧交叉校验（符号 / import / iOS 16）
+$env:PYTHONIOENCODING="utf-8"; python scripts/lead/target_symbols.py
+$env:PYTHONIOENCODING="utf-8"; python scripts/lead/import_check.py
+$env:PYTHONIOENCODING="utf-8"; python scripts/lead/ios16_availability.py
 ```
 
-最近一次结果（提交时）：`selfcheck` 51 文件 / 11,538 行，**P0=0 P1=0 P2=0 通过**；`static_check` **P0=0 P1=0**（唯一 P2 在 `ios/AIKeyboardExtension/`，不属本模块）；`consistency_check` **P0=0 P1=0 P2=0**。
+最近一次结果（提交时）：`selfcheck` 51 文件 / 11,746 行，**P0=0 P1=0 P2=0 通过**；`static_check` **P0=0 P1=0 P2=0**；`consistency_check` **P0=0 P1=0 P2=0**；`scripts/lead/target_symbols.py` 可疑符号 0；`scripts/lead/import_check.py` 缺失 import 0；`scripts/lead/ios16_availability.py` 越界 API 0。
 
 跨 target 顶层类型重名核对：App 133 个类型 ∩ Extension 17 个 = **∅**，App ∩ Shared 54 个 = **∅**，Extension ∩ Shared = **∅**。
 

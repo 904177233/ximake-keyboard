@@ -2,13 +2,17 @@
 """墨语输入法 · 中文聊天词库生成器。
 
 用法：
-    python tools/dict/build_dict.py            # 生成到 ios/Shared/Resources/dict/
+    python tools/dict/build_dict.py            # 生成到 ios/Shared/dict/
     python tools/dict/build_dict.py --check    # 只做质量自查，不写文件
 
 产物（全部 UTF-8 无 BOM、LF 换行）：
-    ios/Shared/Resources/dict/base_dict.tsv   拼音 <TAB> 词 <TAB> 词频 <TAB> flags
-    ios/Shared/Resources/dict/phrases.tsv     建议词拼音 <TAB> 触发词 <TAB> 建议词
-    ios/Shared/Resources/dict/dict_meta.json  版本/条数/日期/来源/SHA256
+    ios/Shared/dict/base_dict.tsv   拼音 <TAB> 词 <TAB> 词频 <TAB> flags
+    ios/Shared/dict/phrases.tsv     建议词拼音 <TAB> 触发词 <TAB> 建议词
+    ios/Shared/dict/dict_meta.json  版本/条数/日期/来源/SHA256
+
+注意：输出目录**必须**是 `ios/Shared/dict/`，绝不能是 `ios/Shared/Resources/dict/`。
+folder reference 会把目录名原样复制到 App bundle 根，若出现 `Resources/` 目录，
+iOS 27 的 installd 会拒绝安装（IXErrorDomain Code=13 Missing bundle ID）。
 
 数据来源：
     1) jieba 自带词频表 dict.txt（cppjieba dict，MIT License），已缓存到 .cache/jieba_dict.txt；
@@ -41,7 +45,8 @@ import symbol_map  # noqa: E402
 from syllable_table import SYLLABLES, is_splittable  # noqa: E402
 
 CACHE_PATH = os.path.join(HERE, ".cache", "jieba_dict.txt")
-OUT_DIR = os.path.join(ROOT, "ios", "Shared", "Resources", "dict")
+# 输出目录：必须是 Shared/dict（不能是 Shared/Resources/dict，见模块 docstring 的说明）
+OUT_DIR = os.path.join(ROOT, "ios", "Shared", "dict")
 
 DICT_VERSION = "1.0.0"
 GENERATED_DATE = "2026-10-24"   # 固定日期，保证可重跑幂等（不取 now）

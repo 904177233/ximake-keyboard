@@ -12,11 +12,11 @@ import Foundation
 
 /// 拼音词库（只读索引，加载完成后线程安全）。
 ///
-/// 词库文件为 `ios/Shared/Resources/dict/base_dict.tsv`，每行：
+/// 词库文件为 `ios/Shared/dict/base_dict.tsv`，每行：
 /// `拼音<TAB>词<TAB>词频<TAB>flags`；以 `#` 开头的行为注释。
 ///
 /// 加载策略：先按候选路径列表逐个尝试（兼容 App Bundle 根目录、`dict/` 子目录、
-/// `Resources/dict/` 文件夹引用三种打包方式），全部失败时退回内置极小词表，
+/// 以及历史上的 `Resources/dict/` 文件夹引用三种打包方式），全部失败时退回内置极小词表，
 /// 保证键盘在词库缺失时仍可输入，不会崩溃。
 public final class PinyinDictionary {
 
@@ -275,14 +275,14 @@ public final class PinyinDictionary {
     /// 词库文件在 Bundle 中的候选路径列表。
     ///
     /// 覆盖三种常见打包方式：
-    /// 1. `Resources/` 以 folder reference 形式加入 -> `Resources/dict/base_dict.tsv`
-    /// 2. `dict/` 以 folder reference 形式加入 -> `dict/base_dict.tsv`
+    /// 1. `dict/` 以 folder reference 形式加入 -> `dict/base_dict.tsv`（**当前布局**）
+    /// 2. 旧布局 `Resources/dict/`（仅兼容保留，新工程已不再使用）
     /// 3. TSV 被直接加入 Copy Bundle Resources -> Bundle 根目录
     ///
     /// - Returns: 候选 URL 数组（按优先级）。
     private static func candidateURLs() -> [URL] {
         var urls: [URL] = []
-        let subdirectories: [String?] = ["Resources/dict", "dict", nil]
+        let subdirectories: [String?] = ["dict", "Resources/dict", nil]
 
         for bundle in searchBundles() {
             for subdirectory in subdirectories {
@@ -296,8 +296,8 @@ public final class PinyinDictionary {
         // 直接拼 resourceURL，兜住 folder reference 未被索引的极端情况
         for bundle in searchBundles() {
             guard let resourceURL = bundle.resourceURL else { continue }
-            urls.append(resourceURL.appendingPathComponent("Resources/dict/base_dict.tsv"))
             urls.append(resourceURL.appendingPathComponent("dict/base_dict.tsv"))
+            urls.append(resourceURL.appendingPathComponent("Resources/dict/base_dict.tsv"))
             urls.append(resourceURL.appendingPathComponent("base_dict.tsv"))
         }
 
@@ -320,7 +320,7 @@ public final class PinyinDictionary {
     /// - Returns: 版本号字符串。
     private static func readVersion(fallback: String) -> String {
         for bundle in searchBundles() {
-            for subdirectory in ["Resources/dict", "dict", nil] as [String?] {
+            for subdirectory in ["dict", "Resources/dict", nil] as [String?] {
                 guard let url = bundle.url(forResource: "dict_meta",
                                            withExtension: "json",
                                            subdirectory: subdirectory),

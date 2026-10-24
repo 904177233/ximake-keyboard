@@ -2,8 +2,8 @@
 //  AIFeature.swift
 //  ios/Shared/Models
 //
-//  模块职责：声明键盘内可一键调用的 AI 能力集合（润色/扩写/翻译/回复建议/生图/自定义），
-//            并提供中文标题、SF Symbol 与默认 Prompt 模板 ID。
+//  模块职责：声明键盘内可一键调用的 AI 能力集合（润色/扩写/翻译/回复建议/生图/自定义/
+//            AI 对话/智能联想），并提供中文标题、SF Symbol 与默认 Prompt 模板 ID。
 //  依赖：仅 Foundation。
 //  使用方：键盘扩展（AIBar / KeyboardViewModel.startAI）、宿主 App（PlaygroundView /
 //          PromptLibraryView）、Prompts（PromptLibrary.templates(feature:)）。
@@ -23,6 +23,16 @@ public enum AIFeature: String, Codable, CaseIterable, Sendable {
     case replySuggestion
     /// 生图：文本提示词 → 图片。
     case image
+    /// AI 对话助手：键盘内多轮对话（整块键区切换成对话界面）。
+    ///
+    /// CONTRACT-ADD（design/04 §1.2 J1）：键盘顶部旋钮进入的全场对话模式，
+    /// 结果可一键上屏；与「回复建议」的区别是它支持多轮、开放问答。
+    case chat
+    /// 上下文联想建议：根据上下文猜下一句。
+    ///
+    /// CONTRACT-ADD（design/04 §4）：非传统联想词——不是词库 n-gram 的下一个词，
+    /// 而是 AI 结合「聊天窗口上文 + 已输入内容」给出的下一句话/短语（≤12 字、最多 3 条）。
+    case suggestion
     /// 自定义：使用用户自己的 Prompt 模板。
     case custom
 
@@ -39,6 +49,10 @@ public enum AIFeature: String, Codable, CaseIterable, Sendable {
             return "回复建议"
         case .image:
             return "生图"
+        case .chat:
+            return "AI 对话"
+        case .suggestion:
+            return "智能联想"
         case .custom:
             return "自定义"
         }
@@ -57,6 +71,12 @@ public enum AIFeature: String, Codable, CaseIterable, Sendable {
             return "bubble.left.and.bubble.right"
         case .image:
             return "photo.on.rectangle.angled"
+        case .chat:
+            // iOS 16 可用的「对话」符号。若目标系统上该符号缺失（渲染为空白），
+            // 退回 `"bubble.left.and.bubble.right"`；键盘侧另有自绘 `KMKnobGlyph`，不依赖本字段。
+            return "bubble.left.and.text.bubble.right"
+        case .suggestion:
+            return "sparkles"
         case .custom:
             return "square.and.pencil"
         }
@@ -75,6 +95,10 @@ public enum AIFeature: String, Codable, CaseIterable, Sendable {
             return "根据对方消息给出 3 条回复"
         case .image:
             return "把描述变成图片，复制后长按粘贴"
+        case .chat:
+            return "和 AI 聊两句，结果可以上屏"
+        case .suggestion:
+            return "根据上下文猜你下一句想说什么"
         case .custom:
             return "使用你自己的 Prompt 模板"
         }
@@ -89,6 +113,10 @@ public enum AIFeature: String, Codable, CaseIterable, Sendable {
             return 0.8
         case .image:
             return 0.7
+        case .chat:
+            return 0.7
+        case .suggestion:
+            return 0.9
         case .custom:
             return 0.7
         }
@@ -112,6 +140,10 @@ public enum AIFeature: String, Codable, CaseIterable, Sendable {
             return "builtin.reply"
         case .image:
             return "builtin.image.prompt"
+        case .chat:
+            return "builtin.chat.assistant"
+        case .suggestion:
+            return "builtin.suggestion.next"
         case .custom:
             return "builtin.custom"
         }

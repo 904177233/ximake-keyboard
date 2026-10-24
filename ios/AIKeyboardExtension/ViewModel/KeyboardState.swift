@@ -79,11 +79,16 @@ extension KeyboardViewModel {
         case result
         /// 键盘内设置。
         case settings
+        /// AI 对话面板（全场模式，design/04-AI对话与智能联想规范.md §3）。
+        ///
+        /// 该页会整体隐藏候选栏 + AI 工具条（84pt chrome），改为
+        /// 「标题条 40 + 消息区 180 + 输入行 44 + 键区 174」四段式，总高 438。
+        case aiChat
 
         /// 是否属于「展开态」页面（决定键盘高度增量）。
         public var isExpanded: Bool {
             switch self {
-            case .aiPanel, .result, .settings:
+            case .aiPanel, .result, .settings, .aiChat:
                 return true
             case .letters, .numbers, .symbols, .emoji:
                 return false
@@ -107,6 +112,8 @@ extension KeyboardViewModel {
                 return "AI 结果"
             case .settings:
                 return "键盘设置"
+            case .aiChat:
+                return "AI 对话"
             }
         }
     }
@@ -325,3 +332,97 @@ public struct KMPhrase: Identifiable, Equatable, Sendable {
         self.isPinned = isPinned
     }
 }
+
+// MARK: - AI 对话
+
+/// 对话面板的会话阶段（design/04-AI对话与智能联想规范.md §3.12）。
+///
+/// 与 `AIResultState`（单次 AI 能力结果）分开维护：对话是多轮累积，
+/// 而结果页是一次请求的临时展示，两者生命周期不同，不能混用同一个枚举。
+public enum KMChatPhase: Equatable, Sendable {
+    /// 空闲：可输入、可发送。
+    case idle
+    /// 已发送但首字未到（思考中，显示三点气泡）。
+    case thinking
+    /// 正在流式输出（末尾光标）。
+    case streaming
+    /// 请求失败（显示错误气泡 + 重试）。
+    case failed
+    /// 生图进行中（显示进度环 + 已等待秒数）。
+    case imageGenerating
+    /// 已取消（保留已生成文本与操作行）。
+    case cancelled
+
+    /// 是否有请求在飞（决定发送按钮形态与输入行可用性）。
+    public var isBusy: Bool {
+        switch self {
+        case .thinking, .streaming, .imageGenerating:
+            return true
+        case .idle, .failed, .cancelled:
+            return false
+        }
+    }
+}
+
+/// 对话消息角色。
+public enum KMChatRole: Equatable, Sendable {
+    /// 用户。
+    case user
+    /// AI。
+    case assistant
+}
+
+/// 对话消息（键盘扩展侧的展示模型）。
+///
+/// 说明：不复用 Shared 的 `ChatMessage`，因为展示层还需要承载「生图缩略图」「错误详情」
+/// 「是否仍在流式」等 UI 状态；发请求时再映射为 `[ChatMessage]`。
+public struct KMChatMessage: Identifiable, Equatable, Sendable {
+
+    /// 稳定 ID。
+    public let id: String
+
+    /// 角色。
+    public let role: KMChatRole
+
+    /// 文本内容（流式时逐字增长）。
+    public var text: String
+
+    /// 是否仍在流式输出（末尾画光标）。
+    public var isStreaming: Bool
+
+    /// 生图缩略图（≤512pt PNG；文本消息为 nil）。
+    public var imageData: Data?
+
+    /// 失败详情（成功消息为 nil）。
+    public var errorDetail: KMAIErrorDetail?
+
+    /// 创建消息。
+    /// - Parameters:
+    ///   - id: 稳定 ID。
+    ///   - role: 角色。
+    ///   - text: 文本内容。
+    ///   - isStreaming: 是否仍在流式输出。
+    ///   - imageData: 生图缩略图。
+    ///   - errorDetail: 失败详情。
+    public init(
+        id: String = UUID().uuidString,
+        role: KMChatRole,
+        text: String = "",
+        isStreaming: Bool = false,
+        imageData: Data? = nil,
+        errorDetail: KMAIErrorDetail? = nil
+    ) {
+        self.id = id
+        self.role = role
+        self.text = text
+        self.isStreaming = isStreaming
+        self.imageData = imageData
+        self.errorDetail = errorDetail
+    }
+
+    /// 是否为生图消息。
+    public var isImageMessage: Bool {
+        imageData != nil
+    }
+}
+

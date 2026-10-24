@@ -35,7 +35,7 @@ public struct PhraseSuggestion: Sendable, Equatable {
 
 /// 短语联想索引（只读，加载完成后线程安全）。
 ///
-/// 数据文件 `ios/Shared/Resources/dict/phrases.tsv`，每行：
+/// 数据文件 `ios/Shared/dict/phrases.tsv`，每行：
 /// `建议词拼音<TAB>触发词<TAB>建议词`；以 `#` 开头的行为注释。
 /// 词库缺失时索引为空，`suggestions(after:)` 返回空数组，不影响主输入流程。
 public final class PhraseSuggestionIndex {
@@ -129,7 +129,7 @@ public final class PhraseSuggestionIndex {
     /// - Returns: 候选 URL 数组。
     private static func candidateURLs() -> [URL] {
         var urls: [URL] = []
-        let subdirectories: [String?] = ["Resources/dict", "dict", nil]
+        let subdirectories: [String?] = ["dict", "Resources/dict", nil]
         var bundles: [Bundle] = [Bundle.main]
         let classBundle = Bundle(for: PhraseSuggestionIndex.self)
         if classBundle.bundleURL.path != Bundle.main.bundleURL.path {
@@ -146,8 +146,8 @@ public final class PhraseSuggestionIndex {
         }
         for bundle in bundles {
             guard let resourceURL = bundle.resourceURL else { continue }
-            urls.append(resourceURL.appendingPathComponent("Resources/dict/phrases.tsv"))
             urls.append(resourceURL.appendingPathComponent("dict/phrases.tsv"))
+            urls.append(resourceURL.appendingPathComponent("Resources/dict/phrases.tsv"))
             urls.append(resourceURL.appendingPathComponent("phrases.tsv"))
         }
         var seen = Set<String>()

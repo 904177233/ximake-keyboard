@@ -2,17 +2,22 @@
 //  BuiltInPrompts.swift
 //  ios/Shared/Prompts
 //
-//  模块职责：墨语内置提示词模板库（14 条），覆盖润色 / 语气调整 / 扩写 / 翻译 /
-//            回复建议 / 生图 / 表情包 / 自定义等常用场景。所有文案均为中文、
-//            systemPrompt 遵循「只输出可直接发送的正文」的硬约束。
+//  模块职责：墨语内置提示词模板库（16 条），覆盖润色 / 语气调整 / 扩写 / 翻译 /
+//            回复建议 / 生图 / 表情包 / AI 对话 / 智能联想 / 自定义等常用场景。
+//            所有文案均为中文，systemPrompt 遵循「只输出可直接发送的正文」的硬约束。
 //  依赖：Foundation、`Models`（AIFeature）、`PromptTemplate`。
-//  使用方：`PromptLibrary.builtIn`、宿主 App 提示词管理页、键盘 AI 面板。
+//  使用方：`PromptLibrary.builtIn`、宿主 App 提示词管理页、键盘 AI 面板、
+//          键盘 AI 对话面板（`builtin.chat.assistant`）、候选栏智能联想（`builtin.suggestion.next`）。
 //
 //  维护约定：
 //  - 内置模板 id 一律以 `builtin.` 开头且**永不复用**（配置里可能存着旧 id）；
 //  - 「回复建议」类模板的条数占位符统一为 `{{reply_count}}`，禁止硬编码 3；
 //    输出格式固定为「恰好 N 条，每条一行，行首 1. 2. 3.」，UI 按行切分解析；
-//  - 翻译类模板的目标语言占位符统一为 `{{target_language}}`。
+//  - 翻译类模板的目标语言占位符统一为 `{{target_language}}`；
+//  - 「对话」与「智能联想」使用条件段落 `{{#context}}…{{/context}}`：
+//    上下文为空时整段消失，不会留下空标题行（见 `PromptTemplate.resolveConditionals`）；
+//  - 「智能联想」的输出格式由 design/04 §4.4 定死为 JSON 数组 `["…","…","…"]`，
+//    每条 ≤ 12 字、最多 3 条，解析失败静默丢弃（绝不弹错）。
 //
 
 import Foundation
@@ -292,6 +297,79 @@ public enum BuiltInPrompts {
         isBuiltIn: true
     )
 
+    // MARK: - AI 对话 / 智能联想类（design/04 §3、§4）
+
+    /// AI 对话助手的系统提示词。
+    ///
+    /// 与「改写类」的根本区别：这里**允许**多轮对话与开放式问答，所以不套用
+    /// `baseRewriteSystemPrompt`（那条要求「只改原文、不聊天」），而是单独定义。
+    /// 关键约束：口语短句、不用 Markdown、不复述问题、不写开场白、
+    /// 让写话时直接给可发送文本、不知道就说不知道。
+    static let baseChatSystemPrompt = """
+    你是用户手机输入法里的 AI 助手。用户正在聊天窗口里打字，会在这里问你问题或让你帮忙组织语言。
+    回答要求：
+    1. 像真人发微信一样说话，口语、简短，一般不超过 60 字；
+    2. 不要用 Markdown、不要用列表符号、不要加引号，除非用户明确要一段可以整段发送的文本；
+    3. 直接给答案，不要复述用户的问题，不要说"好的""当然可以"这类开场白；
+    4. 如果用户让你帮写一段话，就直接给出可以原样发送的文本，不要解释你写了什么；
+    5. 不知道就直说不知道，不要编造事实、数字、链接。
+    """
+
+    /// 智能联想的系统提示词（design/04 §4.4）。
+    ///
+    /// 输出格式**定死为 JSON 数组**（design/04 §4.4「返回解析」只接受 `["…","…","…"]`）：
+    /// 解析失败必须静默丢弃、不弹任何错误，因此这里必须把「只返回 JSON」写在最显眼处。
+    /// 条数固定 3、每条 ≤ 12 字，与候选栏 3 个胶囊、单行不换行的视觉约束对应。
+    static let baseSuggestionSystemPrompt = """
+    你是中文输入法的联想助手。根据用户正在写的这段话，给出 3 个"用户接下来最可能输入的短句"，直接可上屏。要求：每条不超过 12 个字；口语化、自然；三条之间要有差异（不要同义重复）；只返回 JSON 数组，不要任何解释。
+    补充要求：
+    1. 必须紧扣上面这段话的具体语境，不要写"你好""谢谢""好的"这类通用套话；
+    2. 宁可只给 1~2 条准的，也不要凑满 3 条不准的；
+    3. 只输出 JSON 数组本身（形如 ["甲","乙","丙"]），不要输出序号、解释、Markdown 或代码块标记。
+    """
+
+    /// AI 对话助手：键盘内多轮对话，回答可一键上屏。
+    ///
+    /// `{{context}}` 用条件段落包裹：没有聊天窗口上文时整段（含「（聊天窗口上文）」标题）
+    /// 自动消失，不会给模型留下一个空标题行。
+    public static let chatAssistant = PromptTemplate(
+        id: "builtin.chat.assistant",
+        title: "AI 对话",
+        systemImage: "bubble.left.and.text.bubble.right",
+        feature: .chat,
+        systemPrompt: baseChatSystemPrompt,
+        userTemplate: """
+        {{#context}}（聊天窗口上文）
+        {{context}}
+
+        （我的问题）
+        {{/context}}{{text}}
+        """,
+        temperature: 0.7,
+        isBuiltIn: true
+    )
+
+    /// 智能联想：根据上下文猜用户下一句想说什么（≤3 条、每条 ≤12 字、JSON 数组输出）。
+    ///
+    /// 供候选栏「非传统联想」使用：`PromptLibrary.suggestionRequest(context:text:)` 构造请求，
+    /// 结果用 `PromptLibrary.parseSuggestionCandidates(_:)` 解析（失败静默为空数组）。
+    public static let suggestionNext = PromptTemplate(
+        id: "builtin.suggestion.next",
+        title: "智能联想",
+        systemImage: "sparkles",
+        feature: .suggestion,
+        systemPrompt: baseSuggestionSystemPrompt,
+        userTemplate: """
+        {{#context}}（聊天上文）
+        {{context}}
+
+        {{/context}}（我正在输入）
+        {{text}}
+        """,
+        temperature: 0.9,
+        isBuiltIn: true
+    )
+
     // MARK: - 生图 / 表情包类
 
     /// 生图提示词增强：中文描述 → 英文生图 prompt。
@@ -367,6 +445,9 @@ public enum BuiltInPrompts {
         // 回复建议
         replySuggestion,
         quickReply,
+        // AI 对话 / 智能联想
+        chatAssistant,
+        suggestionNext,
         // 生图 / 表情包
         imagePrompt,
         stickerCaption,
@@ -384,11 +465,30 @@ public enum BuiltInPrompts {
 
     /// 按 id 查内置模板。
     ///
+    /// 除 `builtin.*` 规范 id 外，还兼容 `design/04`、`docs/07` 里出现过的两个旧写法
+    /// （`suggestion.next_phrase`、`chat.system`），避免文档与代码的 id 命名不一致导致查不到。
+    ///
     /// - Parameter id: 模板 id（如 `"builtin.polish"`）。
     /// - Returns: 命中的模板，未命中返回 nil。
     public static func template(id: String) -> PromptTemplate? {
-        all.first { $0.id == id }
+        if let matched = all.first(where: { $0.id == id }) {
+            return matched
+        }
+        if let canonical = aliasIDs[id] {
+            return all.first { $0.id == canonical }
+        }
+        return nil
     }
+
+    /// 文档旧 id → 规范 id 的别名表（仅用于查询兼容，不参与 UI 展示）。
+    ///
+    /// `design/04-AI对话与智能联想规范.md` §4.4/§4.7 与 `docs/07` 把联想模板写作
+    /// `suggestion.next_phrase`、对话系统提示词写作 `chat.system`；本库统一采用
+    /// `builtin.*` 命名空间（与其余 14 条一致），故在此做一层别名转发。
+    public static let aliasIDs: [String: String] = [
+        "suggestion.next_phrase": "builtin.suggestion.next",
+        "chat.system": "builtin.chat.assistant"
+    ]
 
     /// 翻译模板支持的目标语言（供 UI 下拉选择）。
     public static let targetLanguages: [String] = [

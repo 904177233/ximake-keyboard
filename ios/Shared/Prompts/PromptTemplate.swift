@@ -22,6 +22,12 @@ import Foundation
 /// - `{{target_language}}` —— 目标语言（翻译类模板使用）
 /// - `{{reply_count}}` —— 条数（回复建议类模板使用）
 ///
+/// 支持的**条件段落**（`{{#key}}…{{/key}}`，CONTRACT-ADD）：
+/// - `values[key]` 非空 → 保留段落内容（标记去掉，内部占位符照常替换）；
+/// - 为空或不存在 → 整段（含标记与其中内容）删除；
+/// - 用于「有上文才显示（聊天窗口上文）」这类段落，避免 `context` 为空时留下
+///   一个空标题行（例如 AI 对话、智能联想模板）；支持嵌套，花括号内允许空格。
+///
 /// 渲染规则：
 /// - 占位符两侧可有空格（`{{ text }}` 同样识别）；
 /// - 未知占位符原样保留（便于用户手里老的模板不至于报错）；
@@ -222,14 +228,64 @@ public struct PromptTemplate: Identifiable, Codable, Equatable, Sendable {
     }
 
     /// 替换模板中的 `{{key}}` 占位符（允许花括号内有空格）；未知占位符原样保留。
+    ///
+    /// 先处理条件段落（`{{#key}}…{{/key}}`），再替换普通占位符。
     static func substitute(_ template: String, with values: [String: String]) -> String {
-        var result = template
+        let resolved = resolveConditionals(template, with: values)
+        var result = resolved
         for (key, value) in values {
             result = result
                 .replacingOccurrences(of: "{{\(key)}}", with: value)
                 .replacingOccurrences(of: "{{ \(key) }}", with: value)
                 .replacingOccurrences(of: "{{\(key) }}", with: value)
                 .replacingOccurrences(of: "{{ \(key)}}", with: value)
+        }
+        return result
+    }
+
+    /// 处理条件段落标记 `{{#key}}…{{/key}}`。
+    ///
+    /// - `values[key]` 去空白后非空 → 保留段落内容；
+    /// - 否则整段删除。
+    ///
+    /// 由内向外逐层消解（每轮只匹配「内部不含其它 `{{#`」的最内层段落），
+    /// 因此支持嵌套；最多 32 轮，成对标记异常时保持原样不报错（模板是用户可编辑的）。
+    static func resolveConditionals(_ template: String, with values: [String: String]) -> String {
+        guard template.contains("{{#") else { return template }
+
+        // 最内层：开标记后到闭标记之间不允许再出现 `{{#`（用惰性匹配 + 显式排除）。
+        let pattern = "\\{\\{#\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*\\}\\}"
+            + "((?:(?!\\{\\{#)[\\s\\S])*?)"
+            + "\\{\\{/\\s*\\1\\s*\\}\\}"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return template }
+
+        var result = template
+        var rounds = 0
+        while result.contains("{{#"), rounds < 32 {
+            let range = NSRange(result.startIndex..<result.endIndex, in: result)
+            let matches = regex.matches(in: result, range: range)
+            guard !matches.isEmpty else { break }
+
+            var rebuilt = ""
+            var cursor = result.startIndex
+            for match in matches {
+                guard let fullRange = Range(match.range, in: result),
+                      let keyRange = Range(match.range(at: 1), in: result),
+                      let bodyRange = Range(match.range(at: 2), in: result) else {
+                    continue
+                }
+                rebuilt += result[cursor..<fullRange.lowerBound]
+                let key = String(result[keyRange])
+                let body = String(result[bodyRange])
+                let value = values[key]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                if !value.isEmpty {
+                    rebuilt += body
+                }
+                cursor = fullRange.upperBound
+            }
+            rebuilt += result[cursor...]
+            result = rebuilt
+            rounds += 1
         }
         return result
     }

@@ -41,6 +41,8 @@ struct ExtensionSettingsSheet: View {
                     clipboardRow
                     divider
                     syncRow
+                    divider
+                    dictionaryRow
                 }
             }
             .frame(maxHeight: .infinity)
@@ -169,6 +171,47 @@ struct ExtensionSettingsSheet: View {
         }
         .frame(height: KMLayout.settingsRowHeight)
         .padding(.horizontal, Theme.Spacing.xl)
+    }
+
+    /// ⑥词库来源（诊断行：排查"候选中没有中文"的第一现场证据）。
+    ///
+    /// 取值来自 `IMEKit.diagnosticsSummary`（`model.dictionarySummary`）。
+    /// 正常态用小字 `Theme.textSecondary`；命中「内置兜底词库」时改 `Theme.warning` 并前置 ⚠️。
+    /// 本行只是增加一条可滚动行，不改变设置页高度（高度恒为 `KMLayout.aiPanelExtraHeight`）。
+    private var dictionaryRow: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("词库来源")
+                .font(Theme.fontBody)
+                .foregroundColor(Theme.textPrimary)
+            Text(dictionarySummaryText)
+                .font(Theme.fontCaption)
+                .foregroundColor(isFallbackDictionary ? Theme.warning : Theme.textSecondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: KMLayout.settingsRowHeight)
+        .padding(.horizontal, Theme.Spacing.xl)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text("词库来源，\(dictionarySummaryText)"))
+    }
+
+    /// 词库摘要文案：兜底词库时前置警示符号；尚未加载时给占位文案。
+    private var dictionarySummaryText: String {
+        let summary = model.dictionarySummary
+        if summary.isEmpty {
+            return "正在读取词库…"
+        }
+        if isFallbackDictionary {
+            return "⚠️ " + summary
+        }
+        return summary
+    }
+
+    /// 是否处于「内置兜底词库」异常态（打包词库没读到时 `IMEKit` 会退回 50 条极小词表）。
+    private var isFallbackDictionary: Bool {
+        let summary = model.dictionarySummary
+        return summary.contains("兜底") || summary.contains("内置")
     }
 
     /// 行分隔线（0.5pt）。

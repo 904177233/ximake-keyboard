@@ -245,6 +245,68 @@ func parseReplies(_ text: String) -> [String] {
 > 条数通过 `replyCount` 传入（clamp 到 1...5），**不要硬编码 3**；
 > 模板里的 `{{reply_count}}` 会同步替换到 systemPrompt 的「恰好 N 条」说明中。
 
+### A.5 AI 对话（多轮，`AIFeature.chat`）
+
+对话与「一次性改写」的区别是**要多轮历史**，所以用专用工厂 `PromptLibrary.chatRequest`，
+不要自己拼 `[.system(...), .user(...)]`（system prompt 与「有上文才显示标题」的条件段落都在模板里）：
+
+```swift
+import Foundation
+
+/// 一轮对话：把历史 + 本轮输入交给模型，流式追加到气泡。
+func sendChatTurn(
+    userText: String,
+    chatWindowContext: String,          // 聊天窗口里的上文（可空）
+    history: [ChatMessage],             // 之前几轮（正序，可含 system；内部会去重）
+    provider: AIProviderConfig,
+    apiKey: String
+) async throws -> AsyncThrowingStream<ChatDelta, Error> {
+    let request = PromptLibrary.chatRequest(
+        text: userText,
+        context: chatWindowContext,
+        history: history,
+        maxTokens: 512                 // 对话比改写类长；模板无 maxTokens 字段（冻结契约）
+    )
+    let client = AIClientFactory.makeLLM(config: provider, apiKey: apiKey)
+    return client.stream(request)
+}
+```
+
+- `messages` 结构 = `[.system(渲染后的 systemPrompt)] + history(剔除 system) + [.user(本轮)]`；
+  本轮渲染为空时兜底成 `"你好"`，不会发出空 user 消息。
+- temperature 用模板值 `0.7`；`stream: true`。
+- 取消：用外层 `Task` 持有并在页面关闭时 `cancel()`，客户端 `onTermination` 会关连接。
+- 对 `.chat` 取默认模板用 `PromptLibrary.defaultTemplate(for: .chat)`（= `builtin.chat.assistant`）。
+
+### A.6 智能联想（`AIFeature.suggestion`，**失败必须完全静默**）
+
+一次拿完（`stream: false`）便于做 1.5s 超时；输出契约为 **JSON 数组**，解析用共享库，
+不要自己写正则：
+
+```swift
+/// 请求一次「下一句」候选；任何失败都返回 []，UI 直接退回传统联想、不弹任何提示。
+func requestNextPhrase(
+    context: String,                    // 聊天上文（≤200 字，超出自行裁剪）
+    composing: String,                  // 已输入内容
+    provider: AIProviderConfig,
+    apiKey: String
+) async -> [String] {
+    let request = PromptLibrary.suggestionRequest(context: context, text: composing)
+    let client = AIClientFactory.makeLLM(config: provider, apiKey: apiKey)
+    guard let result = try? await client.complete(request) else { return [] }
+    return PromptLibrary.parseSuggestionCandidates(result.text)   // 0...3 条，绝不抛错
+}
+```
+
+| 常量 | 值 | 含义 |
+| --- | --- | --- |
+| `PromptLibrary.suggestionMaxTokens` | 120 | 输出上限（3 条 12 字 + JSON 括号已够） |
+| `PromptLibrary.suggestionMaxCount` | 3 | 最多显示几个胶囊 |
+| `PromptLibrary.suggestionMaxCharacters` | 12 | 单条最大字数（超长项被丢弃） |
+
+- `parseSuggestionCandidates` 三级容错：JSON → 括号内逗号切分 → 逐行清洗；**永不为空即报错**，
+  解析不出就返回 `[]`。触发条件/防抖 0.35s/节流 3s/超时 1.5s 由键盘侧常量控制（见 `design/04` §4.4）。
+
 ---
 
 ## B. 宿主 App：生图（三种服务商自动路由）
@@ -446,7 +508,7 @@ struct ResultCard: View {
 
 ---
 
-## D. 常见问题（UI 接入时最容易踩的 8 个坑）
+## D. 常见问题（UI 接入时最容易踩的坑）
 
 | 现象 | 原因 | 正确做法 |
 | --- | --- | --- |
@@ -457,6 +519,9 @@ struct ResultCard: View {
 | 报 `.server(code: 404)` | baseURL 写错（少了 `/v1`）或模型名不对 | 提示检查 baseURL（一般以 `/v1` 结尾）与模型名 |
 | 生图返回 413 | 单图超过 4MB 上限 | 提示换更小的尺寸或换服务商 |
 | 回复建议解析出空行 / 带序号 | 没按行切分或没去前缀 | 用 §A.4 的 `parseReplies(_:)` |
+| 对话不回消息 / 报参数错误 | 自己拼 `[.system, .user]`，漏了模板里的条件段落与 `maxTokens` | 用 §A.5 的 `PromptLibrary.chatRequest(...)`，别手拼 |
+| 联想胶囊闪一下又没了 | 解析失败后清空了候选栏 / 弹了 toast | 用 §A.6：`parseSuggestionCandidates` 返回 `[]` 时**保持原样、什么都不做** |
+| 联想把长句塞进胶囊 | 没按 `suggestionMaxCharacters` 过滤就展示 | 共享库已过滤；若自己再二次处理，务必保留 12 字上限 |
 | 配置导入失败 | 剪贴板内容被覆盖 / 校验和不匹配 | `PasteboardBridge.importSnapshot()` 返回 nil 时提示「剪贴板里没有可导入的墨语配置」 |
 
 ---
@@ -475,6 +540,9 @@ struct ResultCard: View {
 | 流式对话 | `client.stream(request)` | `ios/Shared/Networking/LLMClient.swift` |
 | 一次性对话 | `client.complete(request)` | 同上 |
 | 渲染提示词 | `PromptLibrary.render / makeRequest` | `ios/Shared/Prompts/PromptLibrary.swift` |
+| AI 对话一轮请求 | `PromptLibrary.chatRequest(text:context:history:maxTokens:)` | 同上 |
+| 智能联想请求 | `PromptLibrary.suggestionRequest(context:text:)` | 同上 |
+| 联想结果解析 | `PromptLibrary.parseSuggestionCandidates(_:)` | 同上 |
 | 内置模板 | `BuiltInPrompts.all` / `templates(for:)` | `ios/Shared/Prompts/BuiltInPrompts.swift` |
 | 颜色/字体/间距 | `Theme.*` | `ios/Shared/Theme/Theme.swift` |
 | 预设服务商 | `PresetProviders.chatPresets()` / `imagePresets()` | `ios/Shared/Models/PresetProviders.swift` |

@@ -139,6 +139,87 @@ enum KMLayout {
     /// 设置头部高 52。
     static let settingsHeaderHeight: CGFloat = Theme.Sizing.largeTitleHeight
 
+    // MARK: - AI 对话面板（design/04-AI对话与智能联想规范.md §6.1）
+    //
+    // 说明：以下 15 个 sizing 与 3 个 motion 常量已写入 `design/tokens.json`（256 叶子），
+    // 但 `ios/Shared/Theme/Theme.swift` 的对应令牌由 ai-service 维护，本文件暂以派生/字面量
+    // 形式落地（每行标 `// TOKEN:`），待 Theme.Sizing / Theme.Motion 补齐同名令牌后
+    // 可无痛改为直连，视图侧无需改动。
+
+    /// 34 —— 旋钮视觉圆直径（竖屏）。
+    static let aiChatKnobSize: CGFloat = 34  // TOKEN: sizing.aiChatKnobSize
+
+    /// 32 —— 旋钮视觉圆直径（横屏，规范 §2.1「横屏 32」）。
+    static let aiChatKnobLandscapeSize: CGFloat = 32  // TOKEN: sizing.aiChatKnobLandscapeSize
+
+    /// 44 —— 旋钮命中区边长（横竖屏恒 44）。
+    static let aiChatKnobHitSize: CGFloat = Theme.Sizing.minTapTarget
+
+    /// 8 —— 旋钮右边距。
+    static let aiChatKnobInset: CGFloat = Theme.Spacing.md
+
+    /// 16 —— 旋钮图标的绘制框边长（16×16 坐标系）。
+    static let aiChatKnobGlyphSize: CGFloat = Theme.Spacing.xl
+
+    /// 40 —— 对话面板标题条高度。
+    static let aiChatTopBarHeight: CGFloat = 40  // TOKEN: sizing.aiChatTopBarHeight
+
+    /// 32 —— 横屏标题条高度（规范 §3.11）。
+    static let aiChatLandscapeTopBarHeight: CGFloat = 32  // TOKEN: sizing.aiChatTopBarHeight - 8
+
+    /// 180 —— 对话消息区高度（竖屏）。
+    static let aiChatMessageHeight: CGFloat = 180  // TOKEN: sizing.aiChatMessageHeight
+
+    /// 44 —— 对话输入行高度（= 候选栏高度，组合态原地换候选行不跳高）。
+    static let aiChatInputHeight: CGFloat = Theme.Sizing.candidateBarHeight
+
+    /// 36 —— 发送按钮直径。
+    static let aiChatSendSize: CGFloat = 36  // TOKEN: sizing.aiChatSendSize
+
+    /// 16 —— 气泡圆角。
+    static let aiChatBubbleCorner: CGFloat = Theme.Radius.card
+
+    /// 32 —— 最新 AI 消息操作行高度。
+    static let aiChatActionHeight: CGFloat = 32  // TOKEN: sizing.aiChatActionHeight
+
+    /// 180 —— 对话面板展开增量（= resultExtraHeight，不新增高度令牌）。
+    static let aiChatExtraHeight: CGFloat = Theme.Sizing.resultExtraHeight
+
+    /// 30 —— 联想胶囊高度。
+    static let sugChipHeight: CGFloat = Theme.Sizing.aiChipHeight
+
+    /// 8 —— 联想胶囊间距。
+    static let sugChipGap: CGFloat = Theme.Sizing.aiChipGap
+
+    /// 3 —— 联想胶囊最多条数。
+    static let sugChipMaxCount: Int = 3  // TOKEN: sizing.sugChipMaxCount
+
+    /// 12 —— 联想胶囊每条最大字数。
+    static let sugChipMaxChars: Int = 12  // TOKEN: sizing.sugChipMaxChars
+
+    /// 0.35 —— 联想防抖（秒）。
+    static let suggestDebounce: TimeInterval = 0.35  // TOKEN: motion.suggestDebounce
+
+    /// 3.0 —— 联想节流（秒）：两次请求之间的最小间隔。
+    static let suggestThrottle: TimeInterval = 3.0  // TOKEN: design §4.4 ④
+
+    /// 1.5 —— 联想超时（秒）：超过即放弃，静默不显示。
+    ///
+    /// 规范 §6 采纳「方案 A」：不新增 `suggestTimeout` 令牌，此处以具名常量落地。
+    static let suggestTimeout: TimeInterval = 1.5
+
+    /// 0.08 —— 旋钮按下动效时长。
+    static let knobPress: TimeInterval = Theme.Motion.keyPress
+
+    /// 0.15 —— 旋钮反色渐变时长。
+    static let knobActiveFade: TimeInterval = Theme.Motion.fast
+
+    /// 对话面板总高（竖屏 438 = 40 + 180 + 44 + 174）。
+    static let aiChatHeight: CGFloat = portraitHeight + aiChatExtraHeight
+
+    /// 对话面板总高（横屏 340 = 32 + 108 + 44 + 156）。
+    static let aiChatLandscapeHeight: CGFloat = landscapeHeight + landscapeExtraHeight
+
     // MARK: - 方法
 
     /// 指定宽度下的字母键宽；390pt 时正好 33。
@@ -196,7 +277,7 @@ enum KMLayout {
     static func keyboardHeight(isLandscape: Bool, page: KeyboardViewModel.Page, safeAreaBottom: CGFloat) -> CGFloat {
         if isLandscape {
             switch page {
-            case .aiPanel, .settings, .result:
+            case .aiPanel, .settings, .result, .aiChat:
                 return landscapeHeight + landscapeExtraHeight
             default:
                 return landscapeHeight
@@ -210,6 +291,8 @@ enum KMLayout {
             height += resultExtraHeight
         case .settings:
             height += aiPanelExtraHeight
+        case .aiChat:
+            height += aiChatExtraHeight
         default:
             break
         }

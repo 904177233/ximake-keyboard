@@ -23,8 +23,8 @@ if HERE not in sys.path:
 
 from syllable_table import SYLLABLES  # noqa: E402
 
-DICT_PATH = os.path.join(ROOT, "ios", "Shared", "Resources", "dict", "base_dict.tsv")
-PHRASE_PATH = os.path.join(ROOT, "ios", "Shared", "Resources", "dict", "phrases.tsv")
+DICT_PATH = os.path.join(ROOT, "ios", "Shared", "dict", "base_dict.tsv")
+PHRASE_PATH = os.path.join(ROOT, "ios", "Shared", "dict", "phrases.tsv")
 
 MAX_TILE_LENGTH = 24
 PREFIX_KEY_LIMIT = 40

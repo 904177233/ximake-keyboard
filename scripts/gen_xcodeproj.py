@@ -14,12 +14,19 @@ plist，手写极易出现「括号不平衡 / UUID 引用断裂 / build phase �
       ios/Shared/**/*.swift              → 两个 target 的 Sources
       ios/AIKeyboard/**/*.swift          → 仅 App 的 Sources
       ios/AIKeyboardExtension/**/*.swift → 仅 Extension 的 Sources
-      ios/Shared/Resources/              → folder reference（蓝文件夹），两个 target 的 Resources
+      ios/Shared/dict/                   → folder reference（蓝文件夹），两个 target 的 Resources
       ios/Resources/Assets.xcassets      → 仅 App 的 Resources
       ios/Resources/ 下其他文件/目录      → 仅 App 的 Resources
       ios/Config/                         → 仅用于 Xcode 导航（不参与构建）
    并行开发中某个目录还没落盘时，脚本打印 WARNING 并继续，**不会崩**；
    等其它模块落盘后重跑本脚本即可自动纳入。
+
+   ⚠️ **词库文件夹必须叫 `dict`，绝不能叫 `Resources`**（即不能是 `ios/Shared/Resources/dict`）：
+   folder reference 会把文件夹**原样复制到 bundle 根**，若叫 `Resources` 就会产出
+   `AIKeyboard.app/Resources/`，而 iOS 27 的 installd / IXPlaceholder **会拒绝 app bundle
+   根目录下存在名为 `Resources` 的目录**（真机实测：即使空目录也会导致安装失败，
+   报 `IXErrorDomain Code=13 Missing bundle ID`）。叫 `dict` 则产出 `AIKeyboard.app/dict/`，
+   安装正常。运行时用 `Bundle.main.url(forResource:withExtension:subdirectory:"dict")` 寻址。
 3. **配置单一真相源**：关键构建设置写在 ios/Config/*.xcconfig 里，本脚本会解析这些
    xcconfig 并把其中的关键键回填进 pbxproj 的 target buildSettings（这样即使有人只用
    文本编辑器看 pbxproj 也能看出 bundle id / 部署目标；同时 xcconfig 仍是可读的真相源）。
@@ -78,6 +85,13 @@ CREATED_ON_TOOLS_VERSION = "15.0"
 
 PRODUCT_TYPE_APP = "com.apple.product-type.application"
 PRODUCT_TYPE_EXT = "com.apple.product-type.app-extension"
+
+# 词库等共享资源的物理目录（folder reference，同时加入 App 与 Extension 的 Resources phase）。
+# ⚠️ 目录名必须是 `dict`，**不能是 `Resources`**：folder reference 会把文件夹名原样复制到
+# bundle 根，若叫 Resources 就会产出 `AIKeyboard.app/Resources/`，而 iOS 27 的 installd /
+# IXPlaceholder 会拒绝 app bundle 根目录下存在名为 Resources 的目录（真机实测：即使空目录
+# 也会让安装失败，报 IXErrorDomain Code=13 Missing bundle ID；同样内容放 dict/ 就成功）。
+SHARED_RESOURCES_REL = "Shared/dict"
 
 # 扫描时跳过的目录名（构建产物 / 版本库 / 用户态目录）
 SKIP_DIR_NAMES = {
@@ -551,10 +565,15 @@ class ProjectModel:
         self.stats: dict[str, int] = {}
 
         # ---- 文件发现 ----
-        # 注意：Shared/Resources 是 folder reference，里面的 .swift（若有）不再单独编译，
-        # 避免「既是资源又是源码」的重复。
+        # ⚠️ 词库目录必须叫 `dict`，**不能叫 `Resources`**：
+        # folder reference 会把文件夹名原样复制到 bundle 根目录，若叫 Resources 就会产出
+        # `AIKeyboard.app/Resources/`，而 iOS 27 的 installd / IXPlaceholder 会拒绝 app bundle
+        # 根目录下存在名为 Resources 的目录（真机实测：空目录也导致安装失败，
+        # IXErrorDomain Code=13 Missing bundle ID）。叫 dict 则产出 `AIKeyboard.app/dict/`。
+        # 运行时 PinyinDictionary.swift 走 ["Resources/dict", "dict", nil] 三段 subdirectory
+        # 依次尝试，第二段 `dict` 正好命中本布局。
         self.shared_swift = discover_swift(
-            ios_root, "Shared", exclude_prefixes=("Shared/Resources",))
+            ios_root, "Shared", exclude_prefixes=(SHARED_RESOURCES_REL,))
         self.app_swift = discover_swift(ios_root, APP_TARGET)
         self.ext_swift = discover_swift(ios_root, EXT_TARGET)
         self.config_files = discover_config_files(ios_root)
@@ -580,14 +599,18 @@ class ProjectModel:
             else:
                 self.app_resources.append(FileRefSpec(rel=rel, filetype=file_type_for(rel), comment=entry.name))
 
-        shared_res_rel = "Shared/Resources"
+        # 词库等共享资源：folder reference（蓝文件夹），同时加入 App 与 Extension 的 Resources
+        # phase。目录名必须是 `dict`（见顶部 SHARED_RESOURCES_REL 的注释）——绝不能叫
+        # Resources，否则会在 bundle 根产出 Resources/ 目录导致 iOS 27 安装失败。
+        shared_res_rel = SHARED_RESOURCES_REL
         if (ios_root / shared_res_rel).is_dir():
             self.shared_resource_folder = FileRefSpec(
-                rel=shared_res_rel, filetype="folder", comment="Resources")
+                rel=shared_res_rel, filetype="folder", comment=Path(shared_res_rel).name)
         else:
             self.warnings.append(
                 f"未找到 {shared_res_rel}/（词库等共享资源尚未落盘；重跑本脚本会自动作为 "
-                "folder reference 加入两个 target 的 Resources）")
+                "folder reference 加入两个 target 的 Resources）。"
+                "⚠️ 目录名必须是 dict，不能是 Resources（iOS 27 installd 拒绝 bundle 根下的 Resources 目录）")
 
         if not self.app_swift:
             self.warnings.append(
@@ -1061,7 +1084,7 @@ def print_summary(model: ProjectModel, meta: dict, ios_root: Path) -> None:
     print(f"    Sources     : {len(meta['app_source_rels'])} 个 .swift"
           f"（Shared {model.stats['shared_swift']} + App {model.stats['app_swift']}）")
     print(f"    Resources   : {len(meta['app_res_rels'])} 项"
-          f"（Assets.xcassets{' + Shared/Resources' if model.shared_resource_folder else ''}"
+          f"（Assets.xcassets{' + ' + SHARED_RESOURCES_REL if model.shared_resource_folder else ''}"
           f"{' + 其他' if len(meta['app_res_rels']) > (1 + (1 if model.shared_resource_folder else 0)) else ''}）")
     print(f"    Frameworks  : (空，系统框架自动链接)")
     print(f"    Copy Files  : Embed Foundation Extensions → PlugIns"
@@ -1072,7 +1095,7 @@ def print_summary(model: ProjectModel, meta: dict, ios_root: Path) -> None:
     print(f"    Sources     : {len(meta['ext_source_rels'])} 个 .swift"
           f"（Shared {model.stats['shared_swift']} + Extension {model.stats['ext_swift']}）")
     print(f"    Resources   : {len(meta['ext_res_rels'])} 项"
-          f"（{'Shared/Resources' if model.shared_resource_folder else '(无)'}）")
+          f"（{SHARED_RESOURCES_REL if model.shared_resource_folder else '(无)'}）")
     print()
     if model.warnings:
         print(f"[WARNING] {len(model.warnings)} 条（不影响工程结构，但可能影响可编译性）：")

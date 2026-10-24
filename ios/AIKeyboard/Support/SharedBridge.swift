@@ -110,20 +110,50 @@ enum PhraseStore {
 // MARK: - 词库信息
 
 /// 拼音词库信息（只读，用于首页与诊断页展示）。
+///
+/// CONTRACT-ADD（真机排查）：除了版本与词条数，还带上**词库来源**。
+/// 键盘打不出中文时，`PinyinDictionary` 会静默回退到 50 条内置小词表而不报错，
+/// 所以"来源"是判断「词库到底有没有打进包」的唯一现场证据（见 `IMEKit.dictionarySource`）。
 struct DictionaryInfo: Equatable {
+
     /// 词库版本号。
     var version: String
+
     /// 词条数量。
     var wordCount: Int
 
+    /// 词库来源（打包词库 / 内置兜底 / 内存）。
+    var source: IMEKit.DictionarySource
+
+    /// 词库在 Bundle 内的相对路径（如 `dict/base_dict.tsv`），兜底时为 `<builtin>`。
+    var relativePath: String
+
+    /// 词库加载耗时（毫秒）。
+    var loadDurationMilliseconds: Double
+
     /// 词库是否可用（加载失败时为 nil）。
+    ///
+    /// 说明：`PinyinDictionary` 在词库缺失时会用内置兜底词表，此时 `version` 不为空，
+    /// 因此这里不能在兜底时返回 nil —— 兜底本身就是"需要展示给用户"的诊断信息。
     static func current() -> DictionaryInfo? {
-        let dictionary = PinyinDictionary.bundled()
-        let version = dictionary.version
-        let wordCount = dictionary.wordCount
+        let kit = sharedKit
+        let version = kit.dictionaryVersion
         guard !version.isEmpty else { return nil }
-        return DictionaryInfo(version: version, wordCount: wordCount)
+        return DictionaryInfo(
+            version: version,
+            wordCount: kit.wordCount,
+            source: kit.dictionarySource,
+            relativePath: kit.dictionaryRelativePath,
+            loadDurationMilliseconds: kit.loadDurationMilliseconds
+        )
     }
+
+    /// 进程内共享的输入法内核（惰性创建一次）。
+    ///
+    /// `IMEKit` 的构造会加载学习数据、短语库与上下文索引，不适合每次刷新都新建；
+    /// 而 `refreshDerivedState()` 会在启动/改配置/回到前台时多次调用，因此在
+    /// 这里缓存一份（`PinyinDictionary` 本身也是进程内单例，不会重复读盘）。
+    private static let sharedKit = IMEKit(store: SharedStore.shared)
 
     /// 形式化的词条数量，例如 "12.6 万"。
     var formattedWordCount: String {
@@ -132,6 +162,31 @@ struct DictionaryInfo: Equatable {
             return String(format: "%.1f 万", value)
         }
         return "\(wordCount)"
+    }
+
+    /// 词库来源的中文描述（正常 / 告警两种语气）。
+    var sourceDescription: String {
+        switch source {
+        case .bundled:
+            return "打包词库"
+        case .builtin:
+            return "⚠️ 内置兜底词库（安装包可能缺词库）"
+        case .memory:
+            return "内存内置"
+        }
+    }
+
+    /// 是否退回到内置小词表（`true` 表示词库没打进包，中文候选会非常少）。
+    var isUsingBuiltin: Bool {
+        source == .builtin
+    }
+
+    /// 一句话完整摘要，例如：
+    /// `词库 v1.0.0｜5276 条｜来源：打包词库｜路径：dict/base_dict.tsv｜加载 12.3ms`
+    var summary: String {
+        let duration = String(format: "%.1f", loadDurationMilliseconds)
+        return "词库 v\(version)｜\(wordCount) 条｜来源：\(sourceDescription)"
+            + "｜路径：\(relativePath)｜加载 \(duration)ms"
     }
 }
 

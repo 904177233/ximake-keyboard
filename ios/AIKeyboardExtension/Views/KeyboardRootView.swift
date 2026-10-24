@@ -5,14 +5,38 @@
 //  模块职责：键盘扩展的视图树根。负责：
 //            ①`KeyboardShell` 统一背景（keyboardBackground + 顶部 0.5pt 阴影）；
 //            ②候选栏 44 + AI 工具条 40 共用一条 84pt 连续玻璃背景（布局规范 §8 ④）；
-//            ③按 `model.page` 切换键区内容（26 键 / 数字 / 符号 / emoji / AI 面板 / 结果 / 设置）；
+//            ③按 `model.page` 切换键区内容（26 键 / 数字 / 符号 / emoji / AI 面板 / 结果 / 设置 / AI 对话）；
 //            ④浮层（短语 / 剪贴板）与 Toast 的叠加。
-//  设计依据：design/键盘布局规范.md §1（总高 258）、§4（各页）、§8（视觉层级）、§5（12 状态）。
+//  设计依据：design/键盘布局规范.md §1（总高 258）、§4（各页）、§8（视觉层级）、§5（12 状态）；
+//            design/04-AI对话与智能联想规范.md §3.2（`.aiChat` 整页隐藏 84pt chrome）。
 //  约束：本视图不计算高度——高度由 `KeyboardViewController` 的 `heightAnchor` 唯一决定；
 //        本视图只负责在给定高度内排布，因此所有子视图都用固定高度，不用 `Spacer` 撑高。
 //
 
 import SwiftUI
+
+/// 某个页面是否需要显示候选栏 + AI 工具条（84pt chrome）。
+/// - Parameter page: 当前页面。
+/// - Returns: 是否显示。
+private func pageShowsChrome(_ page: KeyboardViewModel.Page) -> Bool {
+    // `.aiChat` 是全场对话模式：自己的标题条替代了候选栏 + AI 工具条（design/04 §3.2）。
+    page != .aiChat
+}
+
+/// 旋钮状态：不可用时 disabled、回答中 busy、已打开 active，否则 idle。
+/// - Parameter model: 键盘状态机。
+/// - Returns: 旋钮外观状态。
+private func chatKnobState(for model: KeyboardViewModel) -> KMChatKnobState {
+    if model.aiAvailability == .noFullAccess || model.aiAvailability == .notConfigured || model.aiAvailability == .offline {
+        return .disabled
+    }
+    if model.chatPhase.isBusy {
+        return .busy
+    }
+    return model.isChatOpen ? .active : .idle
+}
+
+// MARK: - 根视图
 
 /// 键盘根视图。
 struct KeyboardRootView: View {
@@ -30,7 +54,9 @@ struct KeyboardRootView: View {
         ZStack(alignment: .top) {
             KeyboardShell {
                 VStack(spacing: 0) {
-                    chrome
+                    if pageShowsChrome(model.page) {
+                        chrome
+                    }
                     keyArea
                 }
             }
@@ -67,9 +93,15 @@ struct KeyboardRootView: View {
                     pageIndex: model.candidatePageIndex,
                     pageCount: model.candidatePageCount,
                     composingText: model.composing,
+                    showsChatKnob: true,
+                    knobState: chatKnobState(for: model),
+                    isLandscape: model.isLandscape,
+                    suggestions: model.suggestionChips,
                     onSelect: { index in model.selectCandidate(at: model.candidatePageIndex * KeyboardViewModel.candidatePageSize + index) },
                     onLongPress: { index in model.longPressCandidate(at: model.candidatePageIndex * KeyboardViewModel.candidatePageSize + index) },
-                    onTogglePage: { delta in model.turnCandidatePage(delta) }
+                    onTogglePage: { delta in model.turnCandidatePage(delta) },
+                    onChatKnobTap: { model.openAIChat() },
+                    onSelectSuggestion: { index in model.insertSuggestion(at: index) }
                 )
                 .frame(height: KMLayout.candidateBarHeight)
 
@@ -82,6 +114,7 @@ struct KeyboardRootView: View {
                     onSelect: { feature in model.startAI(feature) },
                     onOpenSettings: { model.tap(.openSettings) },
                     onOpenPanel: { model.openAIPanel() },
+                    onOpenChat: { model.openAIChat() },
                     onDisabledTap: { model.handleAIBarDisabledTap() }
                 )
                 .frame(height: KMLayout.aiBarHeight)
@@ -118,6 +151,8 @@ struct KeyboardRootView: View {
             AIResultCardView(model: model)
         case .settings:
             ExtensionSettingsSheet(model: model)
+        case .aiChat:
+            ChatPanelView(model: model)
         }
     }
 

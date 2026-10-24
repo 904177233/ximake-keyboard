@@ -95,8 +95,11 @@ RE_UUID = re.compile(r"^[0-9A-Fa-f]{24}$")
 
 EMBED_DST_SUBFOLDER_PLUGINS = 13
 
-#: 共享资源目录（folder reference，两个 target 都要引；目录不存在时降级为 WARNING）
-SHARED_RESOURCES_REL = "Shared/Resources"
+#: 共享资源目录（folder reference，两个 target 都要引；目录不存在时降级为 WARNING）。
+#: ⚠️ 目录名必须是 `dict`，**不能是 `Resources`**：folder reference 会把文件夹名原样复制到
+#: bundle 根，而 iOS 27 的 installd / IXPlaceholder 会拒绝 app bundle 根目录下存在名为
+#: Resources 的目录（真机实测：空目录也会导致安装失败，IXErrorDomain Code=13 Missing bundle ID）。
+SHARED_RESOURCES_REL = "Shared/dict"
 
 #: target 的 buildSettings 里必须出现的键（生成器会把 xcconfig 标量回填进来）
 REQUIRED_BUILD_SETTINGS_COMMON = [
@@ -782,7 +785,10 @@ class Validator:
             for _, path in entries:
                 if path.endswith(".xcassets"):
                     found["assets"] = path
-                elif path.endswith("/Resources") or path == "Shared/Resources":
+                elif path == SHARED_RESOURCES_REL:
+                    # 只认规范的共享资源目录名（Shared/dict）。
+                    # 历史上这里写成 path.endswith("/Resources")，那个名字会产出
+                    # bundle 根下的 Resources/ 目录，iOS 27 installd 直接拒绝安装，已废弃。
                     found["shared"] = path
             return found
 
@@ -825,15 +831,16 @@ class Validator:
                             else:
                                 self.report.ok("APPICON", f"AppIcon 到位（{fname}）")
 
-        # 注意：Shared/Resources 尚未落盘时，gen 脚本不会凭空造文件夹引用（--repo-root 的
-        # 空仓库场景）。此时降级为 WARNING：目录本身不存在 → 缺引用是预期行为，不是结构错误。
+        # 注意：Shared 资源目录（SHARED_RESOURCES_REL = "Shared/dict"）尚未落盘时，gen 脚本不会
+        # 凭空造文件夹引用（--repo-root 的空仓库场景）。此时降级为 WARNING：目录本身不存在 →
+        # 缺引用是预期行为，不是结构错误。目录存在却没被引用仍然是 P0。
         shared_dir_exists = (self.ios / SHARED_RESOURCES_REL).is_dir()
 
         if "shared" not in app:
             if shared_dir_exists:
                 self.report.p0("APP-RESOURCES-SHARED",
-                               "App 的 Resources 阶段缺少 Shared 资源文件夹引用"
-                               "（Shared/Resources，folder reference）")
+                               "App 的 Resources 阶段缺少共享词库文件夹引用"
+                               f"（{SHARED_RESOURCES_REL}，folder reference）")
             else:
                 self.report.warn(
                     "APP-RESOURCES-SHARED",
@@ -850,8 +857,8 @@ class Validator:
         if "shared" not in ext:
             if shared_dir_exists:
                 self.report.p0("EXT-RESOURCES-SHARED",
-                               "Extension 的 Resources 阶段缺少 Shared 资源文件夹引用"
-                               "（键盘扩展读不到词库）")
+                               "Extension 的 Resources 阶段缺少共享词库文件夹引用"
+                               f"（{SHARED_RESOURCES_REL}；键盘扩展读不到词库）")
             else:
                 self.report.warn(
                     "EXT-RESOURCES-SHARED",
@@ -865,7 +872,7 @@ class Validator:
         for target_name, entries in ((APP_TARGET, self.app_resources),
                                      (EXT_TARGET, self.ext_resources)):
             for _, path in entries:
-                if not (path.endswith("/Resources") or path == "Shared/Resources"):
+                if path != SHARED_RESOURCES_REL:
                     continue
                 ref_uid = None
                 for pu in self.targets[target_name][1].get("buildPhases") or []:
@@ -1323,7 +1330,9 @@ class Validator:
     # -- 14. 磁盘 ↔ 工程一致性 --------------------------------------------
 
     def check_disk_membership(self) -> None:
-        shared = [r for r in scan_swift(self.ios, "Shared", exclude_dirs=("Shared/Resources/",))]
+        # 词库目录（SHARED_RESOURCES_REL）里即使出现 .swift 也不单独编译，
+        # 与 gen_xcodeproj.py 的 discover_swift(exclude_prefixes=(SHARED_RESOURCES_REL,)) 保持一致。
+        shared = [r for r in scan_swift(self.ios, "Shared", exclude_dirs=(SHARED_RESOURCES_REL + "/",))]
         app_only = scan_swift(self.ios, "AIKeyboard")
         ext_only = scan_swift(self.ios, "AIKeyboardExtension")
 

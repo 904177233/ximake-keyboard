@@ -52,6 +52,14 @@ final class KeyboardViewController: UIInputViewController {
     /// 上一次布局时的横屏状态（检测横竖屏翻转）。
     private var lastLandscape: Bool = false
 
+    /// 正在执行 `applyHeight` 的重入锁。
+    ///
+    /// 必要性（真机崩溃修复）：`applyHeight` 内部会 `layoutIfNeeded()` 强制布局，
+    /// 而布局会再次回调 `viewWillLayoutSubviews`，后者又调用 `applyHeight` →
+    /// 无限递归 → 栈溢出（`EXC_BAD_ACCESS / Thread stack size exceeded`）。
+    /// 该锁保证同一时刻只有一层 `applyHeight` 在跑，内层直接返回。
+    private var isApplyingHeight: Bool = false
+
     /// 观察状态变化的订阅（页面切换时刷新高度）。
     private var pageCancellable: AnyCancellable?
 
@@ -109,7 +117,11 @@ final class KeyboardViewController: UIInputViewController {
 
         model.proxy = textDocumentProxy
         model.setLandscape(isLandscapeLayout)
-        applyHeight(animated: false)
+        // 注意：这里**只能同步约束常量**，绝不能调 `layoutIfNeeded()`。
+        // 该方法是布局回调，在其中强制布局会再次回到这里 —— 真机上表现为
+        // `applyHeight → layoutBelowIfNeeded → viewWillLayoutSubviews → applyHeight`
+        // 的无限递归，最终栈溢出崩溃（EXC_BAD_ACCESS / Thread stack size exceeded）。
+        syncHeightConstraintOnly()
     }
 
     /// 宿主输入框内容变化（切换输入框 / 外部插入）时刷新代理。
@@ -118,6 +130,8 @@ final class KeyboardViewController: UIInputViewController {
         super.textDidChange(textInput)
         model.proxy = textDocumentProxy
         model.reloadContextPreview()
+        // 上下文变化是 AI 联想的触发时机 B（design/04 §4.4）。
+        model.scheduleSuggestions()
     }
 
     /// 外观（浅色 / 深色）变化时同步 SwiftUI 宿主。
@@ -220,6 +234,26 @@ final class KeyboardViewController: UIInputViewController {
         )
     }
 
+    /// 只同步高度约束常量，**不触发任何布局**。
+    ///
+    /// 专供 `viewWillLayoutSubviews` 使用：该方法本身就是布局过程的回调，
+    /// 在其中调用 `layoutIfNeeded()` 会形成无限递归（真机栈溢出崩溃的根因）。
+    /// 约束常量改变后，UIKit 会在本轮布局里自然生效，无需手动推动。
+    private func syncHeightConstraintOnly() {
+        let target = currentTargetHeight
+        guard abs(target - appliedHeight) > 0.5 else { return }
+        if let constraint = heightConstraint {
+            if abs(constraint.constant - target) > 0.5 {
+                constraint.constant = target
+            }
+        } else {
+            setupHeightConstraint()
+        }
+        appliedHeight = target
+        lastLandscape = isLandscapeLayout
+        requestHeightUpdateFromSystem()
+    }
+
     /// 应用目标高度（唯一改高度的地方）。
     ///
     /// 兼容方案说明：iOS 16 没有公开的 `requestInputViewHeightUpdate()`，
@@ -227,6 +261,12 @@ final class KeyboardViewController: UIInputViewController {
     /// 若未来系统提供该方法则通过 `responds(to:)` 转发，不产生编译期依赖。
     /// - Parameter animated: 是否使用弹簧动画（页面切换为 true，旋转/首次布局为 false）。
     private func applyHeight(animated: Bool) {
+        // 重入保护：`layoutIfNeeded()` 会同步回调 `viewWillLayoutSubviews`，
+        // 若不加锁会形成 applyHeight → layout → viewWillLayoutSubviews → applyHeight 的无限递归。
+        guard isApplyingHeight == false else { return }
+        isApplyingHeight = true
+        defer { isApplyingHeight = false }
+
         let target = currentTargetHeight
         let changed = abs(target - appliedHeight) > 0.5
 
@@ -265,14 +305,18 @@ final class KeyboardViewController: UIInputViewController {
     ///
     /// iOS 16 上该方法通常不存在，此时退回「约束 + 布局」路径（`applyHeight` 已完成），
     /// 只是额外通知一下宿主，失败无副作用。
+    ///
+    /// - Important: 这里**只能 `setNeedsLayout()`，不能 `layoutIfNeeded()`**——
+    ///   本方法会被 `viewWillLayoutSubviews` 路径（`syncHeightConstraintOnly`）调用，
+    ///   在布局回调里强制布局就是真机栈溢出的根因。
     private func requestHeightUpdateFromSystem() {
         let selector = NSSelectorFromString(Self.heightUpdateSelectorName)
         if responds(to: selector) {
             perform(selector)
         }
-        // 通知系统重新测量：`view` 就是本控制器的输入视图（`UIInputViewController` 以 `view` 作为 inputView）。
+        // 通知系统下一轮重新测量：`view` 就是本控制器的输入视图
+        // （`UIInputViewController` 以 `view` 作为 inputView）。
         view.setNeedsLayout()
-        view.layoutIfNeeded()
     }
 
     // MARK: - 外观

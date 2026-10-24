@@ -95,6 +95,7 @@ struct DiagnosticsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppMetrics.sectionGap) {
                 summaryCard
+                dictionaryCard
                 checkList
                 signatureCard
             }
@@ -188,6 +189,79 @@ struct DiagnosticsView: View {
             return "共检查 \(checks.count) 项，全部通过。遇到问题可以把右上角的报告复制给我们。"
         }
         return "共检查 \(checks.count) 项，其中 \(problems) 项需要注意，逐条看下面的说明。"
+    }
+
+    // MARK: - 词库来源（真机排查首选：区分「打包词库」与「内置兜底词库」）
+
+    private var dictionaryCard: some View {
+        VStack(alignment: .leading, spacing: AppMetrics.blockGap) {
+            SectionHeader(title: "词库来源", footnote: "键盘打不出中文时先看这一项")
+
+            SurfaceCard {
+                if let info = appState.dictionaryInfo {
+                    VStack(alignment: .leading, spacing: AppMetrics.blockGap) {
+                        HStack(spacing: AppMetrics.rowGap) {
+                            IconGlyph(
+                                symbol: info.isUsingBuiltin ? "exclamationmark.triangle.fill" : "shippingbox.fill",
+                                fallback: info.isUsingBuiltin ? "!" : "📦",
+                                size: AppMetrics.glyphSize,
+                                weight: .semibold,
+                                tint: info.isUsingBuiltin ? Theme.warning : Theme.success
+                            )
+
+                            Text(info.sourceDescription)
+                                .font(AppFont.body.weight(.semibold))
+                                .foregroundColor(info.isUsingBuiltin ? Theme.warning : Theme.textPrimary)
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            Spacer(minLength: 0)
+                        }
+
+                        Text("路径：\(info.relativePath)")
+                            .font(AppFont.footnote)
+                            .foregroundColor(Theme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Text("词库 v\(info.version) · \(info.wordCount) 条 · 加载 "
+                             + String(format: "%.1f", info.loadDurationMilliseconds) + "ms")
+                            .font(AppFont.caption)
+                            .foregroundColor(Theme.textTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        if info.isUsingBuiltin {
+                            // 注意：这里不能用 `ErrorBanner`，它自带左右 pageInset 外边距，
+                            // 套进 `SurfaceCard` 会二次缩进。改为卡内联的警示块。
+                            HStack(alignment: .top, spacing: AppMetrics.tightGap) {
+                                IconGlyph(
+                                    symbol: "exclamationmark.triangle.fill",
+                                    fallback: "!",
+                                    size: AppMetrics.glyphSizeSmall,
+                                    weight: .semibold,
+                                    tint: Theme.warning
+                                )
+                                .padding(.top, AppMetrics.hairGap)
+
+                                Text("正在使用只有 50 条的内置小词表，中文候选会非常少。请在电脑上重新安装完整安装包（App 与键盘扩展的 `dict/` 目录都要带上 base_dict.tsv、phrases.tsv、dict_meta.json）。")
+                                    .font(AppFont.footnote)
+                                    .foregroundColor(Theme.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(AppMetrics.rowVPadding)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(
+                                RoundedRectangle(cornerRadius: AppMetrics.controlRadius, style: .continuous)
+                                    .fill(Theme.warningSoft)
+                            )
+                        }
+                    }
+                } else {
+                    Text("没有读到词库信息，拼音输入可能不可用。请在电脑上重新安装完整安装包。")
+                        .font(AppFont.footnote)
+                        .foregroundColor(Theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
     }
 
     // MARK: - 检查列表
@@ -330,9 +404,12 @@ struct DiagnosticsView: View {
         lines.append("存储：\(SharedStore.shared.storageStatusDescription)")
         lines.append("钥匙串：\(appState.isKeychainAvailable ? "可用" : "不可用")")
         if let info = appState.dictionaryInfo {
-            lines.append("词库：v\(info.version) · \(info.wordCount) 词")
+            lines.append("词库：\(info.summary)")
+            if info.isUsingBuiltin {
+                lines.append("词库异常：使用了内置兜底词表，安装包可能缺 dict/base_dict.tsv。")
+            }
         } else {
-            lines.append("词库：未加载")
+            lines.append("词库：未加载（PinyinDictionary 没有返回版本号）")
         }
         lines.append("签名：\(SignatureClock.summary)")
         lines.append("")

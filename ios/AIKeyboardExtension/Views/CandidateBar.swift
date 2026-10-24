@@ -2,12 +2,16 @@
 //  CandidateBar.swift
 //  墨语（Moyu）键盘扩展 · 候选栏
 //
-//  模块职责：显示当前页候选（每页最多 9 个），首候选高亮为 accent + semibold，
-//            右侧分页指示点，左侧可选页码开关，空态显示品牌语。
-//  设计依据：design/组件库.md「CandidateBar」（44 固定 / 项最小宽 48 / 项间距 20 /
-//            左右内边距 16 / 高亮底 candidateSelected 圆角 6 仅覆盖文字 ±6 / 分页点 6×6
-//            间距 5 / 空态「墨语 · 会 AI 的输入法」12pt textTertiary 左对齐 16）。
-//  约束：高度固定 44，绝不因候选内容变化而改变；候选变化只做 opacity 0.15s 过渡。
+//  模块职责：44pt 固定高度的一行，从左到右依次是
+//            ①候选滚动区（或 AI 联想胶囊行 / 空态文案，三者互斥）
+//            ②分页指示点（有分页 24 宽，无分页 0 宽）
+//            ③5pt 间隙
+//            ④AI 对话旋钮（命中区 44×44，视觉圆 34）
+//  设计依据：design/组件库.md「CandidateBar」+ design/04-AI对话与智能联想规范.md §2.2（旋钮布局）、
+//            §4.2（候选栏优先级）、§4.3（联想胶囊）。
+//  约束：高度固定 44，绝不因候选/联想内容变化而改变；候选项最小宽 48、项间距 20、左右内边距 16；
+//        首候选 semibold + accent；高亮底 candidateSelected 圆角 6 仅覆盖文字；
+//        分页点 6×6 间距 5、>5 页折叠；空态「墨语 · 会 AI 的输入法」12pt textTertiary 左对齐 16。
 //
 
 import SwiftUI
@@ -33,6 +37,18 @@ struct CandidateBar: View {
     /// 正在组字的拼音串。
     let composingText: String
 
+    /// 是否显示右侧 AI 对话旋钮（对话面板内的输入行不显示）。
+    var showsChatKnob: Bool = true
+
+    /// 旋钮当前状态（由调用方按可用性/忙碌态计算）。
+    var knobState: KMChatKnobState = .idle
+
+    /// 是否横屏（旋钮视觉圆 32，竖屏 34）。
+    var isLandscape: Bool = false
+
+    /// AI 联想胶囊（≤3 条）；非空且未在组字时优先显示。
+    var suggestions: [String] = []
+
     /// 选择候选（参数为本页内下标）。
     let onSelect: (Int) -> Void
 
@@ -42,15 +58,31 @@ struct CandidateBar: View {
     /// 翻页（-1 / +1）。
     let onTogglePage: ((Int) -> Void)?
 
+    /// 点击 AI 对话旋钮。
+    var onChatKnobTap: (() -> Void)?
+
+    /// 点击联想胶囊（参数为下标）。
+    var onSelectSuggestion: ((Int) -> Void)?
+
     var body: some View {
         HStack(spacing: 0) {
-            if items.isEmpty {
-                emptyState
-            } else {
-                candidateScroll
-            }
+            contentArea
             paginationIndicator
+                .frame(width: paginationWidth)
+            if showsChatKnob {
+                // 旋钮与分页点之间的固定间隙（design/04 §2.2：5pt）。
+                Spacer(minLength: 0)
+                    .frame(width: Theme.Spacing.sm + Theme.Spacing.xs)
+                KMChatKnob(
+                    state: knobState,
+                    isLandscape: isLandscape,
+                    action: { onChatKnobTap?() }
+                )
+                .frame(width: KMLayout.aiChatKnobHitSize, height: KMLayout.aiChatKnobHitSize)
+            }
         }
+        .padding(.leading, Theme.Sizing.keyHorizontalPadding)
+        .padding(.trailing, showsChatKnob ? KMLayout.aiChatKnobInset : 0)
         .frame(height: Theme.Sizing.candidateBarHeight)
         .background(Theme.candidateBar)
         .overlay(alignment: .bottom) {
@@ -58,6 +90,27 @@ struct CandidateBar: View {
                 .fill(Theme.candidateSeparator)
                 .frame(height: Theme.MaterialToken.strokeWidth)
         }
+    }
+
+    // MARK: - 内容区（候选 / 联想 / 空态，三档互斥）
+
+    /// 内容区：组字中或有关联候选时显示候选；否则有 AI 联想显示联想；都没有则空态。
+    @ViewBuilder
+    private var contentArea: some View {
+        if !items.isEmpty {
+            candidateScroll
+        } else if !composingText.isEmpty {
+            emptyState
+        } else if !suggestions.isEmpty, let onSelectSuggestion {
+            KMSuggestionChipRow(titles: suggestions, onSelect: onSelectSuggestion)
+        } else {
+            emptyState
+        }
+    }
+
+    /// 分页区宽度：有分页 24，无分页 0（design/04 §2.2 修正项）。
+    private var paginationWidth: CGFloat {
+        pageCount > 1 ? Theme.Spacing.xxl : 0
     }
 
     // MARK: - 候选列表
@@ -83,6 +136,7 @@ struct CandidateBar: View {
             }
         }
         .accessibilityElement(children: .contain)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// 单个候选。
@@ -95,7 +149,7 @@ struct CandidateBar: View {
             HStack(spacing: Theme.Spacing.sm) {
                 if showsIndex {
                     Text("\(index + 1)")
-                        .font(.system(size: 10, weight: .medium))  // TOKEN: typography.caption.size ≈ 10
+                        .font(Theme.fontCaption)
                         .foregroundColor(Theme.textTertiary)
                 }
                 Text(candidate.text)
@@ -140,7 +194,7 @@ struct CandidateBar: View {
 
     // MARK: - 分页指示
 
-    /// 右侧分页区（固定 8 宽 + 点击翻页）。
+    /// 分页区（有分页时 24 宽可点翻页；无分页时完全收起为 0 宽）。
     @ViewBuilder
     private var paginationIndicator: some View {
         if pageCount > 1 {
@@ -161,8 +215,7 @@ struct CandidateBar: View {
             .buttonStyle(KMPressableStyle(scale: 0.94, pressedOpacity: 0.7, duration: Theme.Motion.fast))
             .accessibilityLabel(Text("翻页，第 \(pageIndex + 1) 页，共 \(pageCount) 页"))
         } else {
-            Color.clear
-                .frame(width: Theme.Spacing.md)
+            EmptyView()
         }
     }
 }

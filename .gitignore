@@ -58,7 +58,7 @@ env/
 *.egg-info/
 
 # ---- 词库构建缓存（4.9MB 的 jieba 原始词表，可随时用 tools/dict/_fetch_src.py 重新下载）----
-# 注意：ios/Shared/Resources/dict/*.tsv 是**产物**，必须入库（App 直接打包它们）；
+# 注意：ios/Shared/dict/*.tsv 是**产物**，必须入库（App 直接打包它们）；
 # 只有 tools/dict/.cache/ 里的原始语料不入库。
 tools/dict/.cache/
 .cache/

@@ -61,12 +61,20 @@ struct SettingsRow: View {
     var isDestructive: Bool = false
     var onTap: (() -> Void)?
 
+    /// `accessory == .value(...)` 时的文字颜色（nil 表示默认的次要色）。
+    ///
+    /// CONTRACT-ADD：契约 §4.2 只定义了 `.value(String)`，但诊断类信息需要用
+    /// 警示色（如「内置兜底词库」）提示异常，故追加一个可选的着色覆盖，
+    /// 不改变既有调用点的行为。
+    var valueTint: Color?
+
     init(
         icon: IconSpec? = nil,
         title: String,
         subtitle: String? = nil,
         accessory: Accessory = .none,
         isDestructive: Bool = false,
+        valueTint: Color? = nil,
         onTap: (() -> Void)? = nil
     ) {
         self.icon = icon
@@ -74,6 +82,7 @@ struct SettingsRow: View {
         self.subtitle = subtitle
         self.accessory = accessory
         self.isDestructive = isDestructive
+        self.valueTint = valueTint
         self.onTap = onTap
     }
 
@@ -164,7 +173,7 @@ struct SettingsRow: View {
         case .value(let text):
             Text(text)
                 .font(AppFont.headline.weight(.regular))
-                .foregroundColor(Theme.textSecondary)
+                .foregroundColor(valueTint ?? Theme.textSecondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
         case .checkmark(let isOn):

@@ -60,8 +60,11 @@ struct AIBar: View {
     /// 打开键盘内设置。
     let onOpenSettings: () -> Void
 
-    /// 展开 AI 面板（横屏圆钮点击）。
+    /// 展开 AI 面板（保留旧路径；横屏圆钮改为进入 AI 对话后仅供长按使用）。
     let onOpenPanel: () -> Void
+
+    /// 进入 AI 对话面板（横屏圆钮的主路径，design/04 §2.8）。
+    var onOpenChat: () -> Void = {}
 
     /// 点击禁用提示区。
     let onDisabledTap: () -> Void
@@ -170,26 +173,35 @@ struct AIBar: View {
     // MARK: - 横屏折叠形态
 
     /// 横屏 32×32 玻璃圆钮。
+    ///
+    /// 主路径改为「进入 AI 对话面板」（design/04 §2.8）：横屏隐藏独立 AIBar 后，
+    /// 这里是 AI 入口；长按仍展开旧 AI 面板，保留旧路径不影响既有功能。
     private var compactButton: some View {
         Button(action: {
             KMHaptics.chip()
-            onOpenPanel()
+            onOpenChat()
         }) {
             ZStack {
                 Circle()
                     .fill(BusyOrEnabledColor(isBusy: isBusy, availability: availability).color)
                 Circle()
                     .strokeBorder(Theme.chipBorder, lineWidth: Theme.MaterialToken.strokeWidth)
-                Text("✨")
-                    .font(.system(size: 14))  // TOKEN: typography.chip.size ≈ 14
+                KMKnobGlyph(
+                    size: KMLayout.aiChatKnobGlyphSize,
+                    tint: availability.canStartRequest ? Theme.accent : Theme.textTertiary
+                )
             }
             .frame(width: Theme.Sizing.aiChipHeight + Theme.Spacing.xs, height: Theme.Sizing.aiChipHeight + Theme.Spacing.xs)
             .frame(minWidth: Theme.Sizing.minTapTarget, minHeight: Theme.Sizing.minTapTarget)
             .contentShape(Rectangle())
         }
         .buttonStyle(KMPressableStyle(scale: 0.94, pressedOpacity: 0.9))
-        .accessibilityLabel(Text("AI 助手"))
-        .accessibilityHint(Text("展开 AI 面板"))
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.5)
+                .onEnded { _ in onOpenPanel() }
+        )
+        .accessibilityLabel(Text("AI 对话"))
+        .accessibilityHint(Text("打开墨语 AI 对话面板；长按展开 AI 能力面板"))
     }
 
     // MARK: - 状态推导
