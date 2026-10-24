@@ -167,9 +167,9 @@ private func chatKnobState(for model: KeyboardViewModel) -> KMChatKnobState {
                     onOpenPanel: { model.openAIPanel() },
                     onOpenChat: { model.openAIChat() },
                     onDisabledTap: { model.handleAIBarDisabledTap() },
-                    accent: themeAccent,
                     showsVoice: model.canUseVoiceInput,
-                    onOpenVoice: { model.openVoiceInput() }
+                    onOpenVoice: { model.openVoiceInput() },
+                    accent: themeAccent
                 )
                 .frame(height: KMLayout.aiBarHeight)
             }

@@ -27,7 +27,7 @@ extension KeyboardViewModel {
     public var canUseVoiceInput: Bool {
         guard KMVoiceInput.shared.isPlatformSupported else { return false }
         if aiAvailability == .noFullAccess { return false }
-        return !aiAvailability.isBusy
+        return aiAvailability != .busy
     }
 
     // MARK: - 进出语音页

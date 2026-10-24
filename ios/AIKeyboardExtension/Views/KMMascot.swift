@@ -130,7 +130,7 @@ public struct KMMascotView: View {
     /// 呼吸动画相位（0.6 ↔ 1.0）。
     @State private var breathing: Bool = false
 
-    public init(
+    init(
         size: CGFloat = KMLayout.mascotVisualSize,
         symbol: KMMascotSymbol = .defaultSymbol,
         isBusy: Bool = false,

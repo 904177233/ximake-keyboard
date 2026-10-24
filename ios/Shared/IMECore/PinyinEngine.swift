@@ -152,10 +152,10 @@ public final class PinyinEngine {
             return lhs.text < rhs.text
         }
 
-        var trimmed = Array(results.prefix(limit))
+        var finalCandidates = Array(results.prefix(limit))
         // 输入纠错：原始输入「无候选」或「候选过少」时，追加带 `[纠错]` 标记的候选到尾部。
-        appendTypoCorrections(normalized: normalized, limit: limit, into: &trimmed)
-        return trimmed
+        appendTypoCorrections(normalized: normalized, limit: limit, into: &finalCandidates)
+        return finalCandidates
     }
 
     /// 上屏并记录选词（不在词库里的组合句/新词会自动沉淀为自造词）。

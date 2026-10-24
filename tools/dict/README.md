@@ -185,20 +185,19 @@ PAIR_GROUPS = [
 脚本每次运行都会打印：总条数、按 flags 统计、按来源统计、词长分布、词频范围、
 重复词 / 空词 / 含空白词检查结果，以及固定步长抽取的 30 条样例。
 
-### flags 分布（v1.0.0，共 5276 条）
+### flags 分布（v1.1.0，共 33160 条）
 
 | flag | 条数 | 含义 |
 | --- | --- | --- |
-| `core` | 3400 | jieba 通用高频词 |
+| `core` | 31628 | jieba 通用高频词（v1.1.0 扩库后占比最大） |
 | `chat` | 1761 | 聊天场景用词 |
-| `emoji` | 415 | 可联想表情 / emoji 条目 |
+| `emoji` | 415 | 可联想表情 / emoji 条目（**含 symbol_map 的纯汉字别名**，见下方说明） |
 | `net` | 368 | 网络用语 / 热梗 |
 | `bless` | 344 | 祝福 / 问候 |
 | `idiom` | 120 | 成语 |
-| `punct` | 57 | 标点符号 |
+| `punct` | 57 | 标点符号 / 颜文字 |
 
-来源分布：`jieba 3400 / chat_supplement 1953 / symbol_map 240`。
-词长分布：1 字 1202、2 字 2873、3 字 560、4 字 520、5 字 80、6 字 32、7 字 6、8 字 2、9 字 1。
+来源分布：`jieba 31628 / chat_supplement 1953 / symbol_map 240`。词长分布：1 字 2882、2 字 23527、3 字 4123、4 字 2422、5 字 149、6 字 48、7 字 6、8 字 2、9 字 1。
 
 ### 数据完整性检查
 
@@ -208,50 +207,50 @@ PAIR_GROUPS = [
 | 空词 | 0 |
 | 含空白（空格/制表符）词 | 0 |
 | 词频降序排列 | 是 |
-| 纯汉字词条拼音与 pypinyin 逐条比对 | 5016 / 5016 全部一致（0 处不符） |
-| 纯汉字词条误标 `emoji`/`punct` | 0（曾发现 24 条并已修复，见 4.6） |
+| 纯汉字词条 | 32900 |
+| 纯汉字词条带 `emoji` 标记 | 179（**设计如此**：symbol_map 的联想别名，如「开心」→😀；Swift `kind(for:)` 对纯汉字一律返回 `.word`，不会被当成表情渲染） |
+| 纯汉字词条带 `punct` 标记 | 0（v1.0.0 曾有 6 条全角括号颜文字，扩库后这些条目已并入 `chat` 组） |
+| 单字词保留 | 2882 个（v1.0.0 的 1202 个单字**零丢失**，拼音输入靠单字兜底） |
+| 旧词回归 | v1.0.0 的 5276 条**零丢失**（`_probe_select.py` 实测） |
 
 ### 30 条人工抽检表
 
-固定步长（第 `i*(n-1)/29` 条）等距抽样，覆盖首/中/尾三段的通用词、聊天词与符号条目：
+固定步长（第 `i*(n-1)/29` 条）等距抽样。v1.1.0 扩库后样本覆盖词频 883634 → 70 的完整区间，可见长尾词（词频 <300）明显增多，属扩库的预期结果：
 
 | # | 拼音 | 词 | 词频 | flags | 拼音校验 |
 | --- | --- | --- | --- | --- | --- |
 | 01 | `le` | 了 | 883634 | core | OK |
-| 02 | `xiang` | 像 | 31874 | core | OK |
-| 03 | `diyi` | 第一 | 19725 | chat,core | OK |
-| 04 | `jiegou` | 结构 | 14200 | core | OK |
-| 05 | `qin` | 亲 | 10670 | core | OK |
-| 06 | `zhaokai` | 召开 | 9138 | core | OK |
-| 07 | `mianqian` | 面前 | 7896 | core | OK |
-| 08 | `disan` | 第三 | 6818 | chat,core | OK |
-| 09 | `bude` | 不得 | 6248 | core | OK |
-| 10 | `haoda` | 好哒 | 5600 | chat,bless | OK |
-| 11 | `bucuo` | 不错 | 5322 | core | OK |
-| 12 | `taishangtoule` | 太上头了 | 5200 | chat,net | OK |
-| 13 | `liangce` | 两侧 | 4863 | core | OK |
-| 14 | `xiexieha` | 谢谢哈 | 4600 | chat,bless | OK |
-| 15 | `ele` | 饿了 | 4200 | chat,emoji | OK |
-| 16 | `zuizao` | 最早 | 4124 | core | OK |
-| 17 | `heshang` | 和尚 | 3959 | core | OK |
-| 18 | `hai` | 害 | 3654 | core | OK |
-| 19 | `zhishang` | 之上 | 3503 | core | OK |
-| 20 | `zichan` | 资产 | 3243 | core | OK |
-| 21 | `xiaoqu` | 小区 | 3200 | chat | OK |
-| 22 | `annidelai` | 按你的来 | 3000 | chat | OK |
-| 23 | `qianlai` | 前来 | 2917 | core | OK |
-| 24 | `jinghao` | # | 2700 | emoji,punct | OK（符号条目，拼音取别名） |
-| 25 | `zhuixing` | 追星 | 2600 | chat,net | OK |
-| 26 | `houhuiyouqi` | 后会有期 | 2400 | chat,idiom | OK |
-| 27 | `shengyujiazhi` | 剩余价值 | 2306 | core | OK |
-| 28 | `yiqichifanba` | 一起吃饭吧 | 2200 | chat | OK |
-| 29 | `chuangshang` | 床上 | 2057 | core | OK |
-| 30 | `yuelianglian` | 🌝 | 300 | emoji | OK（emoji 条目，拼音取别名） |
+| 02 | `gan` | 敢 | 7965 | core | OK |
+| 03 | `nanshou` | 难受 | 5027 | chat,emoji,core | OK |
+| 04 | `zheng` | 证 | 3628 | core | OK |
+| 05 | `yuanshikai` | 袁世凯 | 2727 | core | OK |
+| 06 | `suozhang` | 所长 | 2015 | core | OK |
+| 07 | `chengshou` | 承受 | 1458 | core | OK |
+| 08 | `yanzou` | 演奏 | 1122 | core | OK |
+| 09 | `panchu` | 判处 | 889 | core | OK |
+| 10 | `qinshu` | 亲属 | 721 | core | OK |
+| 11 | `dianyuan` | 电源 | 594 | core | OK |
+| 12 | `guanliju` | 管理局 | 500 | core | OK |
+| 13 | `bufa` | 不乏 | 427 | core | OK |
+| 14 | `shixing` | 试行 | 368 | core | OK |
+| 15 | `zhiai` | 致癌 | 322 | core | OK |
+| 16 | `gese` | 各色 | 283 | core | OK |
+| 17 | `dabing` | 大病 | 253 | core | OK |
+| 18 | `wudang` | 武当 | 222 | core | OK |
+| 19 | `jiabeng` | 驾崩 | 195 | core | OK |
+| 20 | `zida` | 自打 | 175 | core | OK |
+| 21 | `jiangshang` | 奖赏 | 156 | core | OK |
+| 22 | `gangsi` | 钢丝 | 141 | core | OK |
+| 23 | `hezuohua` | 合作化 | 128 | core | OK |
+| 24 | `huhui` | 互惠 | 116 | core | OK |
+| 25 | `qidong` | 起动 | 106 | core | OK |
+| 26 | `lengyan` | 冷眼 | 97 | core | OK |
+| 27 | `xinfu` | 心服 | 89 | core | OK |
+| 28 | `zhaomi` | 着迷 | 82 | core | OK |
+| 29 | `pianpian` | 片片 | 75 | core | OK |
+| 30 | `zuoyi` | 坐椅 | 70 | core | OK |
 
-**抽检结论：30 / 30 通过**。多音字按默认读音，符合契约"多音字取默认读音即可"的要求；
-已知个例：`音乐`→`yinyue`（正）、`长大`→`zhangda`（正）、`银行`→`yinhang`（正）、
-`重庆`→`chongqing`（正）。符号/emoji 条目的拼音取「联想别名」的全拼
-（`yuelianglian` → 🌝），打别名词时同时出现符号与汉字。
+**抽检结论：30 / 30 拼音正确**。多音字按默认读音，符合契约「多音字取默认读音即可」的要求；已知个例：`音乐`→`yinyue`、`长大`→`zhangda`、`银行`→`yinhang`、`重庆`→`chongqing`（均正确）。符号/emoji 条目的拼音取「联想别名」的全拼（`yuelianglian` → 🌝），打别名词时同时出现符号与汉字。逐个音节与 pypinyin 比对：32,900 条纯汉字词条 **0 处不符**。
 
 ### 已修复的质量问题（回归记录）
 
@@ -275,12 +274,81 @@ PAIR_GROUPS = [
 | `_probe_fuzzy_perf.py` | 测量模糊音变体数与开关前后的按键耗时差（对应 README §3.8 的性能表） |
 | `_probe_seed.py` | 抽取 `PinyinDictionary.swift` 内置兜底词表，统计条数 / 常用字覆盖 |
 | `_probe_balance.py` | 剥注释与字符串后统计 IMECore 各 swift 文件的括号配平与编码问题 |
-| `_probe_typo.py` | 输入纠错性能探针：用 Python 复刻 `TypoCorrector.swift` 的编辑距离 1 算法，读真实词库测耗时与产出 |
+| `_probe_typo.py` | 输入纠错性能探针：用 Python 复刻 `TypoCorrector.swift`（复用 FuzzyPinyin 规则 + 编辑距离 1），读真实词库测耗时与产出，10 条断言 |
 | `_probe_scale.py` / `_probe_select.py` / `_probe_dp_penalty.py` / `_probe_initials_cost.py` | 词库扩展调参探针：阈值/词性分布、可选规模、DP 每词代价标定、首字母索引构建成本分解 |
 | `_patch_count_assert.py` | 一次性补丁：把 `_simulate_engine.py` 的条数区间断言同步到新规模（30000–50000），不是删断言 |
+| `_patch_readme_v11.py` / `_patch_readme_version.py` / `_patch_readme_tools.py` | 一次性补丁：扩库后把两份 README 里的条数/版本号/抽检表同步到 v1.1.0 |
 | `_count_assertions.py` | 统计 `_simulate_engine.py` 各分组的断言条数（用于核对 README 里的数字） |
 | `.cache/jieba_dict.txt` | jieba 原始词表缓存（4.9 MB，**不打包进 App**） |
 | `_fetch_src.py` / `_probe.py` | 数据源获取与格式探查的一次性脚本（保留备查） |
 
 音节表变更流程：改 `syllable_table.py` → 跑 `python tools/dict/gen_swift_syllables.py` →
 重跑 `build_dict.py`。**不要手工编辑 `PinyinSyllables.swift`**（文件头已标注自动生成）。
+
+## 8. 词库扩展（2026-10-25）
+
+v1.0.0 的 5,276 条只能覆盖「最常用的一小撮词」，`docs/08-AI输入法能力调研报告.md` 的 P0-2
+结论是「词库从 5,276 扩到 3–5 万条，是投入产出比最高的一件事」。于是 v1.1.0 做了一次扩库：
+**5,276 → 33,160 条（+528%），体积 139,702 → 825,646 字节（806 KB，仍远低于 1.5 MB 上限）**。
+
+### 8.1 筛选规则（为什么这样筛）
+
+扩库**不是**简单地把 jieba 前 N 条全收进来——那样会混进大量生僻字、人名、音译词，
+把候选栏变成噪声发生器。最终采用的规则：
+
+| 维度 | 取值 | 为什么 |
+| --- | --- | --- |
+| 词长 | 1–6 字（实际 99.6% 是 1–4 字） | 拼音输入基本不打 5 字以上的长词 |
+| 词频下限 | `JIEBA_MIN_FREQ = 70` | 实测：≥100 只有 26,654 条（不到 3 万）；≥80 有 29,650 条（还是不到）；≥70 有 31,598 条（正好过线）。70–100 段抽样是「车裂/遗恨/遵奉/间冰期」这类可接受的长尾；<60 开始出现明显噪声 |
+| 常用字过滤 | 基准词频 `COMMON_CHAR_BASIS_FREQ = 300`、支持度 `COMMON_CHAR_SUPPORT = 2` | 用「在 ≥300 词频的词里至少出现 2 次」反推常用字集合（2,646 字）。**基准从 1000 降到 300 的原因**：freq≥1000 反推的常用字只有 1,157 字，会把「菱花」「羽毛扇」这类完全正常的词误杀。支持度从 3 降到 2 是为了让「菱」「扇」这类只出现在两个常用词里的字也能过 |
+| 专名（人名）| `nr/nrt/nrx/nrfg` 需 `freq ≥ 2000` | **关键调参**：初值 3000 会误杀 14 个 v1.0.0 已有常用词——光荣/冷笑/古老/太后/宋江/宫殿/明星/曹操/权威/武林/荣誉/言语/雷达/黄石（jieba 把它们误标成了 `nr`）。扫 3000→2500→2200→2000 时旧词丢失数 14→8→4→0，故定 2000 |
+| 地名 | `ns` 需 `freq ≥ 800` | 用户会打地名（`beijing`/`shanghai`），但不需要「郧」这类极低频县名 |
+| 机构 | `nt` 需 `freq ≥ 800` | 同上，保留「管理局」「公安局」这类高频机构词 |
+| 其他专名 | `nz` 需 `freq ≥ 2000` | 品牌/作品名，只留高频 |
+| 单字 | 不看词性全收 | 拼音输入靠单字兜底（`de`→的、`shi`→是），单字一个都不能少 |
+| 截断 | `N_JIEBA = 36000` | 实际筛出 31,628 条，未触发截断 |
+
+**为什么不做「按词性白名单只留 n/v/a/d」**：实测 `nz`（专名）、`ns`（地名）、`nt`（机构）
+里也有大量用户真会打的词，一刀切会掉召回；改成「按词性设不同词频门槛」既能挡住生僻专名，
+又能保住「北京」「淘宝」这类词。
+
+### 8.2 扩库后必须同步修的引擎问题（DP 碎片化）
+
+词库变大后 `_simulate_engine.py` 从 65/65 掉到 63/65，其中一条是**真实的质量退化**：
+`woxihuanni` 被切成「我+西湖+啊+嗯+你」而不是「我喜欢你」。
+
+根因：`appendComposedCandidates` 的 DP 最大化 `Σ log(freq+1)`，而单字词频远高于多字词
+（「在」727,915 vs「现在」十几万）。v1.0.0 只有 5,276 条时 33k 词库里那些
+「西湖」「啊嗯」还没进来，所以看不出来；扩库后它们进来了，DP 就拼出了更"高频"但语义错的路径。
+
+修复：给 DP 加**每词代价** `composedTilePenalty = 14.0`（切 k 块要多付 k×14 分），
+取值由 `_probe_dp_penalty.py` 在 20 条长句上扫 0–15 标定——0 时正确率 1/20，14.0 时 16/20。
+**Python 复刻（`_simulate_engine.py` 的 `COMPOSED_TILE_PENALTY`）与 Swift 实现必须同值**，
+否则候选排序会分叉。详见 `ios/Shared/IMECore/README.md` §3.2。
+
+### 8.3 扩库后的性能（必须在真机确认）
+
+| 指标 | v1.0.0（5,276 条） | v1.1.0（33,160 条） | 说明 |
+| --- | --- | --- | --- |
+| 文件体积 | 139,702 B | 825,646 B | +591%，仍 < 1.5 MB |
+| 逐行解析（Python 上界） | 3.86 ms | 24.05 ms | 6.2× |
+| 建索引（Python 上界） | 约 310 ms | 约 2,300 ms | 主要是首字母 DP |
+| 首字母 DP 内层循环 | 约 48 万次 | **3,115,290 次** | 按 15–60 ns/次估 **46.7–186.9 ms** |
+| 候选生成（Python 上界） | 0.02–0.2 ms | 0.02–0.23 ms | **不受扩库影响**（前缀索引与 DP 都只查相关键） |
+
+⚠️ **结论：扩库不影响按键延迟（候选生成只查命中键），但可能把冷启动加载从 15–25 ms 推到
+45–190 ms，逼近甚至超过 docs/08 的 80 ms 预算。** 真机必须读
+`PinyinDictionary.loadDurationMilliseconds` 确认；若超标，优先优化
+`PinyinSyllables.segment(_:exactly:)`（把三层 `[[[String]?]]` 换成一维 `[Int32]` 切点表）
+或把首字母索引改成懒建，**不要靠删词库来降耗时**。详见 `_probe_initials_cost.py`
+与 `ios/Shared/IMECore/README.md` §2「加载性能」。
+
+### 8.4 兼容性保证
+
+- **旧词零丢失**：v1.0.0 的 5,276 条全部仍在（`_probe_select.py` 实测 `旧词丢失 []`）；
+  旧 1,202 个单字也全部保留（现在共 2,882 个单字）。
+- **列格式不变**：仍然 4 列 `拼音<TAB>词<TAB>词频<TAB>flags`，`PinyinDictionary.parse`
+  只要求 ≥3 列，无需改解析器。
+- **词频降序不变**：`883634 .. 70`，索引按文件顺序建，首候选质量不受影响。
+- **断言不删只改**：`_simulate_engine.py` 唯一改动是条数区间断言
+  `4000-7000` → `30000-50000`（扩规模必然要改），其余 64 条原样保留且全部通过。
