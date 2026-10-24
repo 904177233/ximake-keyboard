@@ -1,6 +1,6 @@
 # 墨语 · Moyu Keyboard
 
-> **会 AI 的 iOS 输入法**：打字、润色、扩写、翻译、生图、生成回复，全在键盘里完成，一键上屏。
+> **会 AI 的 iOS 输入法**：打字、润色、扩写、翻译、生图、生成回复、AI 对话、智能联想，全在键盘里完成，一键上屏。
 >
 > 纯本地 · 零后端 · 不收集任何数据 · 只需要一台 Windows 电脑 + 一个免费 Apple ID。
 
@@ -8,21 +8,22 @@
 
 ## 一句话介绍
 
-**墨语是一个给自己用的 iOS 中文拼音输入法，内置 5 个 AI 能力，AI 结果直接插入你正在打字的输入框。**
+**墨语是一个给自己用的 iOS 中文拼音输入法，内置 7 个 AI 能力，AI 结果直接插入你正在打字的输入框。**
 
 它由两部分组成：一个系统级键盘扩展（`AIKeyboardExtension`）负责打字与 AI 交互，一个宿主 App（`AIKeyboard`）负责配置与试验。所有 AI 请求都从你手机**直连**你自己填的服务商，不经过任何中转服务器。
 
 ---
 
-## 卖点 5 条
+## 卖点 6 条
 
 | # | 卖点 | 说明 |
 |---|---|---|
-| 1 | **AI 就在键盘里** | 润色 / 扩写 / 翻译 / 回复建议 / 生图，选中文字点一下，流式输出后**直接插入输入框**，全程不离开当前 App |
-| 2 | **任意模型随便接** | 只要服务商兼容 OpenAI / Anthropic / Gemini 协议就能用。内置 9 家国内预设（DeepSeek、通义、Kimi、智谱、豆包、硅基流动等），也能填中转站 |
-| 3 | **Key 只存在你手机里** | API Key 存 iOS **Keychain**，App 内可见可控。**无账号、无云同步、无遥测、无统计**，代码可自查 |
-| 4 | **零成本，Windows 也能装** | 没有 $99 开发者账号？GitHub Actions 免费云编译 + Windows 上 Sideloadly 签名安装，全程不需要 Mac。7 天续签 5 分钟搞定 |
-| 5 | **原生手感，不是网页壳** | 纯 SwiftUI 实现，设计令牌驱动、深色/浅色自适应、玻璃质感、44pt 点击区域。零第三方依赖 |
+| 1 | **AI 就在键盘里** | 润色 / 扩写 / 翻译 / 回复建议 / 生图 / **AI 对话**，选中文字点一下，流式输出后**直接插入输入框**，全程不离开当前 App |
+| 2 | **导航栏里的 AI 对话旋钮** | 候选栏右侧一枚 34pt 的旋钮（只有图标没有文字），点一下**整块键盘直接变成 AI 对话界面**——能聊、能追问、结果一键上屏。不打断你正在打的字 |
+| 3 | **非传统联想词** | 不是「词库里的下一个词」，而是**读你宿主 App 里已经打出的前文**，猜你下一句想说什么，最多 3 条胶囊，点一下上屏。本地规则 0.2ms 兜底 + AI 深度联想，失败完全静默 |
+| 4 | **任意模型随便接** | 只要服务商兼容 OpenAI / Anthropic / Gemini 协议就能用。内置 9 家国内预设（DeepSeek、通义、Kimi、智谱、豆包、硅基流动等），也能填中转站 |
+| 5 | **Key 只存在你手机里** | API Key 存 iOS **Keychain**，App 内可见可控。**无账号、无云同步、无遥测、无统计**，代码可自查 |
+| 6 | **零成本，Windows 也能装** | 没有 $99 开发者账号？GitHub Actions 免费云编译 + Windows 上 iloader 签名安装，全程不需要 Mac。7 天续签 5 分钟搞定 |
 
 ---
 
@@ -44,6 +45,7 @@
 │   ├── 04-安装与续签指南.md       ← ⭐ Windows 用户照这个做
 │   ├── 05-常见问题.md             ← 28 个高频疑问
 │   ├── 06-QA报告.md               ← QA 静态检查报告（阶段二产出）
+│   ├── 07-AI对话与智能联想规范.md ← AI 对话旋钮 + 非传统联想的设计规范
 │   └── ios/
 │       └── README-构建.md         ← 工程生成器与 CI 的细节说明
 │
@@ -52,6 +54,7 @@
 │   ├── 组件库.md
 │   ├── 键盘布局规范.md
 │   ├── 主App界面规范.md
+│   ├── 04-AI对话与智能联想规范.md ← 旋钮 / 对话面板 / 联想胶囊的施工图
 │   ├── 视觉稿.html               ← 浏览器直接打开看效果
 │   ├── preview-keyboard.png
 │   ├── preview-overview.png
@@ -78,8 +81,8 @@
 │   │
 │   ├── AIKeyboardExtension/      ← 键盘扩展（App Extension）
 │   │   ├── Theme/                ← 键盘专属布局常量
-│   │   ├── ViewModel/            ← KeyboardViewModel
-│   │   ├── Views/                ← 键盘视图
+│   │   ├── ViewModel/            ← KeyboardViewModel（含 +AI/+Chat/+Suggest/+Input 分片）
+│   │   ├── Views/                ← 键盘视图（含 KMChatKnob / ChatPanelView / KMSuggestionChips）
 │   │   └── KeyboardViewController.swift
 │   │
 │   ├── Config/                   ← ⚠️ 改 Bundle ID / 签名就改这里
@@ -136,10 +139,12 @@
 | **1** | 把代码推到 GitHub 仓库（**Public / Private 都行**，用 GitHub Desktop 拖进去点 Publish 即可，不用敲命令） | 10 分钟（含注册） |
 | **2** | 打开仓库页 → **Actions** → 左侧 `Build Unsigned IPA` → 等绿勾（云端 macOS 自动编译，约 **1～3 分钟**）→ 底部 **Artifacts** 下载 `AIKeyboard-unsigned-ipa` → 解压出 `AIKeyboard-unsigned.ipa`（约 2.6 MB） | 1～3 分钟 |
 | **3** | **【必做】验 IPA**：改成 `.zip` 解开，确认存在 `Payload\AIKeyboard.app\PlugIns\AIKeyboardExtension.appex`（没有这个，键盘永远装不上） | 1 分钟 |
-| **4** | Windows 装 **Sideloadly**（官网下，别用 winget），插手机点「信任」→ Sideloadly 选 IPA、填 Apple ID、勾 `Sideload with Apple ID` → **Start** → 输密码 + 2FA → 等 `Done`（Sideloadly 认出手机就不用装 iTunes；认不出再装微软商店版 iTunes） | 10 分钟 |
+| **4** | Windows 装 **iloader**（[GitHub nab138/iloader](https://github.com/nab138/iloader) 下载 `iloader-windows-x64.exe`，静默装）→ 插手机 → 填 Apple ID / 密码 → 2FA 验证码 → **Import IPA** 选刚下的包 → **Sign & Install App** | 10 分钟 |
 | **5** | iPhone：设置 › 通用 › **VPN与设备管理** → 信任你的 Apple ID | 1 分钟 |
 | **6** | 设置 › 通用 › **键盘 › 键盘** → **添加新键盘** → 墨语 → 完成 → **点「墨语」那一行** → 开 **允许完全访问**（AI 的生死线） | 2 分钟 |
 | **7** | 打开「墨语」App → 配服务商（填 API Key）→ 点 **同步到键盘** → 键盘 ⚙️ → **从剪贴板导入** | 3 分钟 |
+
+> **为什么是 iloader 而不是 Sideloadly**：Sideloadly 0.71.1 的 Apple ID 登录走的是 Apple 早已下线的 `/IDMSWebAuth/clientDAW.cgi` 端点，无论怎么配都返回 `Login failed: 404`（已实测排除代理/证书/UA/路径四类原因）。iloader 用现代登录 + 远程 Anisette，可正常签名。详见 [`docs/04-安装与续签指南.md`](docs/04-安装与续签指南.md) §4。
 
 **然后每 7 天**：重复第 4 步（IPA 不用重下）即可。清单见 [`docs/04-安装与续签指南.md`](docs/04-安装与续签指南.md) §9.3。
 
@@ -159,7 +164,8 @@
 │  │  · 服务商管理（增删改测）    │        │  · 候选栏 / 数字符号 / Emoji   │ │
 │  │  · Prompt 模板库            │        │  · AI 工具条                  │ │
 │  │  · AI 试验场（先试再用）     │        │  · 流式结果卡片                │ │
-│  │  · 诊断页（连通性自检）      │        │                               │ │
+│  │  · 诊断页（连通性自检）      │        │  · AI 对话旋钮 → 全屏对话界面   │ │
+│  │                            │        │  · 非传统联想胶囊（读前文猜下一句）│ │
 │  └────────────┬───────────────┘        └───────────────┬───────────────┘ │
 │               │                                        │                 │
 │               │        ┌───────────────────────────────┴───────┐         │
@@ -183,13 +189,14 @@
                           └──────────────────────────────────────────────┘
 ```
 
-### 三个关键设计决定
+### 四个关键设计决定
 
 | 决定 | 为什么 |
 |---|---|
 | **无 App Group（免费签名装不了）** | App 与键盘各自独立的 `UserDefaults`。配置靠「同步到键盘」把 JSON 写进**具名剪贴板**，键盘从剪贴板读。这比 hack entitlements 稳，也不会因为描述文件不匹配而崩溃 |
 | **API Key 从不进剪贴板** | `PasteboardBridge.export(includeAPIKeys: false)` 默认剔除 Key。键盘需要用 Key 时在键盘自己的设置页里单独填一次（因为共享 Keychain 也需要 App Group） |
 | **AI 状态机全在 `@MainActor`** | 键盘扩展只有 40–60MB 内存额度，流式输出必须一次只有一个在跑，取消要能立刻断流，否则点两次就崩 |
+| **对话面板保留 174pt 键区** | iOS 扩展里无法可靠唤起系统键盘，砍掉键区就等于「只能聊不能打」。复用 `.result` 已有的 +180 高度（438），**零新增高度令牌**，横屏按 §3.11 走 32/108/44/156 = 340 |
 
 ---
 
@@ -205,7 +212,7 @@
 | 存储 | **Keychain**（Key）+ **UserDefaults**（配置）+ **剪贴板**（跨进程传递） | 无数据库 |
 | 构建 | **xcodebuild** via GitHub Actions | `macos-14` runner，产出未签名 IPA |
 | 工程生成 | **Python 标准库**脚本 | `scripts/gen_xcodeproj.py`（作者只有 Windows） |
-| 签名 | **Sideloadly**（免费 Apple ID） | 7 天一次 |
+| 签名 | **iloader**（免费 Apple ID） | 7 天一次；Sideloadly 因 Apple 下线老端点已不可用 |
 | 依赖 | **零**（无 SPM / CocoaPods / Carthage） | 全过程无 `pod install` |
 
 ---
@@ -240,6 +247,7 @@
 | 10 | **免费账号最多 3 个 App ID** | 装过 3 个自签 App 就满了 | 卸载不用的自签 App |
 | 11 | **无云同步、无多设备** | 换手机要重新配置 | 用「配置导出」手抄 |
 | 12 | **不上架 App Store** | 仅个人自用 | 见下方免责声明 |
+| 13 | **iOS 27 不允许 bundle 根下出现 `Resources` 这一层目录** | 词库若多套一层 `Resources`，装包时设备会报 `IXErrorDomain Code=13 Missing bundle ID`，看起来像签名坏了 | 词库直接放 bundle 根 `dict/`；CI 第 6 步 `Preflight - dictionary layout` 会拦 |
 
 ---
 
@@ -295,7 +303,7 @@ python scripts\qa\final_acceptance.py
 
 > ⚠️ **静态检查全绿 ≠ 能编译** —— 这个判断已被现实验证：六闸门全绿的情况下，真 `xcodebuild` 仍然报了 **14 个硬错误**（外加 1 个 pbxproj 词法错误让工程直接打不开）。逐条留档见 [`docs/06-QA报告.md`](docs/06-QA报告.md) §9.2b，那是本项目最有价值的一页。
 >
-> ✅ **当前状态**：CI 已在 `macos-14` 上真实跑通（run [40084131236](https://github.com/904177233/ximake-keyboard/actions/runs/40084131236)，15 步全绿，产出 2.6 MB 未签名 IPA，键盘扩展与词库都已正确打进 `PlugIns/`）。**剩下的唯一未知是"装到真机上能不能跑"。**
+> ✅ **当前状态**：CI 已在 `macos-14` 上真实跑通（run [40122640589](https://github.com/904177233/ximake-keyboard/actions/runs/40122640589)，18 步全绿，产出 2.89 MB 未签名 IPA，键盘扩展与词库都已正确打进 `PlugIns/`），并且**已经在真机上装成功、App 能打开**。真机踩到的两个坑（iOS 27 拒收 bundle 根 `Resources/` 目录、`applyHeight` 无限递归闪退）都已修复并留档。
 
 ### 工程与构建
 
@@ -318,10 +326,12 @@ python scripts\qa\final_acceptance.py
 | [`docs/03-设计与交互规范.md`](docs/03-设计与交互规范.md) | 逐屏视觉/交互规范、组件库、状态矩阵 | 想改界面时 |
 | [`docs/04-安装与续签指南.md`](docs/04-安装与续签指南.md) | **Windows 装到 iPhone 的完整步骤 + 16 条报错对照 + 7 天续签** | 第一次装 / 装不上 |
 | [`docs/05-常见问题.md`](docs/05-常见问题.md) | 28 个高频疑问（安全、费用、功能边界…） | 有疑问时 |
-| [`docs/06-QA报告.md`](docs/06-QA报告.md) | 静态检查结果、P0/P1/P2 问题清单 | 想知道代码质量 |
+| [`docs/06-QA报告.md`](docs/06-QA报告.md) | 静态检查结果、P0/P1/P2 问题清单、真编译踩的 14 个坑 | 想知道代码质量 |
+| [`docs/07-AI对话与智能联想规范.md`](docs/07-AI对话与智能联想规范.md) | AI 对话旋钮、全屏对话面板、非传统联想胶囊的施工图 | 想改对话/联想功能 |
 | [`docs/ios/README-构建.md`](docs/ios/README-构建.md) | 工程生成器原理、CI 细节 | 想改构建流程 |
-| [`design/tokens.json`](design/tokens.json) | 设计令牌（颜色 / 字号 / 间距 / 动效） | 想改配色 / 尺寸 |
+| [`design/tokens.json`](design/tokens.json) | 设计令牌（颜色 / 字号 / 间距 / 动效，256 个叶子） | 想改配色 / 尺寸 |
 | [`design/键盘布局规范.md`](design/键盘布局规范.md) | 26 键 / 9 键布局与尺寸 | 想改键盘布局 |
+| [`design/04-AI对话与智能联想规范.md`](design/04-AI对话与智能联想规范.md) | 旋钮 / 对话面板 / 联想胶囊的逐像素施工图（与 docs/07 同源） | 想改对话页 |
 | [`ios/Config/README.md`](ios/Config/README.md) | 改 Bundle ID / Team / 版本号 | 签名前必读 |
 
 ---

@@ -4,7 +4,7 @@
 //
 //  模块职责：安装与续签指南（**无 Mac 主线**）。
 //            顶部决策卡告诉用户该走哪条路；下面是 5 张 StepCard：
-//            ①云编译出 ipa ②Sideloadly 安装 ③添加键盘+完全访问 ④配置 AI+同步 ⑤7 天续签。
+//            ①云编译出 ipa ②iloader 安装 ③添加键盘+完全访问 ④配置 AI+同步 ⑤7 天续签。
 //            每个能复制的东西都给「复制」按钮；底部有可复制的续签清单。
 //  依赖：SwiftUI、AppState、StepCard / StepConnector / SurfaceCard / SectionHeader /
 //        PrimaryButton / SecondaryButton / ErrorBanner、SignatureClock / AppInfo。
@@ -17,7 +17,7 @@ import SwiftUI
 enum SigningRoute: String, CaseIterable, Identifiable {
     /// 有 Mac：Xcode 直接 Run（推荐给有 Mac 的人）。
     case xcode
-    /// 只有 Windows：GitHub Actions 云编译 + Sideloadly。
+    /// 只有 Windows：GitHub Actions 云编译 + iloader。
     case cloud
 
     var id: String { rawValue }
@@ -32,7 +32,7 @@ enum SigningRoute: String, CaseIterable, Identifiable {
     var subtitle: String {
         switch self {
         case .xcode: return "Xcode 打开工程 → 改 Bundle ID/Team → 真机 Run"
-        case .cloud: return "GitHub Actions 云端编译出 ipa → Sideloadly 装到 iPhone"
+        case .cloud: return "GitHub Actions 云端编译出 ipa → iloader 装到 iPhone"
         }
     }
 
@@ -253,10 +253,10 @@ struct InstallGuideView: View {
             ),
             StepModel(
                 index: 2,
-                title: "在 Windows 上用 Sideloadly 安装",
-                detail: "先用微软商店装 iTunes（提供 iPhone 驱动），再装 Sideloadly。手机用数据线连电脑并点「信任此电脑」，把 ipa 拖进 Sideloadly，填你的 Apple ID，点 Start，按提示输入 2FA 验证码。",
+                title: "在 Windows 上用 iloader 安装",
+                detail: "装 iloader（开源免费，不需要管理员权限，也不需要 iTunes）。手机用数据线连电脑并在手机上点「信任此电脑」。打开 iloader：填 Apple ID 邮箱和密码 → 点 Log in → 有双重认证会弹窗，填手机上收到的 6 位验证码 → 点 Submit（窗口变成 LOGGED IN AS 你的邮箱）→ 在 DEVICES 区选中你的 iPhone → 点 Import IPA 选那个 ipa → 点 Sign & Install App，等进度走完出现 Operation completed。只有电脑认不出设备时，才需要补装微软商店版 iTunes 来装驱动。",
                 icon: "arrow.down.to.line",
-                codeSnippet: "microsoft.com/store → 搜 iTunes 安装\nsideloadly.io → 下载并安装 Sideloadly\nSideloadly：拖入 ipa → 填 Apple ID → Start → 输入 2FA",
+                codeSnippet: "github.com/nab138/iloader → 下载 iloader-windows-x64.exe 并安装（装到 %LOCALAPPDATA%\\iloader，不需要管理员权限）\niloader：填 Apple ID + 密码 → Log in → 输入 2FA 验证码 → Submit\n在 DEVICES 区选中 iPhone → Import IPA → Sign & Install App\n进度：Signing → Transferring App... → Installing 15%→100% → Operation completed",
                 actionTitle: "标记为已完成"
             ),
             StepModel(
@@ -278,9 +278,9 @@ struct InstallGuideView: View {
             StepModel(
                 index: 5,
                 title: "7 天续签：重新跑一次步骤 2",
-                detail: "免费 Apple ID 的签名 7 天过期。到期前用 Sideloadly 重新装一次同一个 ipa 就行，配置与 API Key 都保留（它们不在 App 包里）。续签清单在页面底部，可以复制。",
+                detail: "免费 Apple ID 的签名 7 天过期。到期前用 iloader 重新装一次同一个 ipa 就行：打开 iloader → 选中设备 → Import IPA → Sign & Install App，登录状态通常还在。配置与 API Key 都保留（它们不在 App 包里）。续签清单在页面底部，可以复制。",
                 icon: "arrow.clockwise",
-                codeSnippet: "1. 打开 Sideloadly，连上 iPhone\n2. 重新拖入同一个 ipa\n3. 填同一个 Apple ID，Start\n4. 手机上确认图标已恢复（配置不会丢）",
+                codeSnippet: "1. 打开 iloader，数据线连上 iPhone\n2. 在 DEVICES 区选中你的 iPhone\n3. Import IPA 选同一个 ipa\n4. 点 Sign & Install App，等 Operation completed\n5. 手机上确认图标已恢复（配置不会丢）",
                 actionTitle: "标记为已完成"
             )
         ]
@@ -399,13 +399,14 @@ struct InstallGuideView: View {
     /// 可复制的续签清单纯文本。
     private static let renewalChecklistText = """
     墨语 · 7 天续签清单
-    [ ] 1. 电脑上打开 Sideloadly（或 Xcode）
+    [ ] 1. 电脑上打开 iloader（或 Xcode）
     [ ] 2. 数据线连上 iPhone，手机点「信任此电脑」
-    [ ] 3. 把同一个 AIKeyboard-unsigned.ipa 重新拖进去
-    [ ] 4. 填同一个 Apple ID，点 Start，输入 2FA
-    [ ] 5. 等进度条走完，手机上确认图标可用
-    [ ] 6. 打开 App，确认「设置」里 API Key 与配置还在
-    [ ] 7. 如提示不受信任：设置 › 通用 › VPN与设备管理 › 信任
+    [ ] 3. 在 DEVICES 区选中你的 iPhone
+    [ ] 4. Import IPA 选同一个 AIKeyboard-unsigned.ipa
+    [ ] 5. 点 Sign & Install App（登录状态通常还在，需要时重新填 Apple ID + 2FA）
+    [ ] 6. 等进度走完出现 Operation completed，手机上确认图标可用
+    [ ] 7. 打开 App，确认「设置」里 API Key 与配置还在
+    [ ] 8. 如提示不受信任：设置 › 通用 › VPN与设备管理 › 信任
 
     说明：配置与 API Key 不在安装包里，重装不会丢；只有 App 会被替换。
     """
@@ -419,7 +420,7 @@ struct InstallGuideView: View {
                     SettingsRow(
                         icon: IconSpec(symbol: "checklist", tint: Theme.accent),
                         title: "我需要在 Windows 上准备什么",
-                        subtitle: "iTunes / Sideloadly / 数据线 / Apple ID",
+                        subtitle: "iloader / 数据线 / Apple ID",
                         accessory: .chevron
                     ) {
                         withAnimation(Theme.Motion.spring) {
@@ -431,9 +432,8 @@ struct InstallGuideView: View {
                         RowDivider()
                         VStack(alignment: .leading, spacing: AppMetrics.blockGap) {
                             requirementLine("一台 Windows 电脑", "Windows 10 及以上")
-                            requirementLine("iTunes（微软商店版）", "提供 iPhone 驱动，Sideloadly 需要它")
-                            requirementLine("Sideloadly", "免费，官网 sideloadly.io 下载")
-                            requirementLine("数据线", "第一次安装必须连线；续签也要连")
+                            requirementLine("iloader", "开源免费，github.com/nab138/iloader 下载，不需要管理员权限")
+                            requirementLine("数据线", "原装或 MFi 认证线")
                             requirementLine("Apple ID", "免费账号即可，不需要开发者账号")
                             requirementLine("GitHub 账号", "用来跑云端编译（公开/私有仓库都可以）")
                         }

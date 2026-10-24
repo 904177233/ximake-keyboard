@@ -79,7 +79,7 @@ struct OnboardingStep: Identifiable, Equatable {
             symbol: "checkmark.seal",
             fallbackEmoji: "✅",
             title: "第 4 步 · 装到手机上",
-            body: "没有 Mac？用 GitHub Actions 云端编译出 ipa，再用 Sideloadly 装到 iPhone（免费 Apple ID 每 7 天续签一次）。",
+            body: "没有 Mac？用 GitHub Actions 云端编译出 ipa，再用 iloader 装到 iPhone（免费 Apple ID 每 7 天续签一次）。",
             primaryTitle: "看安装指南",
             secondaryTitle: "完成",
             canSkip: true

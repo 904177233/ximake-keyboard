@@ -74,7 +74,7 @@ ScrollView {
 
 ## 1. `OnboardingView` —— 5 步引导（硬性 5 步，不许增减）
 
-**背景**：无 Apple 开发者账号、只有 Windows 的用户。所以引导必须承认现实：编译要在 Mac 或 **GitHub Actions 云编译**，装到手机用 **Sideloadly**。
+**背景**：无 Apple 开发者账号、只有 Windows 的用户。所以引导必须承认现实：编译要在 Mac 或 **GitHub Actions 云编译**，装到手机用 **iloader**。
 
 ### 1.1 结构
 
@@ -92,7 +92,7 @@ ScrollView {
 | 2 | `square.grid.2x2` | 第 1 步 · 添加键盘 | 「设置 › 通用 › 键盘 › 键盘 › 添加新键盘 › 墨语。加完后在聊天框里长按地球键就能切换。」 | 我已完成 | 稍后 |
 | 3 | `lock.shield` | 第 2 步 · 开启完全访问 | 「设置 › 通用 › 键盘 › 墨语 › 打开「允许完全访问」。不开这个，键盘就无法联网，AI 不可用。」 | 我已开启 | 查看图示 |
 | 4 | `server.rack` | 第 3 步 · 配置 AI 服务 | 「填一个 baseURL + API Key + 模型名就能用。支持 DeepSeek、通义千问、Kimi、智谱、OpenRouter 等 9 家预设。」 | 去配置 | 稍后 |
-| 5 | `checkmark.seal` | 第 4 步 · 装到手机上 | 「没有 Mac？用 GitHub Actions 云端编译出 ipa，再用 Sideloadly 装到 iPhone（免费 Apple ID 每 7 天续签一次）。」 | 看安装指南 | 完成 |
+| 5 | `checkmark.seal` | 第 4 步 · 装到手机上 | 「没有 Mac？用 GitHub Actions 云端编译出 ipa，再用 iloader 装到 iPhone（免费 Apple ID 每 7 天续签一次）。」 | 看安装指南 | 完成 |
 
 > 标题里的「第 N 步」是**页面内步骤**（2~5），第 1 步是欢迎页不编号。这一点在 UI 里要一致。
 
@@ -305,16 +305,16 @@ SegmentedTabs: [全部] [润色] [扩写] [翻译] [回复] [生图] [自定义]
 |---|---|---|
 | 1 | 准备签名方式 | 两条路：A. 有 Mac → Xcode 直接 Run（推荐）；B. 只有 Windows → GitHub Actions 云编译出 ipa |
 | 2 | 云编译（无 Mac） | 把仓库 push 到自己的 GitHub 私有库 → 在 Actions 里运行 `Build IPA` workflow → 下载 Artifacts 里的 `.ipa`。**给一段可复制说明**，不要给假链接 |
-| 3 | 用 Sideloadly 安装 | Windows 装 Sideloadly + iTunes（驱动）→ 连 iPhone → 拖入 ipa → 填 Apple ID → Start。首次需要在 iPhone「设置 › 通用 › VPN与设备管理」里信任开发者 |
+| 3 | 用 iloader 安装 | Windows 装 iloader（开源，不需要管理员权限）→ 连 iPhone → 填 Apple ID 与密码 → 2FA → Import IPA → Sign & Install App。首次需要在 iPhone「设置 › 通用 › VPN与设备管理」里信任开发者 |
 | 4 | 添加键盘 + 开完全访问 | 同引导第 2、3 步，给路径文字 |
-| 5 | 7 天续签 | 免费 Apple ID 签名 7 天过期，过期后键盘会消失。三种续签方式对比表（Xcode 重新 Run / Sideloadly 重装 / AltStore 自动续签），推荐 AltStore（需常驻电脑或 AltServer） |
+| 5 | 7 天续签 | 免费 Apple ID 签名 7 天过期，过期后键盘会消失。三种续签方式对比表（Xcode 重新 Run / iloader 重装 / AltStore 自动续签），推荐 AltStore（需常驻电脑或 AltServer） |
 
 **续签对比表**（表格，UI 用 `SurfaceCard` + 3 列）：
 
 | 方式 | 需要什么 | 频率 | 适合 |
 |---|---|---|---|
 | Xcode 重新 Run | Mac | 每 7 天 | 有 Mac 的人 |
-| Sideloadly 重装 | Windows + 数据线 | 每 7 天 | 偶尔用 |
+| iloader 重装 | Windows + 数据线 | 每 7 天 | 偶尔用 |
 | AltStore 自动续签 | Windows 常开 AltServer（同一 Wi-Fi） | 自动 | 长期自用（推荐） |
 
 **顶部提醒卡**：`warning.soft` 底 + `exclamationmark.triangle` 图标：「免费签名 7 天过期是 Apple 的限制，不是 App 的问题。」+ 「查看签名剩余天数」（从安装日期算）。
@@ -415,7 +415,7 @@ SegmentedTabs: [全部] [润色] [扩写] [翻译] [回复] [生图] [自定义]
 
 - [ ] 12 个页面全部存在，命名与本文一致
 - [ ] Onboarding **恰好 5 步**，第 3 步无「跳过」
-- [ ] 安装指南 5 步含「GitHub Actions 云编译」+「Sideloadly」+ 续签对比表
+- [ ] 安装指南 5 步含「GitHub Actions 云编译」+「iloader」+ 续签对比表
 - [ ] 生图结果有「进度环 + 已等待 N 秒 + 预计 5–20 秒 + 取消」
 - [ ] 所有颜色来自 `Theme`，字号来自 `Theme.font*`（主 App 可用 `typography.*` 新增项）
 - [ ] 四类降级路径都有中文提示
