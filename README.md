@@ -133,10 +133,10 @@
 
 | 步骤 | 做什么 | 大约耗时 |
 |---|---|---|
-| **1** | 把这个文件夹推到 **GitHub 私有仓库**（用 GitHub Desktop 拖进去点 Publish 即可，不用敲命令） | 10 分钟（含注册） |
-| **2** | 打开仓库页 → **Actions** → 左侧 `Build Unsigned IPA` → 等绿勾（云端 macOS 自动编译，约 5～12 分钟）→ 底部 **Artifacts** 下载 `AIKeyboard-unsigned-ipa` → 解压出 `AIKeyboard-unsigned.ipa` | 5～12 分钟 |
+| **1** | 把代码推到 GitHub 仓库（**Public / Private 都行**，用 GitHub Desktop 拖进去点 Publish 即可，不用敲命令） | 10 分钟（含注册） |
+| **2** | 打开仓库页 → **Actions** → 左侧 `Build Unsigned IPA` → 等绿勾（云端 macOS 自动编译，约 **1～3 分钟**）→ 底部 **Artifacts** 下载 `AIKeyboard-unsigned-ipa` → 解压出 `AIKeyboard-unsigned.ipa`（约 2.6 MB） | 1～3 分钟 |
 | **3** | **【必做】验 IPA**：改成 `.zip` 解开，确认存在 `Payload\AIKeyboard.app\PlugIns\AIKeyboardExtension.appex`（没有这个，键盘永远装不上） | 1 分钟 |
-| **4** | Windows 装 **iTunes（微软商店版）** + **Sideloadly** → 手机连电脑点「信任」→ Sideloadly 选 IPA、填 Apple ID、勾 `Sideload with Apple ID` → **Start** → 输密码 + 2FA → 等 `Done` | 10 分钟 |
+| **4** | Windows 装 **Sideloadly**（官网下，别用 winget），插手机点「信任」→ Sideloadly 选 IPA、填 Apple ID、勾 `Sideload with Apple ID` → **Start** → 输密码 + 2FA → 等 `Done`（Sideloadly 认出手机就不用装 iTunes；认不出再装微软商店版 iTunes） | 10 分钟 |
 | **5** | iPhone：设置 › 通用 › **VPN与设备管理** → 信任你的 Apple ID | 1 分钟 |
 | **6** | 设置 › 通用 › **键盘 › 键盘** → **添加新键盘** → 墨语 → 完成 → **点「墨语」那一行** → 开 **允许完全访问**（AI 的生死线） | 2 分钟 |
 | **7** | 打开「墨语」App → 配服务商（填 API Key）→ 点 **同步到键盘** → 键盘 ⚙️ → **从剪贴板导入** | 3 分钟 |
@@ -228,7 +228,7 @@
 
 | # | 限制 | 影响 | 缓解 |
 |---|---|---|---|
-| 1 | **不能在 Windows 上编译** | 必须走 GitHub Actions 云编译（免费，等 5～12 分钟）或借 Mac | 见 [`docs/04-安装与续签指南.md`](docs/04-安装与续签指南.md) 路线 A |
+| 1 | **不能在 Windows 上编译** | 必须走 GitHub Actions 云编译（免费，等 1～3 分钟）或借 Mac | 见 [`docs/04-安装与续签指南.md`](docs/04-安装与续签指南.md) 路线 A |
 | 2 | **免费签名 7 天过期** | 每 7 天要重新签名安装一次，否则 App 闪退（数据不丢） | 续签清单，5 分钟搞定 |
 | 3 | **免费账号无 App Group** | App 与键盘配置不共享，要手动「同步到键盘」 | 具名剪贴板方案 |
 | 4 | **键盘扩展内存 ~40–60MB** | 大词库不能全量加载，生图大图要压缩 | 精简词库 + 流式输出 |
@@ -293,7 +293,9 @@ python scripts\qa\final_acceptance.py
 
 加 `--md docs/06-QA报告.md --inject` 可把结果自动回填到 QA 报告的「最终验收」章节。完整判定标准见 [`docs/06-QA报告.md`](docs/06-QA报告.md) §9.2。
 
-> ⚠️ **静态检查全绿 ≠ 能编译。** 唯一能证明"可编译"的证据是 `.github/workflows/build.yml` 的 `Build unsigned archive` 步骤变绿，外加真机装上键盘能打字。
+> ⚠️ **静态检查全绿 ≠ 能编译** —— 这个判断已被现实验证：六闸门全绿的情况下，真 `xcodebuild` 仍然报了 **14 个硬错误**（外加 1 个 pbxproj 词法错误让工程直接打不开）。逐条留档见 [`docs/06-QA报告.md`](docs/06-QA报告.md) §9.2b，那是本项目最有价值的一页。
+>
+> ✅ **当前状态**：CI 已在 `macos-14` 上真实跑通（run [40084131236](https://github.com/904177233/ximake-keyboard/actions/runs/40084131236)，15 步全绿，产出 2.6 MB 未签名 IPA，键盘扩展与词库都已正确打进 `PlugIns/`）。**剩下的唯一未知是"装到真机上能不能跑"。**
 
 ### 工程与构建
 

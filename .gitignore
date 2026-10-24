@@ -83,3 +83,8 @@ tmp/
 *.certSigningRequest
 AuthKey_*.p8
 secrets/
+
+# ---- 本地下载的产物（CI 拉下来的 IPA、临时解包目录）----
+# dist/ 里放的是从 GitHub Actions 下载的 AIKeyboard-unsigned.ipa：随时可重新下载，不入库。
+dist/
+Payload/
