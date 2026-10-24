@@ -161,6 +161,21 @@ jobs:
           python3 scripts/validate_project.py
 
       # ---------------------------------------------------------------------
+      # 3.5) pbxproj 词法校验（OpenStep plist）
+      #
+      # 这道闸门是 CI run #1 失败后补上的。当时 validate_project.py 86 项全过，
+      # 但 xcodebuild 连 `-list` 都跑不到，报：
+      #     Old-style plist parser: missing semicolon in dictionary on line 251
+      # 根因是 KeyboardViewModel+AI.swift 这类带 `+` 的文件名，在 pbxproj 里
+      # 必须加引号（OpenStep plist 的裸字符串只允许 A-Z a-z 0-9 . _ $ / : -）。
+      # 结构校验查不出这个，只有词法校验能查。
+      # ---------------------------------------------------------------------
+      - name: Validate pbxproj OpenStep plist syntax
+        run: |
+          set -euo pipefail
+          python3 scripts/lead/pbxproj_plist_check.py
+
+      # ---------------------------------------------------------------------
       # 4) 列出 scheme，确认 AIKeyboard 被 Xcode 识别
       # ---------------------------------------------------------------------
       - name: List schemes

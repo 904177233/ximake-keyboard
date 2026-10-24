@@ -142,7 +142,21 @@ INJECT_SCALAR_KEYS = [
 # 基础工具
 # ---------------------------------------------------------------------------
 
-_SAFE_UNQUOTED = re.compile(r"^[A-Za-z0-9_.$/:\-+]+$")
+# OpenStep plist（pbxproj 的格式）里，**裸字符串**允许的字符集由 CoreFoundation
+# 的 CFPropertyList.c / isUnquotedStringChar() 决定，实测只有：
+#
+#     A-Z a-z 0-9 . _ $ / : -
+#
+# 特别注意 **不包含 `+`**。像 `KeyboardViewModel+AI.swift` 这种 Swift 常见命名，
+# 如果不加引号直接写 `path = 某某+AI.swift;`，xcodebuild 会报
+#
+#     Old-style plist parser: missing semicolon in dictionary on line N
+#     xcodebuild: error: Unable to read project '...'
+#     Reason: The project '...' is damaged and cannot be opened due to a parse error
+#
+# 整个工程连 `xcodebuild -list` 都跑不到（这是 2026-10-24 CI run #1 的真实故障）。
+# 所以这里的白名单必须严格：宁可多引号，也不要漏引号。
+_SAFE_UNQUOTED = re.compile(r"^[A-Za-z0-9_.$/:\\-]+$")
 
 
 def quote(value: str) -> str:

@@ -270,7 +270,7 @@
 | **Windows** | `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/finalize.ps1` |
 | **macOS / CI** | `bash scripts/finalize.sh` |
 
-`finalize.ps1` 依次跑 5 个闸门，任一失败立刻中止：`gen_xcodeproj.py` → `validate_project.py` → `qa/project_check.py` → `qa/static_check.py` → `qa/consistency_check.py`。
+`finalize.ps1` 依次跑 6 个闸门，任一失败立刻中止：`gen_xcodeproj.py` → `validate_project.py` → `qa/project_check.py` → `qa/static_check.py` → `qa/consistency_check.py` → `lead/pbxproj_plist_check.py`。
 
 **不要手改 `project.pbxproj`** —— 下次重跑会整个覆盖，你的修改会丢失。
 

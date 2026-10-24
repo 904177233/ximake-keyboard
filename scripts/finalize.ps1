@@ -1,4 +1,4 @@
-#!/usr/bin/env pwsh
+﻿#!/usr/bin/env pwsh
 # -*- coding: utf-8 -*-
 <#
 .SYNOPSIS
@@ -15,6 +15,12 @@
       3. qa/project_check.py  —— QA 的第二道独立校验（不可跳过）
       4. qa/static_check.py   —— Swift 源码静态检查（括号/强制解包/UIKit 越界…）
       5. qa/consistency_check.py —— 设计令牌一致性（颜色/字号有没有硬编码）
+      6. lead/pbxproj_plist_check.py —— pbxproj 的 OpenStep plist 词法校验
+
+    第 6 步是 CI run #1 失败后补的：结构校验全过，但 xcodebuild 报
+    `Old-style plist parser: missing semicolon`，根因是带 `+` 的文件名
+    （KeyboardViewModel+AI.swift）在 pbxproj 里必须加引号。括号平衡/UUID
+    引用完整性这类检查查不出词法问题，只有逐字符扫 OpenStep 规则才查得出。
 
 .PARAMETER Python
     Python 可执行文件路径。默认自动探测。
@@ -82,6 +88,8 @@ $env:PYTHONUTF8 = "1"
 
 $Failures = @()
 $Total = 0
+# 闸门总数（含被 -SkipGen 跳过的那一步，编号保持连续）
+$GateTotal = 6
 
 function Invoke-Gate {
     param(
@@ -94,7 +102,7 @@ function Invoke-Gate {
     $script:Total++
     Write-Host ""
     Write-Host ("=" * 78) -ForegroundColor DarkGray
-    Write-Host (" [{0}/{1}] {2}" -f $script:Total, 5, $Title) -ForegroundColor Cyan
+    Write-Host (" [{0}/{1}] {2}" -f $script:Total, $script:GateTotal, $Title) -ForegroundColor Cyan
     Write-Host ("         {0} {1}" -f $ScriptPath, ($Arguments -join " ")) -ForegroundColor DarkGray
     Write-Host ("=" * 78) -ForegroundColor DarkGray
     Write-Host ""
@@ -154,7 +162,7 @@ if (-not $SkipGen) {
 } else {
     $Total++
     Write-Host ""
-    Write-Host ("[{0}/5] 1. 生成 Xcode 工程（gen_xcodeproj.py）—— 已按 -SkipGen 跳过" -f $Total) -ForegroundColor DarkYellow
+    Write-Host ("[{0}/{1}] 1. 生成 Xcode 工程（gen_xcodeproj.py）—— 已按 -SkipGen 跳过" -f $Total, $GateTotal) -ForegroundColor DarkYellow
 }
 
 $ok = Invoke-Gate -Title "2. 工程结构校验（validate_project.py）" `
@@ -190,6 +198,16 @@ if (-not $ok) {
 $ok = Invoke-Gate -Title "5. 设计令牌一致性（qa/consistency_check.py）" `
                   -ScriptPath "scripts/qa/consistency_check.py" `
                   -Hint "P0/P1 必须归零；硬编码颜色/字号会在这里暴露。"
+if (-not $ok) {
+    Write-Host ""
+    Write-Host ("收尾失败：{0}/{1} 个闸门未通过。" -f $Failures.Count, $Total) -ForegroundColor Red
+    $Failures | ForEach-Object { Write-Host ("  ✗ {0}" -f $_) -ForegroundColor Red }
+    exit 1
+}
+
+$ok = Invoke-Gate -Title "6. pbxproj 词法校验（lead/pbxproj_plist_check.py）" `
+                  -ScriptPath "scripts/lead/pbxproj_plist_check.py" `
+                  -Hint "OpenStep plist 词法：裸字符串里出现 + ~ # @ 等字符会让 xcodebuild 直接打不开工程（CI run #1 的真实故障）。"
 if (-not $ok) {
     Write-Host ""
     Write-Host ("收尾失败：{0}/{1} 个闸门未通过。" -f $Failures.Count, $Total) -ForegroundColor Red

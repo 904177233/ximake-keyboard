@@ -489,7 +489,7 @@ python scripts/validate_project.py -v      # 打印每个通过的检查项
 # 生成 AppIcon + AccentColor（用 design/ 里的正式设计稿）
 python scripts/make_appicon.py --from design/appicon/icon-1024.png --force
 
-# 一条命令跑完 5 个闸门（gen → validate → project_check → static_check → consistency_check）
+# 一条命令跑完 6 个闸门（gen → validate → project_check → static_check → consistency_check → pbxproj_plist_check）
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/finalize.ps1
 
 # 开发期自动重生成（文件一变就 gen + validate，Ctrl+C 退出）

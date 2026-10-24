@@ -248,9 +248,9 @@
 		EB76BA28D37224A04BF98AE8 /* KMSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Support/KMSupport.swift; sourceTree = SOURCE_ROOT; };
 		7E329FF41AAA90A130A2B244 /* KMLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Theme/KMLayout.swift; sourceTree = SOURCE_ROOT; };
 		6A95FFC18F35E762DECB6D91 /* KeyboardState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/ViewModel/KeyboardState.swift; sourceTree = SOURCE_ROOT; };
-		514726E6F4275146B408A0E3 /* KeyboardViewModel+AI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/ViewModel/KeyboardViewModel+AI.swift; sourceTree = SOURCE_ROOT; };
-		72CA8B1387DB2D528621C906 /* KeyboardViewModel+Access.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/ViewModel/KeyboardViewModel+Access.swift; sourceTree = SOURCE_ROOT; };
-		86D19954F301A3A0D8A822F7 /* KeyboardViewModel+Panel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/ViewModel/KeyboardViewModel+Panel.swift; sourceTree = SOURCE_ROOT; };
+		514726E6F4275146B408A0E3 /* KeyboardViewModel+AI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIKeyboardExtension/ViewModel/KeyboardViewModel+AI.swift"; sourceTree = SOURCE_ROOT; };
+		72CA8B1387DB2D528621C906 /* KeyboardViewModel+Access.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIKeyboardExtension/ViewModel/KeyboardViewModel+Access.swift"; sourceTree = SOURCE_ROOT; };
+		86D19954F301A3A0D8A822F7 /* KeyboardViewModel+Panel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIKeyboardExtension/ViewModel/KeyboardViewModel+Panel.swift"; sourceTree = SOURCE_ROOT; };
 		A1731C048DCE50DCCD05BEC3 /* KeyboardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/ViewModel/KeyboardViewModel.swift; sourceTree = SOURCE_ROOT; };
 		37216E90FFE47E2D37961837 /* AIBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Views/AIBar.swift; sourceTree = SOURCE_ROOT; };
 		6B533A9C9C7112D8F649314F /* AIPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Views/AIPanelView.swift; sourceTree = SOURCE_ROOT; };

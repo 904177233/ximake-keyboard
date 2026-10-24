@@ -61,6 +61,8 @@ export PYTHONUTF8=1
 
 FAILURES=""
 TOTAL=0
+# 闸门总数（含被 --skip-gen 跳过的那一步，编号保持连续）
+GATE_TOTAL=6
 
 hr() {
   # 78 个等号，避免依赖 seq 的具体行为
@@ -83,7 +85,7 @@ run_gate() {
   TOTAL=$((TOTAL + 1))
   echo
   hr
-  printf ' [%d/5] %s\n' "${TOTAL}" "${title}"
+  printf ' [%d/%d] %s\n' "${TOTAL}" "${GATE_TOTAL}" "${title}"
   printf '         %s %s\n' "${script_path}" "$*"
   hr
   echo
@@ -132,7 +134,7 @@ fi
 if [ "${SKIP_GEN}" -eq 1 ]; then
   TOTAL=$((TOTAL + 1))
   echo
-  echo "[${TOTAL}/5] 1. 生成 Xcode 工程（gen_xcodeproj.py）—— 已按 --skip-gen 跳过"
+  echo "[${TOTAL}/${GATE_TOTAL}] 1. 生成 Xcode 工程（gen_xcodeproj.py）—— 已按 --skip-gen 跳过"
 elif [ "${MODE_CHECK}" -eq 1 ]; then
   run_gate "1. 生成 Xcode 工程（gen_xcodeproj.py）" "scripts/gen_xcodeproj.py" "--check" || abort
 else
@@ -143,6 +145,10 @@ run_gate "2. 工程结构校验（validate_project.py）" "scripts/validate_proj
 run_gate "3. QA 独立校验（qa/project_check.py）" "scripts/qa/project_check.py" || abort
 run_gate "4. Swift 静态检查（qa/static_check.py）" "scripts/qa/static_check.py" || abort
 run_gate "5. 设计令牌一致性（qa/consistency_check.py）" "scripts/qa/consistency_check.py" || abort
+# 第 6 道是 CI run #1 失败后补的：结构校验全过，但 xcodebuild 报
+# `Old-style plist parser: missing semicolon`，根因是带 `+` 的文件名
+# （KeyboardViewModel+AI.swift）在 pbxproj 里必须加引号。
+run_gate "6. pbxproj 词法校验（lead/pbxproj_plist_check.py）" "scripts/lead/pbxproj_plist_check.py" || abort
 
 # ---------------------------------------------------------------------------
 # 汇总
