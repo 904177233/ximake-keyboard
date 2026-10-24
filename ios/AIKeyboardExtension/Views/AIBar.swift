@@ -69,6 +69,18 @@ struct AIBar: View {
     /// 点击禁用提示区。
     let onDisabledTap: () -> Void
 
+    /// 是否显示「语音」胶囊（`KeyboardViewModel.canUseVoiceInput` 为 true 时由调用方置位）。
+    ///
+    /// 语音不是 `AIFeature`（它走麦克风 + 本地/端侧识别，不发给用户配置的 LLM），
+    /// 因此单独一个回调，不塞进 `onSelect(feature)`。
+    var showsVoice: Bool = false
+
+    /// 点击「语音」胶囊。
+    var onOpenVoice: () -> Void = {}
+
+    /// 主题主色（design/05 §1.1：AI 工具条选中胶囊是 4 处主色之一）。
+    var accent: Color = Theme.accent
+
     var body: some View {
         if landscapeCompact {
             compactButton
@@ -141,6 +153,17 @@ struct AIBar: View {
                         isEnabled: true,
                         action: onOpenSettings
                     )
+                    if showsVoice {
+                        KMPillChip(
+                            title: "语音",
+                            emoji: "🎙️",
+                            style: .tool,
+                            size: .regular,
+                            isSelected: false,
+                            isEnabled: isBusy == false,
+                            action: onOpenVoice
+                        )
+                    }
                 }
                 .padding(.horizontal, Theme.Sizing.aiBarInset)
             }

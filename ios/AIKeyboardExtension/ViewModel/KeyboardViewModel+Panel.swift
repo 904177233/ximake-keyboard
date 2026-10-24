@@ -144,6 +144,31 @@ extension KeyboardViewModel {
         refreshClipboard()
     }
 
+    /// 切换「AI 联想词」开关（键盘内设置页可切，宿主 App 同键同义）。
+    ///
+    /// 关闭后 `KeyboardViewModel+Suggest` 的 `scheduleSuggestions()` 会直接清空并
+    /// **不创建任何 Task**（不做请求、不占额度、不刷候选栏）。
+    /// - Parameter enabled: 是否启用。
+    public func setAISuggestionEnabled(_ enabled: Bool) {
+        var updated = snapshot
+        updated.enableAISuggestion = enabled
+        snapshot = updated
+        configStore.save(updated)
+        if !enabled { clearSuggestions() }
+    }
+
+    /// 切换「输入纠错」开关（键盘内设置页可切，宿主 App 同键同义）。
+    ///
+    /// 纠错本身在 `PinyinEngine+TypoCorrection` 层按默认启用并打 `[纠错]` 角标；
+    /// 关闭后由视图层过滤掉 `isTypoCorrection == true` 的候选（见 `CandidateBar`）。
+    /// - Parameter enabled: 是否启用。
+    public func setTypoCorrectionEnabled(_ enabled: Bool) {
+        var updated = snapshot
+        updated.enableTypoCorrection = enabled
+        snapshot = updated
+        configStore.save(updated)
+    }
+
     /// 切换默认服务商（键盘内设置页只做切换，完整编辑在宿主 App）。
     /// - Parameter providerID: 服务商 ID。
     public func setDefaultProvider(_ providerID: String?) {

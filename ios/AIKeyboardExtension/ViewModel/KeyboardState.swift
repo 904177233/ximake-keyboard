@@ -84,11 +84,16 @@ extension KeyboardViewModel {
         /// 该页会整体隐藏候选栏 + AI 工具条（84pt chrome），改为
         /// 「标题条 40 + 消息区 180 + 输入行 44 + 键区 174」四段式，总高 438。
         case aiChat
+        /// 键盘内语音输入（整页，与 `.aiChat` / `.result` 同高 438）。
+        ///
+        /// 只在 `KMVoiceInput.isPlatformSupported == true` 时可由 UI 进入；
+        /// 录音与转写全部在 `KMVoiceInput` 里，本页只做呈现（见 docs/13）。
+        case voice
 
         /// 是否属于「展开态」页面（决定键盘高度增量）。
         public var isExpanded: Bool {
             switch self {
-            case .aiPanel, .result, .settings, .aiChat:
+            case .aiPanel, .result, .settings, .aiChat, .voice:
                 return true
             case .letters, .numbers, .symbols, .emoji:
                 return false
@@ -114,6 +119,8 @@ extension KeyboardViewModel {
                 return "键盘设置"
             case .aiChat:
                 return "AI 对话"
+            case .voice:
+                return "语音输入"
             }
         }
     }

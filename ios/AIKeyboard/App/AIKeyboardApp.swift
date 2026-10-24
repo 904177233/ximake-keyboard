@@ -16,6 +16,16 @@ struct AIKeyboardApp: App {
     /// 宿主 App 状态中枢（整个 App 唯一一份）。
     @StateObject private var appState = AppState()
 
+    /// App 入口初始化。
+    ///
+    /// 在这里启动 MetricKit 订阅（而不是 `.onAppear`）有两个原因：
+    /// ①MetricKit 要求尽早注册，越早越不容易漏掉系统投递的指标包；
+    /// ②`.onAppear` 在场景重建时可能被多次触发，而 `init` 只在进程内走一次
+    /// （`MetricKitReporter.start()` 自身也做了幂等保护，双保险）。
+    init() {
+        MetricKitReporter.shared.start()
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()

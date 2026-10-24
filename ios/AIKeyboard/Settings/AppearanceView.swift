@@ -2,8 +2,8 @@
 //  AppearanceView.swift
 //  墨语 · 宿主 App
 //
-//  模块职责：语气与外观设置（默认语气 / 回复条数 / 生图尺寸 / 深浅色）。
-//  依赖：SwiftUI、AppState、SegmentedTabs / SectionHeader / ListGroup / PillChip。
+//  模块职责：语气与外观设置（默认语气 / 回复条数 / 生图尺寸 / 深浅色 / 主题与形象入口）。
+//  依赖：SwiftUI、AppState、ThemeStore、SegmentedTabs / SectionHeader / ListGroup / PillChip。
 //  使用方：SettingsView / KeyboardHomeView。
 //
 
@@ -14,6 +14,9 @@ struct AppearanceView: View {
 
     @EnvironmentObject private var appState: AppState
 
+    /// 当前主题名（用于入口行副标题）。从「主题与形象」返回时刷新一次。
+    @State private var currentThemeName: String = ThemeStore.shared.currentTheme.name
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppMetrics.sectionGap) {
@@ -21,6 +24,7 @@ struct AppearanceView: View {
                 replySection
                 imageSizeSection
                 appearanceSection
+                themeSection
             }
             .padding(.horizontal, AppMetrics.pageInset)
             .padding(.bottom, Theme.Spacing.xxl + AppMetrics.pageInset)
@@ -29,6 +33,9 @@ struct AppearanceView: View {
         .navigationTitle("语气与外观")
         .navigationBarTitleDisplayMode(.inline)
         .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+        .onAppear {
+            currentThemeName = ThemeStore.shared.currentTheme.name
+        }
     }
 
     // MARK: - 默认语气
@@ -157,6 +164,31 @@ struct AppearanceView: View {
                         RowDivider()
                     }
                 }
+            }
+        }
+    }
+    // MARK: - 主题与形象
+
+    /// 主题与小形象入口：显示当前主题名，进去可切换 6 套双色主题、导入自定义形象。
+    private var themeSection: some View {
+        VStack(alignment: .leading, spacing: AppMetrics.blockGap) {
+            SectionHeader(
+                title: "主题与形象",
+                footnote: "双色主题，主色只出现在最需要的地方"
+            )
+
+            ListGroup {
+                NavigationLink {
+                    ThemeSettingsView()
+                } label: {
+                    SettingsRow(
+                        icon: IconSpec(symbol: "paintpalette.fill", tint: Theme.accent),
+                        title: "主题与形象",
+                        subtitle: currentThemeName,
+                        accessory: .chevron
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
             }
         }
     }

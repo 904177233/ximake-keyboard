@@ -48,14 +48,25 @@ CACHE_PATH = os.path.join(HERE, ".cache", "jieba_dict.txt")
 # 输出目录：必须是 Shared/dict（不能是 Shared/Resources/dict，见模块 docstring 的说明）
 OUT_DIR = os.path.join(ROOT, "ios", "Shared", "dict")
 
-DICT_VERSION = "1.0.0"
-GENERATED_DATE = "2026-10-24"   # 固定日期，保证可重跑幂等（不取 now）
+DICT_VERSION = "1.1.0"
+GENERATED_DATE = "2026-10-25"   # 固定日期，保证可重跑幂等（不取 now）
 
 # ---- 选词参数（改这里就能调规模） ----
-N_JIEBA = 3400          # 从 jieba 词表取前 N 条通用词
-JIEBA_MIN_FREQ = 1200   # jieba 词频下限（低于此的通用词不收录，避免生僻词）
+# v1.0.0：N_JIEBA=3400 / JIEBA_MIN_FREQ=1200 / COMMON_CHAR_SUPPORT=3 → 5276 条
+# v1.1.0：目标 ≥30000 条（docs/08 P0-2「词库扩到 3-5 万，投入产出比最高」），
+#         放宽词频下限到 100、常用字支持度到 2，覆盖长尾日常词；
+#         常用字基准从 freq>=1000 降到 freq>=300，避免"常用字集合"过窄而误杀中频词。
+N_JIEBA = 36000          # 从 jieba 词表取前 N 条通用词（扩规模后基本不截断）
+# 词频下限 70 的由来：实测 freq>=100 → 26654 条（不到 3 万），freq>=80 → 29650（仍不到），
+# freq>=70 → 31598 条（正好落在 3-5 万目标）。抽检 freq 60-70 段发现「车裂/遗恨/遵奉/间冰期」
+# 这类偏书面词可接受，但 freq<60 的词噪声明显上升（大量单字异体/古文短句），故定 70。
+JIEBA_MIN_FREQ = 70      # jieba 词频下限（低于此的多为生僻字/噪声词）
 MIN_LEN, MAX_LEN = 1, 6  # 词长（汉字个数）
-COMMON_CHAR_SUPPORT = 3  # 一个字至少出现在 N 个高频词里才算"常用字"
+COMMON_CHAR_BASIS_FREQ = 300  # 统计"常用字"时的词频门槛
+COMMON_CHAR_SUPPORT = 2       # 一个字至少出现在 N 个 basis 词里才算"常用字"
+
+# 产物条数的验收区间（v1.1.0：3-5 万条）
+TARGET_MIN, TARGET_MAX = 30000, 50000
 
 # flags 输出顺序（可读且稳定）
 FLAG_ORDER = ["chat", "net", "bless", "emoji", "punct", "idiom", "core", "user"]
@@ -65,9 +76,19 @@ ALNUM_RE = re.compile(r"^[0-9A-Za-z]+$")
 PY_RE = re.compile(r"^[a-z]+$")
 HAS_CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
 
-# jieba 词性中属于"人名/音译/专名"的标记，长词低词频的多为无用专名，做过滤
-NAME_POS = {"nr", "nrt", "nrx", "nrfg"}
-NAME_KEEP_FREQ = 8000
+# jieba 词性中属于"人名/音译/专名"的标记。v1.1.0 改为分级放行：
+# 3 万条规模下如果全放，词库会被"韦小宝/毛泽东/鄂"这类词灌满；全砍又会丢「王/李/明白」这种
+# 既是姓氏又是常用词的条目 —— 所以只对 freq 高的放行，且单字完全按常用字放行（见 select_jieba）。
+PERSON_POS = {"nr", "nrt", "nrx", "nrfg"}
+PLACE_POS = {"ns"}
+ORG_POS = {"nt"}
+OTHER_PROPER_POS = {"nz"}
+PERSON_KEEP_FREQ = 2000   # 人名：只留高频。实测 3000 会误杀 14 个 v1.0.0 已有的常用词
+                          # （光荣/冷笑/古老/太后/宫殿/明星/权威/荣誉/言语/雷达…，
+                          #  它们被 jieba 误标成 nr），降到 2000 后旧词零丢失。
+PLACE_KEEP_FREQ = 800     # 地名：留省市地名（用户会打地名）
+ORG_KEEP_FREQ = 800       # 机构名：只留高频
+NZ_KEEP_FREQ = 2000       # 其它专名：只留少量高频（百科/搜狐）
 
 
 def log(msg: str) -> None:
@@ -96,10 +117,15 @@ def load_jieba() -> list[tuple[str, int, str]]:
 
 
 def common_chars(rows: list[tuple[str, int, str]]) -> set[str]:
-    """从高频词中反推"常用字集合"，用于剔除生僻字词（如 笉/灱 这类）。"""
+    """从高频词中反推"常用字集合"，用于剔除生僻字词（如 笉/灱 这类）。
+
+    v1.1.0：基准词频降到 COMMON_CHAR_BASIS_FREQ（300），支持度降到 2。
+    原因：扩到 3 万条后要覆盖"中频词"，若仍用 freq>=1000 反推，
+    常用字集合只有 1157 字，会把「菱花」「羽毛扇」这类正常词误杀。
+    """
     support: Counter[str] = Counter()
     for word, freq, _pos in rows:
-        if freq < 1000 or not CJK_RE.match(word):
+        if freq < COMMON_CHAR_BASIS_FREQ or not CJK_RE.match(word):
             continue
         for ch in set(word):
             support[ch] += 1
@@ -107,7 +133,16 @@ def common_chars(rows: list[tuple[str, int, str]]) -> set[str]:
 
 
 def select_jieba(rows: list[tuple[str, int, str]], keep_chars: set[str]) -> list[tuple[str, int, str]]:
-    """按词频取前 N 条通用词，过滤生僻字/超长词/低质专名。"""
+    """按词频取前 N 条通用词，过滤生僻字/超长词/低质专名。
+
+    v1.1.0 的词性策略（3 万条规模下人名地名会大量混入，必须分级放行）：
+    - 单字（len == 1）：不看词性，只要命中常用字就收 —— 拼音输入靠单字兜底；
+    - 人名 nr/nrt/nrx/nrfg：仅保留 freq >= PERSON_KEEP_FREQ 的高频词；
+    - 地名 ns：保留 freq >= PLACE_KEEP_FREQ 的省市地名（用户会打地名）；
+    - 机构 nt：仅保留 freq >= ORG_KEEP_FREQ；
+    - 其它专名 nz：保留 freq >= NZ_KEEP_FREQ 的少量高频（百科/搜狐这类常用词）；
+    - 其余词性（n/v/a/d/vn/ad/m/t/r/l/i/b/s/z 等）全收。
+    """
     picked: list[tuple[str, int, str]] = []
     for word, freq, pos in rows:
         if freq < JIEBA_MIN_FREQ:
@@ -118,10 +153,17 @@ def select_jieba(rows: list[tuple[str, int, str]], keep_chars: set[str]) -> list
             continue
         if not all(ch in keep_chars for ch in word):
             continue
-        if pos in NAME_POS and len(word) >= 3 and freq < NAME_KEEP_FREQ:
-            continue
         if PY_RE.match(word) or ALNUM_RE.match(word):
             continue
+        if len(word) > 1:               # 单字兜底：不按词性过滤
+            if pos in PERSON_POS and freq < PERSON_KEEP_FREQ:
+                continue
+            if pos in PLACE_POS and freq < PLACE_KEEP_FREQ:
+                continue
+            if pos in ORG_POS and freq < ORG_KEEP_FREQ:
+                continue
+            if pos in OTHER_PROPER_POS and freq < NZ_KEEP_FREQ:
+                continue
         picked.append((word, freq, pos))
         if len(picked) >= N_JIEBA:
             break
@@ -402,7 +444,7 @@ def main() -> int:
 
     report = quality_report(entries, phrases, dropped)
     log("[3/4] 质量自查：")
-    log("      总条数 = %d（目标 4000-7000）" % report["total"])
+    log("      总条数 = %d（v1.1.0 目标 %d-%d）" % (report["total"], TARGET_MIN, TARGET_MAX))
     log("      短语条数 = %d（目标 >=300）" % report["phrases"])
     log("      flags 分布 = %s" % json.dumps(report["flag_counts"], ensure_ascii=False))
     log("      来源分布 = %s" % json.dumps(report["source_counts"], ensure_ascii=False))
@@ -417,8 +459,9 @@ def main() -> int:
         log("[--check] 不写文件，结束。")
         return 0
 
-    if not (4000 <= report["total"] <= 7000):
-        log("!! 条数不在 4000-7000 目标区间，请调整 N_JIEBA / JIEBA_MIN_FREQ")
+    if not (TARGET_MIN <= report["total"] <= TARGET_MAX):
+        log("!! 条数不在 %d-%d 目标区间，请调整 N_JIEBA / JIEBA_MIN_FREQ / COMMON_CHAR_*"
+            % (TARGET_MIN, TARGET_MAX))
 
     os.makedirs(args.out, exist_ok=True)
     base_path = os.path.join(args.out, "base_dict.tsv")

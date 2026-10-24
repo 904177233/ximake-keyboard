@@ -64,6 +64,9 @@ struct CandidateBar: View {
     /// 点击联想胶囊（参数为下标）。
     var onSelectSuggestion: ((Int) -> Void)?
 
+    /// 主题主色（design/05 §1.1：候选栏首选字背景是 4 处主色之一）。
+    var accent: Color = Theme.accent
+
     var body: some View {
         HStack(spacing: 0) {
             contentArea
@@ -154,7 +157,7 @@ struct CandidateBar: View {
                 }
                 Text(candidate.text)
                     .font(isHighlighted ? Theme.fontHeadline : Theme.fontCandidate)
-                    .foregroundColor(isHighlighted ? Theme.accent : Theme.textPrimary)
+                    .foregroundColor(isHighlighted ? accent : Theme.textPrimary)
                     .lineLimit(1)
             }
             .padding(.horizontal, Theme.Spacing.sm)
@@ -162,7 +165,7 @@ struct CandidateBar: View {
             .frame(minHeight: Theme.Sizing.minTapTarget)
             .background(
                 RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous)
-                    .fill(isHighlighted ? Theme.candidateSelected : Color.clear)
+                    .fill(isHighlighted ? accent.opacity(Theme.MaterialToken.strokeWidth * 0.2) : Color.clear)
             )
             .contentShape(Rectangle())
         }

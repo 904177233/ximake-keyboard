@@ -28,7 +28,12 @@ extension KeyboardViewModel {
     ///
     /// 该方法只负责「要不要发」，真正的 L1+L2 在 `requestSuggestions()` 里；
     /// 所有失败路径都静默返回，绝不产生可见副作用。
+    /// 用户关闭「AI 联想词」时：直接清空并返回，不创建任何 Task。
     public func scheduleSuggestions() {
+        guard snapshot.enableAISuggestion else {
+            clearSuggestions()
+            return
+        }
         guard canScheduleSuggestions else { return }
         suggestDebounceTask?.cancel()
         let token = UUID()
@@ -56,6 +61,7 @@ extension KeyboardViewModel {
 
     /// 是否可以调度联想（design/04 §4.4 ①–⑤）。
     var canScheduleSuggestions: Bool {
+        guard snapshot.enableAISuggestion else { return false }
         guard aiAvailability == .ready else { return false }
         guard page == .letters || page == .numbers else { return false }
         guard !isChatOpen else { return false }

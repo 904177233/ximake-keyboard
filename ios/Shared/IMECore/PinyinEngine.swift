@@ -32,23 +32,29 @@ public final class PinyinEngine {
     /// 组合切分时单个词块允许的最大拼音长度。
     private static let maxTileLength = 24
 
+    /// 组合切分时「每多切一个词块」的代价（DP 惩罚项）。
+    ///
+    /// DP 目标是最大化 `Σ log(freq+1)`，而单字词频远高于多字词（「在」727,915 vs
+    /// 「现在」十几万），词库变大后会把长串切成一堆高频单字。减去固定代价后，
+    /// 切 k 块要拿 k 个词的信息量补回 k×penalty，碎片路径就不再划算。
+    /// 取值依据：`tools/dict/_probe_dp_penalty.py` 在 20 条长句上扫 0–15，14.0 正确率最高
+    /// （16/20）——Python 复刻的 `COMPOSED_TILE_PENALTY` 必须与此值一致。
+    private static let composedTilePenalty = 14.0
+
     /// 前缀预测最多展开的拼音键数量。
     private static let prefixKeyLimit = 40
 
     /// 简拼最多展开的首字母串长度（超长串不再按简拼处理，避免误命中）。
     private static let maxInitialsQueryLength = 6
 
-    /// 模糊音命中降权系数（精确命中 1.0，模糊命中 0.85）。
-    ///
-    /// 取值的依据：模糊命中本质上比精确命中"猜测成分"更多，但用户一旦开了模糊音，
-    /// 它就是刚需而不是噪声，所以不能压太狠（0.85 大约相当于"词频低一个数量级"
-    /// 或"少了 2 次选词学习"，仍能排进候选栏前几位，但永远排在原文精确命中之后）。
+    /// 模糊音命中降权系数（精确 1.0、模糊 0.85，约等于「词频低一个数量级」，
+    /// 仍能排进候选栏但永远在精确命中之后）。
     private static let fuzzyDiscount = 0.85
 
     // MARK: - 依赖
 
     /// 词库。
-    private let dictionary: PinyinDictionary
+    let dictionary: PinyinDictionary
 
     /// 用户学习数据。
     private let learning: UserLearningStore
@@ -85,14 +91,21 @@ public final class PinyinEngine {
         set { FuzzyPinyinSettings.shared.options = newValue }
     }
 
+    // MARK: - 输入纠错开关
+
+    /// 是否启用输入纠错（默认开启）。
+    ///
+    /// 纠错只在「原始输入无候选或候选 < 3 条」时兜底补几条 `[纠错]` 候选，不参与正常排序。
+    /// `ConfigSnapshot.enableTypoCorrection` 接线后由调用方写入本属性即可关闭。
+    public var isTypoCorrectionEnabled: Bool = true
+
     // MARK: - 候选生成
 
     /// 生成候选词。
     ///
-    /// 处理顺序：自造词/学习词 → 全拼精确与前缀预测 → 简拼 → 多词组合切分 →
-    /// 模糊音兜底（仅当精确候选不足时）→ 英文/数字直通，
-    /// 最后统一打分排序并截断。末尾的 `1`–`9` 数字视为"选词序号"，不计入拼音匹配
-    /// （UI 可通过 `selectionIndex(for:)` 取到该序号）。
+    /// 处理顺序：自造词/学习词 → 全拼精确与前缀预测 → 简拼 → 多词组合切分 → 模糊音兜底
+    /// （仅当精确候选不足时）→ 英文/数字直通，最后统一打分排序并截断。末尾 `1`–`9`
+    /// 数字视为"选词序号"，不计入拼音匹配（UI 用 `selectionIndex(for:)` 取序号）。
     ///
     /// - Parameters:
     ///   - input: 用户当前输入串（拼音、英文或数字，含空格会被忽略）。
@@ -138,13 +151,14 @@ public final class PinyinEngine {
             if lhs.pinyin != rhs.pinyin { return lhs.pinyin < rhs.pinyin }
             return lhs.text < rhs.text
         }
-        return Array(results.prefix(limit))
+
+        var trimmed = Array(results.prefix(limit))
+        // 输入纠错：原始输入「无候选」或「候选过少」时，追加带 `[纠错]` 标记的候选到尾部。
+        appendTypoCorrections(normalized: normalized, limit: limit, into: &trimmed)
+        return trimmed
     }
 
-    /// 上屏并记录选词（用于后续个性化排序）。
-    ///
-    /// 若选中的候选不在基础词库中（例如组合出的整句或用户新词），会自动沉淀为自造词，
-    /// 下次同样的输入可以直接命中。
+    /// 上屏并记录选词（不在词库里的组合句/新词会自动沉淀为自造词）。
     ///
     /// - Parameters:
     ///   - candidate: 被选中的候选。
@@ -157,9 +171,7 @@ public final class PinyinEngine {
         learning.addUserPhrase(candidate.text, pinyin: candidate.pinyin)
     }
 
-    /// 上屏后联想下一个词。
-    ///
-    /// 先查短语联想库（`phrases.tsv` 的"触发词 → 建议词"表），不足时用最近使用补齐。
+    /// 上屏后联想下一个词（先查短语库的"触发词 → 建议词"，不足时用最近使用补齐）。
     ///
     /// - Parameters:
     ///   - text: 已经上屏的文本（通常是整句或最后一个词）。
@@ -291,7 +303,7 @@ public final class PinyinEngine {
         var best = [Double](repeating: -Double.infinity, count: count + 1)
         var back = [Int](repeating: -1, count: count + 1)
         var tileText = [String?](repeating: nil, count: count + 1)
-        var tileFrequency = [Int](repeating: 0, count: count + 1)
+        var tileLog = [Double](repeating: 0, count: count + 1)
         best[0] = 0
 
         for start in 0..<count {
@@ -303,19 +315,20 @@ public final class PinyinEngine {
                 guard let entry = dictionary.exactEntries(pinyin: key, limit: 1).first else { continue }
                 guard !entry.isEmoji, !entry.isPunctuation else { continue }
                 guard Self.containsCJK(entry.text) else { continue }
-                let score = best[start] + Self.logScore(entry.frequency)
+                let logTerm = Self.logScore(entry.frequency)
+                let score = best[start] + logTerm - Self.composedTilePenalty
                 if score > best[start + length] {
                     best[start + length] = score
                     back[start + length] = start
                     tileText[start + length] = entry.text
-                    tileFrequency[start + length] = entry.frequency
+                    tileLog[start + length] = logTerm
                 }
             }
         }
 
         // 情况 A：整串都能切完
         if best[count].isFinite,
-           let full = pathResult(end: count, back: back, tileText: tileText, tileFrequency: tileFrequency),
+           let full = pathResult(end: count, back: back, tileText: tileText, tileLog: tileLog),
            full.tiles >= 2 {
             let base = full.sumLog / Double(full.tiles) + 1.2 * Double(full.tiles - 1) + 1.5
             insert(text: full.text, pinyin: normalized, frequency: 0, base: base, kind: .word, into: &pool)
@@ -331,7 +344,7 @@ public final class PinyinEngine {
             }
         }
         guard bestEnd > 0,
-              let head = pathResult(end: bestEnd, back: back, tileText: tileText, tileFrequency: tileFrequency)
+              let head = pathResult(end: bestEnd, back: back, tileText: tileText, tileLog: tileLog)
         else { return }
 
         let remainder = String(chars[bestEnd..<count])
@@ -357,16 +370,10 @@ public final class PinyinEngine {
 
     /// 收集模糊音候选（`zongguo` → 中国，`senme` → 什么）。
     ///
-    /// 性能约束（整次按键 <2ms）：①**只在精确候选不足时才展开**（`poolSize >= limit`
-    /// 说明候选栏已填满，再算纯属浪费，这条挡住绝大多数按键）；②变体由
-    /// `FuzzyPinyin.expand` 限流（最多 24 个、按改动音节数从少到多），每个变体最多取
-    /// 8 条精确词 + 8 个前缀键；③模糊命中统一乘 `fuzzyDiscount` 降权，永远排在精确命中之后。
-    ///
-    /// - Parameters:
-    ///   - normalized: 已归一化的输入串。
-    ///   - poolSize: 当前候选池条目数（用于判断是否还需要模糊展开）。
-    ///   - limit: 本次请求的候选上限。
-    ///   - pool: 候选池。
+    /// 性能约束（整次按键 <2ms）：只在精确候选不足时展开（`poolSize >= limit` 挡掉绝大多数
+    /// 按键）；变体由 `FuzzyPinyin.expand` 限流（≤24 个、按改动音节数升序），每变体最多 8 条
+    /// 精确词 + 8 个前缀键；模糊命中统一乘 `fuzzyDiscount` 排在精确之后。
+    /// - Parameters: `normalized` 已归一化输入；`poolSize` 当前候选池条目数；`limit` 候选上限。
     private func appendFuzzyCandidates(normalized: String,
                                        poolSize: Int,
                                        limit: Int,
@@ -483,11 +490,14 @@ public final class PinyinEngine {
     }
 
     /// 从 DP 的 `back`/`tileText` 数组还原一条完整路径。
+    ///
+    /// `tileLog` 存的是每块**未扣惩罚**的对数词频——DP 分数已减过 `composedTilePenalty`，
+    /// 这里若再用 `logScore(frequency)` 重算，情况 A/B 的 base 就会与 DP 口径不一致。
     private func pathResult(
         end: Int,
         back: [Int],
         tileText: [String?],
-        tileFrequency: [Int]
+        tileLog: [Double]
     ) -> (text: String, tiles: Int, sumLog: Double)? {
         var pieces: [String] = []
         var sumLog = 0.0
@@ -499,7 +509,7 @@ public final class PinyinEngine {
             let previous = back[cursor]
             guard previous >= 0, let piece = tileText[cursor] else { return nil }
             pieces.append(piece)
-            sumLog += Self.logScore(tileFrequency[cursor])
+            sumLog += tileLog[cursor]
             cursor = previous
         }
         guard cursor == 0, !pieces.isEmpty else { return nil }
@@ -511,14 +521,8 @@ public final class PinyinEngine {
         log(Double(max(frequency, 0)) + 1.0)
     }
 
-    /// 词条类型映射。
-    ///
-    /// 判定顺序有讲究：
-    /// 1. 纯汉字条目一律 `.word`——即使带 `emoji`/`punct` 标记（那只是"可联想表情"的提示），
-    ///    否则 UI 会用表情字体渲染汉字，属于显示错误。
-    /// 2. 纯 ASCII 条目按内容细分：含字母/数字的是英文词（`yyds`、`2333`）→ `.english`；
-    ///    纯符号的是半角标点（`#`、`~`）→ `.punctuation`。
-    /// 3. 其余按 `emoji` / `punct` 标记归类（emoji 字符、全角标点、`（狗头）` 这类颜文字）。
+    /// 词条类型映射（判定顺序：纯汉字 → `.word`；纯 ASCII 按有无字母数字分 `.english`/
+    /// `.punctuation`；其余按 `emoji`/`punct` 标记归类）。
     private static func kind(for entry: DictionaryEntry) -> IMECandidate.Kind {
         if isPureCJK(entry.text) { return .word }
         if isPureASCII(entry.text) {

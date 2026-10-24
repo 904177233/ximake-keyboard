@@ -12,6 +12,7 @@
 //
 
 import Combine
+import Foundation
 import SwiftUI
 import UIKit
 
@@ -66,6 +67,19 @@ final class KeyboardViewController: UIInputViewController {
     /// 上一次的键盘外观（检测外观切换）。
     private var lastKeyboardAppearance: UIKeyboardAppearance = .default
 
+    // MARK: - 内存治理状态
+
+    /// 已注册到 `KMMemoryGovernor` 的可释放资源 token。
+    ///
+    /// 只在 `viewDidLoad` 注册一次（注册项是长生命周期对象，重复注册会让同一个资源
+    /// 在治理器里出现多条记录、被重复释放）。闭包内部统一 `[weak self]`，不会造成循环引用。
+    /// 注意：`model` 是 `let` 存储属性，不能写 `[weak model]`（Swift 只允许 weak 捕获可变的 class 引用），
+    /// 一律以 `[weak self]` 捕获控制器、再由控制器访问 `model`。
+    private var memoryReclaimerTokens: [UUID] = []
+
+    /// 内存采样是否已启动（避免 `viewWillAppear` 反复重建 Timer）。
+    private var isMemoryMonitoring: Bool = false
+
     // MARK: - 输入视图
 
     // 说明：不为 `inputView` 提供覆写。`UIInputViewController` 以自身的 `view` 作为键盘输入视图
@@ -86,6 +100,7 @@ final class KeyboardViewController: UIInputViewController {
         setupHostingController()
         setupHeightConstraint()
         bindModel()
+        setupMemoryGovernor()
 
         model.activate()
         model.proxy = textDocumentProxy
@@ -100,12 +115,16 @@ final class KeyboardViewController: UIInputViewController {
         model.proxy = textDocumentProxy
         model.refreshAccessState(hasFullAccess: hasFullAccess)
         applyHeight(animated: false)
+        // 键盘每次弹出都可能被系统重建/复用，这里兜底恢复采样（幂等）。
+        startMemoryMonitoringIfNeeded()
     }
 
     /// 视图即将消失：取消 AI 请求、释放缩略图，压低扩展内存峰值。
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         model.deactivate()
+        // 键盘收起后不再需要周期采样：停掉 Timer，避免后台空转（下次弹出会重新启动）。
+        stopMemoryMonitoringIfNeeded()
     }
 
     /// 每次布局：同步横竖屏状态并刷新高度（高度只在这里与状态回调处更新）。
@@ -216,6 +235,95 @@ final class KeyboardViewController: UIInputViewController {
                 guard let self else { return }
                 self.applyHeight(animated: true)
             }
+    }
+
+    // MARK: - 内存治理
+
+    /// 把键盘侧的资源登记到 `KMMemoryGovernor`，并注入「是否正在拼字」回调。
+    ///
+    /// 登记时机：只在 `viewDidLoad` 调一次。资源闭包必须**幂等**（治理器可能连续调用）。
+    /// 三个资源的释放代价分级：
+    /// - `image-cache`（cheap）：生图原图 / 缩略图 + HTTP 缓存，释放后不影响输入；
+    /// - `clipboard-history`（costly）：清空本地剪贴板上屏列表，属用户可感知操作，放第二档；
+    /// - `pinyin-engine`（last）：中文引擎重建 15–25ms，只在 `terminal` 档位才动。
+    private func setupMemoryGovernor() {
+        let governor = KMMemoryGovernor.shared
+
+        // 注入「是否正在拼字」：正在拼字时推迟重度释放，避免引擎重建打断当前候选。
+        // 控制器已释放时返回 `true`（保守：宁可少放，也不在无主状态下动别人资源）。
+        governor.shouldDeferHeavyRelease = { [weak self] in
+            guard let self = self else { return true }
+            return !self.model.composing.isEmpty
+        }
+
+        // ① 图片缓存：释放生图原图与缩略图（单张原图可达数 MB）。
+        //    `URLCache` 兜底清掉 Networking 层的 HTTP 响应缓存（不走 App Group）。
+        memoryReclaimerTokens.append(
+            governor.register(
+                name: "image-cache",
+                estimatedBytes: 8 * 1024 * 1024,
+                stage: .cheap
+            ) { [weak self] in
+                Self.runOnMain {
+                    self?.model.releaseImageBuffers()
+                    URLCache.shared.removeAllCachedResponses()
+                }
+            }
+        )
+
+        // ② 剪贴板历史：只清**内存里的上屏列表**（`clipboardItems`）。
+        //    刻意不调 `KMInputEngine.shared.clearClipboard()`——那会连用户持久化的
+        //    剪贴板历史一起清掉（写入 SharedStore），属于数据丢失，不适合做内存回收。
+        memoryReclaimerTokens.append(
+            governor.register(
+                name: "clipboard-history",
+                estimatedBytes: 256 * 1024,
+                stage: .costly
+            ) { [weak self] in
+                Self.runOnMain {
+                    self?.model.clipboardItems = []
+                }
+            }
+        )
+
+        // ③ 中文引擎：暂无对应资源，占位。
+        //    `PinyinDictionary` 是引擎核心数据，释放后重建 15–25ms 会打断输入；
+        //    且 `ios/Shared/IMECore` 未提供「只清临时缓存」的入口（不在本模块写作用域内）。
+        memoryReclaimerTokens.append(
+            governor.register(
+                name: "pinyin-engine",
+                estimatedBytes: 0,
+                stage: .last
+            ) {
+                // 暂无对应资源，占位：待 Shared/IMECore 提供 clearTransientCaches() 后接入。
+            }
+        )
+
+        // 注册完立刻启动采样（`viewWillAppear` 里还有一次幂等兜底）。
+        startMemoryMonitoringIfNeeded()
+    }
+
+    /// 启动内存采样（幂等：`viewDidLoad` 与 `viewWillAppear` 都会调用）。
+    private func startMemoryMonitoringIfNeeded() {
+        guard !isMemoryMonitoring else { return }
+        isMemoryMonitoring = true
+        KMMemoryGovernor.shared.startMonitoring()
+    }
+
+    /// 停止内存采样（键盘收起时调用，下次弹出重新启动）。
+    private func stopMemoryMonitoringIfNeeded() {
+        guard isMemoryMonitoring else { return }
+        isMemoryMonitoring = false
+        KMMemoryGovernor.shared.stopMonitoring()
+    }
+
+    /// 在主线程执行回收动作（`@Published` 属性只能在主线程改；治理器的 Timer 本就在主线程）。
+    private static func runOnMain(_ work: @escaping () -> Void) {
+        if Thread.isMainThread {
+            work()
+        } else {
+            DispatchQueue.main.async(execute: work)
+        }
     }
 
     // MARK: - 高度

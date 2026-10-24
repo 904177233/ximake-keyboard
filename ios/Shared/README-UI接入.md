@@ -506,6 +506,61 @@ struct ResultCard: View {
 深色模式**自动跟随**（`Theme` 的颜色都是 `UIColor { traits in }` 动态色），
 不要写 `@Environment(\.colorScheme)` 分支。
 
+### C.5 主题与小形象：走 `ThemeStore`，不要自己拼键名
+
+```swift
+import SwiftUI
+
+struct ThemeAndMascotSettings: View {
+    /// 当前主题（6 套预设之一，或自定义形象主题）。
+    @State private var theme: AppTheme = ThemeStore.shared.currentTheme
+    /// 键盘右下角是否显示小形象（默认 true）。
+    @State private var showsMascot: Bool = ThemeStore.shared.showsMascot
+
+    var body: some View {
+        List {
+            Section("配色") {
+                ForEach(AppTheme.allPresets) { preset in
+                    Button {
+                        // 只需要写 id，读的时候 currentTheme 会自动解析成 AppTheme
+                        ThemeStore.shared.currentThemeID = preset.id
+                        theme = ThemeStore.shared.currentTheme
+                    } label: {
+                        HStack {
+                            Circle().fill(preset.accent).frame(width: 20, height: 20)
+                            Text(preset.name)
+                            Spacer()
+                            if preset.id == theme.id { Image(systemName: "checkmark") }
+                        }
+                    }
+                }
+            }
+            Section("小形象") {
+                Toggle("在键盘右下角显示", isOn: $showsMascot)
+                    .onChange(of: showsMascot) { newValue in
+                        ThemeStore.shared.showsMascot = newValue
+                    }
+            }
+        }
+    }
+}
+```
+
+**要点**：
+
+| 需求 | 用法 |
+| --- | --- |
+| 6 套预设（含中英文名与品牌说明） | `AppTheme.allPresets` / `preset.name` / `preset.brandNote` |
+| 当前主题 | `ThemeStore.shared.currentTheme`（读不到自动回退默认靛蓝） |
+| 换主题 | 只写 `ThemeStore.shared.currentThemeID = "<rawValue 或 custom>"` |
+| 自定义形象 | `ThemeStore.shared.customMascotData = pngData`（512×512 PNG）→ `currentThemeID = AppTheme.customID` |
+| 显示/隐藏形象开关 | `ThemeStore.shared.showsMascot`（宿主与键盘同一个键） |
+| 删除自定义形象 | `ThemeStore.shared.clearCustomMascot()`（会切回默认主题） |
+
+**不要**自己写 `UserDefaults(suiteName:)` 或手写 `"moyu.theme.showsMascot"`：
+无 App Group 时 `SharedStore` 会给键加 `moyu.shared.` 前缀，
+手写字符串会和 `ThemeStore` 写的键**对不上**（表现为「开关点了没反应」）。
+
 ---
 
 ## D. 常见问题（UI 接入时最容易踩的坑）

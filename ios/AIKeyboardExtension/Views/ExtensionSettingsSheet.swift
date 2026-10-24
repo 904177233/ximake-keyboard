@@ -42,6 +42,10 @@ struct ExtensionSettingsSheet: View {
                     divider
                     fuzzyRow
                     divider
+                    aiSuggestionRow
+                    divider
+                    typoCorrectionRow
+                    divider
                     syncRow
                     divider
                     dictionaryRow
@@ -160,9 +164,68 @@ struct ExtensionSettingsSheet: View {
         .padding(.horizontal, Theme.Spacing.xl)
     }
 
-    /// ⑥配置导入 / 导出。
-    private var syncRow: some View {
+    /// ⑤-b AI 联想词开关：读宿主前文猜下一句（非词库顺序联想）。
+    ///
+    /// 关闭后 `KeyboardViewModel+Suggest.scheduleSuggestions()` 直接清空、**不创建 Task**
+    /// （不发请求、不占额度、不刷候选栏）。默认开启。
+    private var aiSuggestionRow: some View {
         HStack(spacing: Theme.Spacing.md) {
+            Text("💡")
+                .font(Theme.fontBody)
+            VStack(alignment: .leading, spacing: 0) {
+                Text("AI 联想词")
+                    .font(Theme.fontBody)
+                    .foregroundColor(Theme.textPrimary)
+                Text("读前文猜下一句，结果显示在候选栏右侧胶囊")
+                    .font(Theme.fontCaption)
+                    .foregroundColor(Theme.textTertiary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            Toggle("", isOn: Binding(
+                get: { model.snapshot.enableAISuggestion },
+                set: { value in model.setAISuggestionEnabled(value) }
+            ))
+            .labelsHidden()
+            .tint(Theme.accent)
+            .accessibilityLabel(Text("AI 联想词开关"))
+        }
+        .frame(height: KMLayout.settingsRowHeight)
+        .padding(.horizontal, Theme.Spacing.xl)
+    }
+
+    /// ⑤-c 输入纠错开关：拼音打错一个字母时，末尾补 `[纠错]` 候选。
+    ///
+    /// 纠错候选由 `PinyinEngine+TypoCorrection` 产出并标 `isTypoCorrection`，
+    /// 关闭后 `CandidateBar` 会把这些候选过滤掉。默认开启。
+    private var typoCorrectionRow: some View {
+        HStack(spacing: Theme.Spacing.md) {
+            Text("🩹")
+                .font(Theme.fontBody)
+            VStack(alignment: .leading, spacing: 0) {
+                Text("输入纠错")
+                    .font(Theme.fontBody)
+                    .foregroundColor(Theme.textPrimary)
+                Text("打错一个字母时，末尾补一条带 [纠错] 标记的候选")
+                    .font(Theme.fontCaption)
+                    .foregroundColor(Theme.textTertiary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            Toggle("", isOn: Binding(
+                get: { model.snapshot.enableTypoCorrection },
+                set: { value in model.setTypoCorrectionEnabled(value) }
+            ))
+            .labelsHidden()
+            .tint(Theme.accent)
+            .accessibilityLabel(Text("输入纠错开关"))
+        }
+        .frame(height: KMLayout.settingsRowHeight)
+        .padding(.horizontal, Theme.Spacing.xl)
+    }
+
+    /// ⑥配置导入 / 导出。
+    private var syncRow: some View {        HStack(spacing: Theme.Spacing.md) {
             Text("⇅")
                 .font(Theme.fontBody)
             VStack(alignment: .leading, spacing: 0) {

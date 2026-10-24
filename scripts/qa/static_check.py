@@ -186,6 +186,19 @@ UIGraphicsImageRendererContext
 # ---- Photos 框架（相册写入；只在用户点「保存到相册」时用 .addOnly 权限，不读取相册）----
 PHPhotoLibrary PHAssetChangeRequest PHAsset PHAssetCollection PHAuthorizationStatus
 PHPhotoChangeRequest PHFetchResult PHImageManager Photos
+Logger OSLog OSSignposter OSSignpostID MXMetricManager MXMetricPayload MXDiagnosticPayload MXAppLaunchMetric MXAppRunTimeMetric MXAppResponsivenessMetric MXCPUExceptionDiagnostic MXDiskWriteExceptionDiagnostic MXHangDiagnostic MXCrashDiagnostic MXCallStackTree MXMetaData MXAverage MXHistogram MXHistogramBucket CGColorSpaceCreateDeviceRGB CGColorSpaceRelease CGContextDrawImage CGImageCreate
+# ---- PhotosUI（主题形象导入：PhotosPicker 是 out-of-process，不申请相册读取权限）----
+PhotosUI PhotosPicker PhotosPickerItem PHPickerFilter PHPickerConfiguration
+PHPickerViewController PHPickerResult NSItemProvider
+# ---- Speech / AVFoundation（键盘内语音输入：iOS 26 起扩展可录音，见 docs/13）----
+Speech AVFoundation SFSpeechRecognizer SFSpeechAudioBufferRecognitionRequest
+SFSpeechRecognitionTask SFSpeechRecognitionResult SFSpeechRecognitionRequest
+SFSpeechRecognitionTaskDelegate SFSpeechRecognizerAuthorizationStatus
+AVAudioSession AVAudioEngine AVAudioApplication AVAudioPCMBuffer AVAudioFormat
+AVAudioNode AVAudioNodeTapBlock AVAudioSessionRecordPermission AVAudioSessionCategory
+AVAudioSessionCategoryOptions AVAudioSessionMode AVAudioTime AVAudioChannelCount
+SpeechAnalyzer DictationTranscriber SpeechTranscriber SpeechDetector AnalyzerInput
+AssetInventory Locale2
 UIApplication2
 UIScreen2
 QRCoder2
@@ -523,9 +536,22 @@ def check_file_properties(report: Report, tf, relpath: str, line_count: int):
 
 def _is_model_ref_context(lex, pos: int) -> bool:
     """判断命中位置是否在 `ModelRef(title: "...")` / `Preset(name: "...")` 等
-    技术标识符上下文里 —— 这类字符串是模型 ID / 品牌名，不是 UI 文案。"""
+    技术标识符上下文里 —— 这类字符串是模型 ID / 品牌名，不是 UI 文案。
+
+    也覆盖 `DispatchQueue(label:)` / `Logger(subsystem:category:)` 这类
+    「反域名标识符」：`com.moyu.app.metrickit` 是日志/队列标识，不是给用户看的文案。
+    """
     window = lex.masked[max(0, pos - 80):pos]
-    return bool(RE_MODEL_CONTEXT.search(window))
+    if RE_MODEL_CONTEXT.search(window):
+        return True
+    if RE_TECH_IDENTIFIER.search(window):
+        return True
+    return False
+
+
+RE_TECH_IDENTIFIER = re.compile(
+    r"(?:DispatchQueue|Logger|os_log)\s*\("
+)
 
 
 RE_MODEL_CONTEXT = re.compile(r"(?:ModelRef|modelID|model|baseURL|consoleURL|systemImage)\s*\([^()]*$"

@@ -72,5 +72,13 @@
 
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2026 墨语 Moyu. All rights reserved.</string>
+
+	<!-- 语音输入相关权限描述（iOS 26+ 键盘扩展可能可用麦克风，docs/08 §5.1 / docs/09 §1）。
+	     仅在用户触发语音输入时系统才弹对应授权，未触发不会弹。 -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>墨语需要麦克风权限，这样你可以直接对着键盘说话，把说的话变成文字。</string>
+
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>墨语需要语音识别权限，把你说的话转成文字后插入到输入框。</string>
 </dict>
 </plist>

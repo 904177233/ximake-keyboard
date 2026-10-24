@@ -248,4 +248,25 @@ public enum SharedStoreKey {
     public static let lastChatProviderID = "moyu.settings.lastChatProviderID"
     /// 首次启动标记。
     public static let hasCompletedOnboarding = "moyu.host.hasCompletedOnboarding"
+    /// 当前主题 id。`moyu.theme.current`
+    ///
+    /// 值为 `AppTheme.Preset.rawValue`（`"ink"`/`"coral"`/…）或 `"custom"`；
+    /// 读不到或值非法时 `ThemeStore` 回退到 `AppTheme.default`（靛蓝）。
+    public static let themeCurrent = "moyu.theme.current"
+    /// 自定义小形象（512×512 PNG）。`moyu.theme.customMascot`
+    ///
+    /// 原始 PNG `Data`（已裁成正方形、缩到 512×512，约 100–300 KB）。
+    /// 无 App Group 时落在宿主 App 自己的 `UserDefaults.standard`，键盘扩展读不到
+    /// （设计上的已知降级，见 `ios/Shared/Storage/README.md` 与 design/05 §2.2）。
+    public static let themeCustomMascot = "moyu.theme.customMascot"
+    /// 自定义小形象的显示名。`moyu.theme.customMascotName`
+    ///
+    /// 用户可改，默认「我的形象」；只在 `themeCurrent == "custom"` 时参与显示。
+    public static let themeCustomMascotName = "moyu.theme.customMascotName"
+    /// 键盘右下角是否显示小形象。`moyu.theme.showsMascot`
+    ///
+    /// 默认 `true`。宿主 App 的「主题与小形象」设置页与键盘扩展共用同一个键：
+    /// 打开 App Group 后自动同步；无 App Group 时各自保存一份（已知降级）。
+    /// 统一通过 `ThemeStore.shared.showsMascot` 读写，业务代码不要手写字符串。
+    public static let themeShowsMascot = "moyu.theme.showsMascot"
 }

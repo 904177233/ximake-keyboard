@@ -47,7 +47,14 @@ SharedStore.shared.storageStatusDescription    // 直接可显示给用户的中
 
 `SharedStoreKey` 集中了所有键名常量（`configSnapshot` / `customPrompts` / `phrases` /
 `clipboardHistoryEnabled` / `currentTone` / `targetLanguage` / `lastChatProviderID` /
-`hasCompletedOnboarding`），业务代码不要手写字符串。
+`hasCompletedOnboarding` / `themeCurrent` / `themeCustomMascot` / `themeCustomMascotName` /
+`themeShowsMascot`），业务代码不要手写字符串。
+
+> 主题相关的 4 个键（`moyu.theme.current` / `moyu.theme.customMascot` /
+> `moyu.theme.customMascotName` / `moyu.theme.showsMascot`）统一由
+> `ios/Shared/Theme/ThemeStore.swift` 封装，宿主 App 与键盘扩展**都通过 `ThemeStore.shared` 读写**，
+> 不要各自手写键名——否则无 App Group 时会因为「一边写 `moyu.theme.showsMascot`、
+> 另一边写 `moyu.shared.moyu.theme.showsMascot`」而永远对不上。
 
 ### 免费账号（无 App Group）的现实约束
 

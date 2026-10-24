@@ -168,6 +168,19 @@ SYSTEM = set(
     CheckedContinuation CheckedThrowingContinuation
     PHPhotoLibrary PHAssetChangeRequest PHAsset PHAssetCollection PHAuthorizationStatus
     PHPhotoChangeRequest PHFetchResult PHImageManager Photos
+    PhotosUI PhotosPicker PhotosPickerItem PHPickerFilter PHPickerConfiguration
+    PHPickerViewController PHPickerResult NSItemProvider
+    MetricKit MXMetricManager MXMetricManagerSubscriber MXMetricPayload MXDiagnosticPayload
+    MXMetric MXDiagnostic MXCallStackTree MXMetaData MXAppLaunchMetric MXAppRunTimeMetric
+    MXAppResponsivenessMetric MXCPUExceptionDiagnostic MXDiskWriteExceptionDiagnostic
+    MXHangDiagnostic MXCrashDiagnostic MXAverage MXHistogram MXHistogramBucket
+    OSLog Logger OSSignposter OSSignpostID
+    Darwin MemoryLayout Thread Comparable CustomStringConvertible Ellipse FillStyle
+    KERN_SUCCESS MACH_TASK_BASIC_INFO TASK_VM_INFO URLCache
+    task_info task_vm_info MACH_TASK_BASIC_INFO_COUNT
+    AVFoundation Speech AVAudioSession AVAudioEngine AVAudioApplication SFSpeechRecognizer
+    SFSpeechAudioBufferRecognitionRequest SFSpeechRecognitionTask SFSpeechRecognitionResult
+    AVAudioPCMBuffer AVAudioFormat AVAudioNodeTapBlock
     """.split()
 )
 

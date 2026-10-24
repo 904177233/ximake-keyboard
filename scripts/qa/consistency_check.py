@@ -4,7 +4,7 @@
 
 Python 3 标准库，零第三方依赖，可在 Windows 直接运行（无需 Xcode）。
 
-校验三件事（docs/02 §5 设计令牌契约）：
+校验四件事（docs/02 §5 设计令牌契约 + design/05 主题规范）：
   ① tokens → Theme.swift 覆盖度（P1）
      - `design/tokens.json` 里 `color.light` / `color.dark` 的每个叶子键与 hex 值
      - `typography` / `spacing` / `radius` / `sizing` / `motion` / `shadow` 的每个键与数值
@@ -15,6 +15,11 @@ Python 3 标准库，零第三方依赖，可在 Windows 直接运行（无需 X
      - `.font(.system(size: N))` 中 N 不在 tokens 的 typography sizes 里
   ③ tokens.json 自身完整性（P0）
      - docs/02 §5 要求的全部顶层键与关键键名是否存在（缺 → P0）
+  ④ 主题预设一致性（design/05 §6，P0/P1/P2）
+     - tokens 缺 `theme` 组 → P0
+     - 某预设只在 tokens 有、Swift 里找不到（或反之）→ P0
+     - 浅色 hex 值不一致 → P1（报告给出 `preset.field: tokens=#X swift=#Y`）
+     - 深色 hex 缺失 / 不可解析 → P2（深色值由 AppTheme 按 §1.2 推导，不在 tokens 里登记）
 
 用法：
     python scripts/qa/consistency_check.py
@@ -37,6 +42,7 @@ from qa_common import Report, add_common_args, finish, main_guard, rel
 
 TOKENS_REL = "design/tokens.json"
 THEME_REL = "ios/Shared/Theme/Theme.swift"
+APP_THEME_REL = "ios/Shared/Theme/AppTheme.swift"
 
 # ---------------------------------------------------------------------------
 # docs/02 §5 契约：tokens.json 必须有的顶层键与关键键名
@@ -391,6 +397,189 @@ def check_hardcoded(report: Report, root: Path, tokens: dict | None):
 
 
 # ---------------------------------------------------------------------------
+# ④ 主题预设一致性（design/05 §6）
+# ---------------------------------------------------------------------------
+
+# 一套主题的 6 个浅色字段（与 tokens `theme.presets.<id>` 一一对应）。
+# 注意：`name` / `brand` 是文字，不参与颜色比对；深色值由 AppTheme 按 §1.2 推导。
+THEME_COLOR_FIELDS = ["accent", "tint", "tint2", "deep", "sub", "canvas"]
+
+# 在 AppTheme.swift 里定位 `case .ink:` ... `HexPalette(` ... `)` 这一段
+RE_THEME_CASE = re.compile(r"case\s+\.([A-Za-z_][A-Za-z0-9_]*)\s*:")
+RE_THEME_FIELD = re.compile(
+    r"([A-Za-z_][A-Za-z0-9_]*)\s*:\s*\"(#?[0-9A-Fa-f]{6,8})\""
+)
+RE_HEX_BODY = re.compile(r"^#?([0-9A-Fa-f]{6})([0-9A-Fa-f]{2})?$")
+
+
+def normalize_hex(value: str) -> str | None:
+    """把 `#RRGGBB` / `RRGGBBAA` / `0xRRGGBB` 归一成大写 `RRGGBB(AA)`，非法返回 None。"""
+    if value is None:
+        return None
+    text = str(value).strip()
+    m = RE_HEX_BODY.match(text)
+    if not m:
+        return None
+    body = m.group(1).upper()
+    alpha = m.group(2)
+    return body + (alpha.upper() if alpha else "")
+
+
+def parse_app_theme_presets(app_theme_text: str) -> dict[str, dict[str, str]]:
+    """从 AppTheme.swift 里解析每个预设的 12 个 hex 字面量。
+
+    期望写法（每个预设一个 `case .xxx:` + 一个 `HexPalette(...)`）：
+        case .ink:
+            return HexPalette(
+                accent: "101010", accentDark: "2D2D2D",
+                tint: "F7F7F5", tintDark: "2D2D2D38",
+                ... 6 组
+            )
+
+    返回：`{"ink": {"accent": "101010", "accentDark": "2D2D2D", ...}, ...}`
+    解析不到的预设不会出现在返回值里（由调用方报 P0）。
+    """
+    out: dict[str, dict[str, str]] = {}
+    matches = list(RE_THEME_CASE.finditer(app_theme_text))
+    for idx, m in enumerate(matches):
+        case_name = m.group(1)
+        start = m.end()
+        end = matches[idx + 1].start() if idx + 1 < len(matches) else len(app_theme_text)
+        block = app_theme_text[start:end]
+        if "HexPalette" not in block:
+            continue  # 不是主题配色 switch（比如 Preset 的 displayName switch）
+        fields = {name: val for name, val in RE_THEME_FIELD.findall(block)}
+        if not fields:
+            continue
+        # 同名 case 只保留第一处（displayName / brandNote 的 switch 在前，但那里没有 hex 字面量）
+        out.setdefault(case_name, fields)
+    return out
+
+
+def check_theme_presets(report: Report, tokens: dict | None, root: Path):
+    """④ design/05 §6：tokens.theme.presets 与 AppTheme.swift 逐项比对。
+
+    - tokens 缺 `theme` 组 → P0
+    - 某预设 Swift 里找不到（或 Swift 有 tokens 没有）→ P0
+    - 浅色 hex 不一致 → P1
+    - 深色 hex 缺失 / 不可解析 → P2
+    """
+    app_theme_path = root / APP_THEME_REL
+    if tokens is None:
+        return
+    theme_obj = tokens.get("theme")
+    if not isinstance(theme_obj, dict):
+        report.add("P0", "THEME-GROUP-MISSING", TOKENS_REL, 0,
+                   "tokens.json 缺少顶层 `theme` 组（design/05 §6 要求 6 套主题 × 6 色 + mascot）",
+                   "按 design/05 §1 的表格补 `theme.presets` 与 `theme.mascot`")
+        report.stats["theme_presets"] = "缺失"
+        return
+
+    presets = theme_obj.get("presets")
+    if not isinstance(presets, dict) or not presets:
+        report.add("P0", "THEME-PRESETS-MISSING", TOKENS_REL, 0,
+                   "tokens.json 的 `theme.presets` 缺失或为空（应有 6 套：ink/coral/indigo/violet/sky/pine）",
+                   "按 design/05 §1 补 6 套预设，每套 6 个色值 + name + brand")
+        report.stats["theme_presets"] = "缺失"
+        return
+
+    if not app_theme_path.is_file():
+        report.add("P0", "APPTHEME-MISSING", APP_THEME_REL, 0,
+                   f"未找到 `{APP_THEME_REL}`（由 ai-service 负责）",
+                   "按 design/05 §2.1 创建 AppTheme.swift")
+        report.stats["theme_presets"] = "缺失"
+        return
+
+    app_theme_text = app_theme_path.read_text(encoding="utf-8", errors="replace")
+    swift_presets = parse_app_theme_presets(app_theme_text)
+
+    # -- mascot 数值（design/05 §3.2）：只校验存在与是数字，不比对具体值 --
+    mascot = theme_obj.get("mascot")
+    if not isinstance(mascot, dict):
+        report.add("P0", "THEME-MASCOT-MISSING", TOKENS_REL, 0,
+                   "tokens.json 缺少 `theme.mascot`（8 个符号 + 8 个尺寸数值，design/05 §3）",
+                   "按 design/05 §3.2 补 mascot 组")
+    else:
+        for key in ("visualSizePortrait", "visualSizeLandscape",
+                    "cornerCellWidthPortrait", "cornerCellWidthLandscape",
+                    "cornerRightInsetPortrait", "cornerRightInsetLandscape",
+                    "gapToReturnKeyPortrait", "gapToReturnKeyLandscape"):
+            if key not in mascot:
+                report.add("P1", "THEME-MASCOT-KEY", TOKENS_REL, 0,
+                           f"tokens.json 的 `theme.mascot.{key}` 缺失（design/05 §3.2）",
+                           "补该尺寸键；键盘侧 KMMascot 布局依赖它")
+        symbols = mascot.get("symbols")
+        if not isinstance(symbols, list) or len(symbols) != 8:
+            report.add("P1", "THEME-MASCOT-SYMBOLS", TOKENS_REL, 0,
+                       f"tokens.json 的 `theme.mascot.symbols` 应为 8 个符号，实际 "
+                       f"{len(symbols) if isinstance(symbols, list) else '非数组'} 个",
+                       "按 design/05 §3.1 补 whale/whale2/spark/star/moon/leaf/dot/chibi")
+
+    # -- 预设集合对齐 --
+    tokens_ids = set(presets.keys())
+    swift_ids = set(swift_presets.keys())
+    for pid in sorted(tokens_ids - swift_ids):
+        report.add("P0", "THEME-PRESET-NOT-IN-SWIFT", APP_THEME_REL, 0,
+                   f"tokens 里有主题预设 `{pid}`，但 AppTheme.swift 里找不到对应 "
+                   f"`case .{pid}:` + `HexPalette(...)`",
+                   f"在 `AppTheme.Preset` 加 `case {pid}` 并在 palette(for:) 补 12 个 hex")
+    for pid in sorted(swift_ids - tokens_ids):
+        report.add("P0", "THEME-PRESET-NOT-IN-TOKENS", TOKENS_REL, 0,
+                   f"AppTheme.swift 里有主题预设 `{pid}`，但 tokens.json `theme.presets` 没有",
+                   f"在 tokens.json 补 `theme.presets.{pid}`（6 个浅色色值 + name + brand）")
+
+    # -- 逐字段比对 --
+    checked = 0
+    mismatch = 0
+    dark_ok = 0
+    for pid in sorted(tokens_ids & swift_ids):
+        spec = presets.get(pid)
+        if not isinstance(spec, dict):
+            report.add("P0", "THEME-PRESET-MALFORMED", TOKENS_REL, 0,
+                       f"tokens.json 的 `theme.presets.{pid}` 不是对象",
+                       "应为 {name, brand, accent, tint, tint2, deep, sub, canvas}")
+            continue
+        swift_fields = swift_presets[pid]
+        for field in THEME_COLOR_FIELDS:
+            token_hex = normalize_hex(spec.get(field))
+            if token_hex is None:
+                report.add("P0", "THEME-TOKEN-HEX", TOKENS_REL, 0,
+                           f"tokens.json 的 `theme.presets.{pid}.{field}` 缺失或不是合法 hex"
+                           f"（实际 {spec.get(field)!r}）",
+                           "补 `#RRGGBB` 格式的色值（design/05 §1 表格）")
+                continue
+            swift_hex = normalize_hex(swift_fields.get(field))
+            checked += 1
+            if swift_hex is None:
+                report.add("P0", "THEME-SWIFT-HEX", APP_THEME_REL, 0,
+                           f"AppTheme.swift 里预设 `{pid}` 的 `{field}` 字段缺失或不可解析"
+                           f"（实际 {swift_fields.get(field)!r}）",
+                           f"在 palette(for: .{pid}) 的 HexPalette 补 `{field}: \"{token_hex}\"`")
+                continue
+            if swift_hex != token_hex:
+                mismatch += 1
+                report.add("P1", "THEME-HEX-MISMATCH", APP_THEME_REL, 0,
+                           f"`{pid}.{field}`: tokens=#{token_hex} swift=#{swift_hex}"
+                           "（design/05 §6 要求十六进制字面量逐项一致）",
+                           "改 AppTheme.swift 的浅色值对齐 tokens；如需改配色请先改 tokens.json")
+        # 深色值只校验「存在且可解析」（值由 §1.2 推导，不在 tokens 登记）
+        for field in THEME_COLOR_FIELDS:
+            dark_field = field + "Dark"
+            raw = swift_fields.get(dark_field)
+            if normalize_hex(raw) is None:
+                report.add("P2", "THEME-DARK-HEX", APP_THEME_REL, 0,
+                           f"预设 `{pid}` 的 `{dark_field}` 缺失或不是合法 hex（实际 {raw!r}）",
+                           "按 design/05 §1.2 的混色算式补深色值（accent 混白 12% / canvas #1C1C1E / tint 叠 22% alpha）")
+            else:
+                dark_ok += 1
+
+    report.stats["theme_presets"] = f"{len(tokens_ids & swift_ids)} 套"
+    report.stats["theme_colors_checked"] = checked
+    report.stats["theme_colors_mismatch"] = mismatch
+    report.stats["theme_dark_colors"] = dark_ok
+
+
+# ---------------------------------------------------------------------------
 # 主流程
 # ---------------------------------------------------------------------------
 
@@ -408,6 +597,7 @@ def run(root: Path) -> Report:
     if tokens is not None:
         check_tokens_structure(report, tokens)
         check_theme_coverage(report, tokens, theme_text)
+        check_theme_presets(report, tokens, root)
     check_hardcoded(report, root, tokens)
 
     # 设计文档是否落盘（提示）。注意：design-lead 最终交付文件名是

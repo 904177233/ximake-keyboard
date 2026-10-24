@@ -471,6 +471,8 @@ def check_known_type_members(swift_files, declared_members):
                     continue
                 if owner == "Theme":
                     continue  # 已在 check_theme_members 里精确检查
+                if member in ("self", "Type", "init", "some", "none"):
+                    continue  # `ConfigSnapshot.self` 这类元类型表达式不是成员访问
                 if member in declared_members:
                     continue
                 warn("%s:%d: `%s.%s` 未在共享层找到同名声明（需人工确认）" % (rel, i, owner, member))
@@ -539,7 +541,7 @@ REQUIRED_SYMBOLS = {
         "ExportPayload",
     ],
     "Prompts": ["PromptTemplate", "PromptLibrary", "BuiltInPrompts"],
-    "Theme": ["Theme"],
+    "Theme": ["Theme", "AppTheme", "ThemeStore"],
 }
 
 REQUIRED_MEMBERS = {
@@ -548,7 +550,8 @@ REQUIRED_MEMBERS = {
     "SharedStore": ["shared", "isAppGroupAvailable", "defaults", "string", "set", "data", "setData"],
     "KeychainStore": ["shared", "setAPIKey", "apiKey", "deleteAPIKey", "isAvailable"],
     "PasteboardBridge": ["pasteboardName", "export", "importSnapshot", "magic"],
-    "ConfigSnapshot": ["currentVersion", "imageProviderID", "defaultProvider", "presetOnly"],
+    "ConfigSnapshot": ["currentVersion", "imageProviderID", "defaultProvider", "presetOnly",
+                       "enableAISuggestion", "enableTypoCorrection"],
     "PromptLibrary": ["builtIn", "templates", "render", "loadCustom", "saveCustom", "template",
                        "imagePromptEnhanceRequest"],
     "PromptTemplate": ["systemPrompt", "userTemplate", "isBuiltIn", "temperature"],
@@ -556,6 +559,13 @@ REQUIRED_MEMBERS = {
               "fontCaption", "fontTitle", "Spacing", "Radius", "Motion", "Sizing"],
     "PresetProviders": ["isImageOnly", "chatPresets", "imagePresets", "recommended",
                         "defaultImagePreset"],
+    # design/05 §2.1 / §2.2 契约
+    "AppTheme": ["preset", "allPresets", "default", "customID", "accent", "tint", "tint2",
+                 "deep", "sub", "canvas"],
+    "ThemeStore": ["shared", "currentThemeID", "currentTheme", "customMascotData",
+                   "customMascotName", "clearCustomMascot", "showsMascot"],
+    "SharedStoreKey": ["themeCurrent", "themeCustomMascot", "themeCustomMascotName",
+                       "themeShowsMascot"],
 }
 
 
@@ -631,7 +641,12 @@ def main():
     if not swift_files:
         fail("没找到任何 .swift 文件")
     else:
-        theme_entry = next((t for r, t in swift_files if r.endswith("Theme.swift")), None)
+        # 注意：不能用 `r.endswith("Theme.swift")` —— 同目录新增了 `AppTheme.swift`，
+        # 它同样以 "Theme.swift" 结尾且排序更靠前，会顶掉真正的 Theme.swift。
+        # 这里改成严格的 basename 比较。
+        theme_entry = next(
+            (t for r, t in swift_files if os.path.basename(r) == "Theme.swift"), None
+        )
         if theme_entry is None:
             fail("缺少 ios/Shared/Theme/Theme.swift")
         else:

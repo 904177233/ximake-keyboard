@@ -97,6 +97,7 @@ struct DiagnosticsView: View {
                 summaryCard
                 dictionaryCard
                 checkList
+                metricKitSection
                 signatureCard
             }
             .padding(.horizontal, AppMetrics.pageInset)
@@ -333,6 +334,65 @@ struct DiagnosticsView: View {
         .padding(.vertical, AppMetrics.rowVPadding)
     }
 
+    // MARK: - 系统诊断（MetricKit）
+
+    /// 系统级诊断（MetricKit）。
+    ///
+    /// 数据来自系统的 MXMetricPayload / MXDiagnosticPayload，最多保留最近 7 天：
+    /// - 崩溃、卡顿计数（键盘扩展被杀通常表现为「卡顿/无响应」而不是崩溃，App Store Connect 里看不到）；
+    /// - 累计 CPU 时间、峰值内存；
+    /// - 最近一次收到系统指标包的时间。
+    ///
+    /// 注意：MetricKit 是**延迟投递**的（通常次日汇总一次），所以这里显示的是历史，
+    /// 不代表「当前这一秒」的状态。系统还没投递过任何包时，各值为 0 或「暂无」。
+    private var metricKitSection: some View {
+        VStack(alignment: .leading, spacing: AppMetrics.blockGap) {
+            SectionHeader(
+                title: "系统诊断",
+                footnote: "系统次日报表，最多保留 7 天"
+            )
+
+            SurfaceCard {
+                VStack(alignment: .leading, spacing: AppMetrics.blockGap) {
+                    let summary = MetricKitReporter.summary()
+
+                    // 按固定顺序展示（字典本身无序；顺序与 MetricKitReporter.summary() 的语义一致）。
+                    ForEach(Self.metricKitKeyOrder, id: \.self) { key in
+                        if let value = summary[key] {
+                            HStack(alignment: .firstTextBaseline, spacing: AppMetrics.rowGap) {
+                                Text(key)
+                                    .font(AppFont.footnote)
+                                    .foregroundColor(Theme.textSecondary)
+
+                                Spacer(minLength: 0)
+
+                                Text(value)
+                                    .font(AppFont.footnoteStrong)
+                                    .foregroundColor(Theme.textPrimary)
+                                    .multilineTextAlignment(.trailing)
+                            }
+                        }
+                    }
+
+                    Text("说明：系统指标由 iOS 延迟汇总后投递，通常延后一天。键盘扩展因内存超限被系统回收时，这里会表现为卡顿/崩溃计数增加，而不会以普通崩溃的形式出现在 App Store Connect。")
+                        .font(AppFont.caption)
+                        .foregroundColor(Theme.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    /// MetricKit 摘要的展示顺序（与 `MetricKitReporter.summary()` 的键一一对应）。
+    private static let metricKitKeyOrder: [String] = [
+        "统计窗口",
+        "崩溃",
+        "卡顿",
+        "CPU 累计",
+        "峰值内存",
+        "最近上报"
+    ]
+
     // MARK: - 签名
 
     private var signatureCard: some View {
@@ -412,6 +472,9 @@ struct DiagnosticsView: View {
             lines.append("词库：未加载（PinyinDictionary 没有返回版本号）")
         }
         lines.append("签名：\(SignatureClock.summary)")
+        lines.append("")
+        lines.append("== MetricKit（系统次日报表）==")
+        lines.append(MetricKitReporter.summaryLine())
         lines.append("")
         lines.append("== 配置快照（不含 API 密钥）==")
         lines.append(DiagnosticsFormat.snapshotJSON(appState.snapshot))

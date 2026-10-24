@@ -43,6 +43,9 @@ FUZZY_MAX_MATCHES_PER_VARIANT = 8
 FUZZY_MAX_PREFIX_KEYS_PER_VARIANT = 8
 FUZZY_DISCOUNT = 0.85
 
+# 组合切分的「每词代价」：抑制把长串切成大量单字碎片的路径（对应 Swift 同名常量）。
+COMPOSED_TILE_PENALTY = 14.0
+
 
 def cjk(ch: str) -> bool:
     """是否为汉字。"""
@@ -432,6 +435,7 @@ class SimulatedEngine:
         back = [-1] * (count + 1)
         tile_text = [None] * (count + 1)
         tile_frequency = [0] * (count + 1)
+        tile_log = [0.0] * (count + 1)
         best[0] = 0.0
         for start in range(count):
             if not math.isfinite(best[start]):
@@ -447,12 +451,14 @@ class SimulatedEngine:
                     continue
                 if not any(cjk(c) for c in word):
                     continue
-                score = best[start] + self.log_score(frequency)
+                log_term = self.log_score(frequency)
+                score = best[start] + log_term - COMPOSED_TILE_PENALTY
                 if score > best[start + size]:
                     best[start + size] = score
                     back[start + size] = start
                     tile_text[start + size] = word
                     tile_frequency[start + size] = frequency
+                    tile_log[start + size] = log_term
 
         def path(end):
             pieces = []
@@ -467,7 +473,7 @@ class SimulatedEngine:
                 if previous < 0 or tile_text[cursor] is None:
                     return None
                 pieces.append(tile_text[cursor])
-                sum_log += self.log_score(tile_frequency[cursor])
+                sum_log += tile_log[cursor]
                 cursor = previous
             if cursor != 0 or not pieces:
                 return None
@@ -670,7 +676,7 @@ def main():
     run("词频降序", all(rows[i][2] >= rows[i + 1][2] for i in range(len(rows) - 1)), True)
     bad_punct = [row[1] for row in rows if "punct" in row[3] and is_pure_cjk(row[1])]
     run("纯汉字词条无 punct 标记", bad_punct, [])
-    run("总条数在 4000-7000", 4000 <= len(rows) <= 7000, True)
+    run("总条数在 30000-50000", 30000 <= len(rows) <= 50000, True)
 
     print("-" * 78)
     print("[6] 模糊音（对应 ios/Shared/IMECore/FuzzyPinyin.swift）")

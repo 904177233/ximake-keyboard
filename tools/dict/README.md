@@ -30,12 +30,16 @@ python tools/dict/build_dict.py --out /tmp/moyu-dict
 所有排序都使用全序键 `(词频降序, 拼音, 词)`，因此同一份输入**重复执行产出字节级一致**的文件。
 `dict_meta.json` 中的 `sha256` 可直接用于校验产物是否与上一次一致。
 
-当前产物（v1.0.0）：
+当前产物（v1.1.0，词库扩展后）：
 
 | 文件 | 条数 | 字节 | SHA256 |
 | --- | --- | --- | --- |
-| `base_dict.tsv` | 5276 | 139702 | `fb04d1cb74ececc74927e8210d12b070abcbd5a14fef4fbbe2077bacba13c0c8` |
-| `phrases.tsv` | 755 | 21827 | `592bb4b2b52e800aee687ff0f5bee41c1f1498d118adc92fec91119ae05f3c9b` |
+| `base_dict.tsv` | 33160 | 825646 | `4eb3333c95b72e2a63da7856eba66eacef8ee1839a40b4c4ad6da759dda302ab` |
+| `phrases.tsv` | 755 | 21827 | `178468c1261ae8eebb3e7a2a7d38877c81f806b72941b07cc3a36250ac3f751e` |
+
+v1.0.0 是 5276 条 / 139702 字节（SHA256 `fb04d1cb…`），v1.1.0 按 `docs/08` 的
+「词库扩到 3–5 万条」建议把 jieba 侧扩到 33160 条（+1.5 MB 未压缩，加载仍在 80ms 预算内）。
+`pypinyin 0.55.0` 生成，`generated_at` 固定为 `2026-10-25`。
 
 ## 2. 产物格式
 
@@ -271,6 +275,9 @@ PAIR_GROUPS = [
 | `_probe_fuzzy_perf.py` | 测量模糊音变体数与开关前后的按键耗时差（对应 README §3.8 的性能表） |
 | `_probe_seed.py` | 抽取 `PinyinDictionary.swift` 内置兜底词表，统计条数 / 常用字覆盖 |
 | `_probe_balance.py` | 剥注释与字符串后统计 IMECore 各 swift 文件的括号配平与编码问题 |
+| `_probe_typo.py` | 输入纠错性能探针：用 Python 复刻 `TypoCorrector.swift` 的编辑距离 1 算法，读真实词库测耗时与产出 |
+| `_probe_scale.py` / `_probe_select.py` / `_probe_dp_penalty.py` / `_probe_initials_cost.py` | 词库扩展调参探针：阈值/词性分布、可选规模、DP 每词代价标定、首字母索引构建成本分解 |
+| `_patch_count_assert.py` | 一次性补丁：把 `_simulate_engine.py` 的条数区间断言同步到新规模（30000–50000），不是删断言 |
 | `_count_assertions.py` | 统计 `_simulate_engine.py` 各分组的断言条数（用于核对 README 里的数字） |
 | `.cache/jieba_dict.txt` | jieba 原始词表缓存（4.9 MB，**不打包进 App**） |
 | `_fetch_src.py` / `_probe.py` | 数据源获取与格式探查的一次性脚本（保留备查） |

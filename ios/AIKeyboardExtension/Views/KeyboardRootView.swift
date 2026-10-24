@@ -19,8 +19,13 @@ import SwiftUI
 /// - Parameter page: 当前页面。
 /// - Returns: 是否显示。
 private func pageShowsChrome(_ page: KeyboardViewModel.Page) -> Bool {
-    // `.aiChat` 是全场对话模式：自己的标题条替代了候选栏 + AI 工具条（design/04 §3.2）。
-    page != .aiChat
+    // `.aiChat` / `.voice` 都是全场模式：自己的标题条替代了候选栏 + AI 工具条（design/04 §3.2）。
+    switch page {
+    case .aiChat, .voice:
+        return false
+    default:
+        return true
+    }
 }
 
 /// 旋钮状态：不可用时 disabled、回答中 busy、已打开 active，否则 idle。
@@ -41,45 +46,85 @@ private func chatKnobState(for model: KeyboardViewModel) -> KMChatKnobState {
     return model.isChatOpen ? .active : .idle
 }
 
-// MARK: - 根视图
+    /// 键盘根视图。
+    struct KeyboardRootView: View {
 
-/// 键盘根视图。
-struct KeyboardRootView: View {
+        /// 键盘状态机（由 `KeyboardViewController` 注入并持有）。
+        @ObservedObject var model: KeyboardViewModel
 
-    /// 键盘状态机（由 `KeyboardViewController` 注入并持有）。
-    @ObservedObject var model: KeyboardViewModel
+        /// 主题状态（design/05 §1）：主色与符号跟随 `ThemeStore.shared.currentTheme`。
+        ///
+        /// `ThemeStore` 没有 Combine 通知，所以这里把它包成 `@State` + `objectWillChange`
+        /// 的手动刷新：设置页改完主题后调用 `applyTheme()` 让视图重算。
+        @State private var theme: AppTheme = ThemeStore.shared.currentTheme
 
-    /// 创建根视图。
-    /// - Parameter model: 键盘状态机。
-    init(model: KeyboardViewModel) {
-        self.model = model
-    }
+        /// 小形象是否显示（设置页「小形象」开关）。
+        @State private var showsMascot: Bool = KMMascotSettings.isEnabled
 
-    var body: some View {
-        ZStack(alignment: .top) {
-            KeyboardShell {
-                VStack(spacing: 0) {
-                    if pageShowsChrome(model.page) {
-                        chrome
+        /// 当前小形象符号（设置页横排选择）。
+        @State private var mascotSymbol: KMMascotSymbol = KMMascotSettings.symbol
+
+        /// 创建根视图。
+        /// - Parameter model: 键盘状态机。
+        init(model: KeyboardViewModel) {
+            self.model = model
+        }
+
+        var body: some View {
+            ZStack(alignment: .top) {
+                KeyboardShell {
+                    VStack(spacing: 0) {
+                        if pageShowsChrome(model.page) {
+                            chrome
+                        }
+                        keyArea
                     }
-                    keyArea
+                }
+
+                if model.overlay != .none {
+                    overlayLayer
+                }
+
+                if let toast = model.toastMessage {
+                    toastLayer(toast)
+                }
+
+                if model.showsFullAccessCard {
+                    fullAccessLayer
                 }
             }
-
-            if model.overlay != .none {
-                overlayLayer
-            }
-
-            if let toast = model.toastMessage {
-                toastLayer(toast)
-            }
-
-            if model.showsFullAccessCard {
-                fullAccessLayer
+            .environment(\.layoutDirection, .leftToRight)
+            .onAppear { reloadThemeState() }
+            .onChange(of: model.page) { _ in
+                // 从设置页回来时主题 / 小形象可能已改，重算一次。
+                reloadThemeState()
             }
         }
-        .environment(\.layoutDirection, .leftToRight)
-    }
+
+        // MARK: - 主题状态
+
+        /// 从 `ThemeStore` 与本地开关重新读取主题、小形象设置。
+        private func reloadThemeState() {
+            theme = ThemeStore.shared.currentTheme
+            showsMascot = KMMascotSettings.isEnabled
+            mascotSymbol = KMMascotSettings.symbol
+        }
+
+        /// 主题主色（design/05 §1.1 允许出现在 4 处：候选栏首选字背景 / AI 工具条选中胶囊 / 对话旋钮 / 回车键）。
+        private var themeAccent: Color {
+            theme.accent
+        }
+
+        /// 底行小形象配置（未开启时返回 nil，空格键自动回弹到 194 设计宽）。
+        private var mascotConfig: KMMascotConfig? {
+            guard showsMascot else { return nil }
+            return KMMascotConfig(
+                symbol: mascotSymbol,
+                isBusy: model.aiAvailability == .busy || model.chatPhase.isBusy,
+                usesCustomImage: ThemeStore.shared.hasCustomMascot,
+                accent: themeAccent
+            )
+        }
 
     // MARK: - 候选栏 + AI 工具条（共用 84pt 玻璃背景）
 
@@ -106,7 +151,8 @@ struct KeyboardRootView: View {
                     onLongPress: { index in model.longPressCandidate(at: model.candidatePageIndex * KeyboardViewModel.candidatePageSize + index) },
                     onTogglePage: { delta in model.turnCandidatePage(delta) },
                     onChatKnobTap: { model.openAIChat() },
-                    onSelectSuggestion: { index in model.insertSuggestion(at: index) }
+                    onSelectSuggestion: { index in model.insertSuggestion(at: index) },
+                    accent: themeAccent
                 )
                 .frame(height: KMLayout.candidateBarHeight)
 
@@ -120,7 +166,10 @@ struct KeyboardRootView: View {
                     onOpenSettings: { model.tap(.openSettings) },
                     onOpenPanel: { model.openAIPanel() },
                     onOpenChat: { model.openAIChat() },
-                    onDisabledTap: { model.handleAIBarDisabledTap() }
+                    onDisabledTap: { model.handleAIBarDisabledTap() },
+                    accent: themeAccent,
+                    showsVoice: model.canUseVoiceInput,
+                    onOpenVoice: { model.openVoiceInput() }
                 )
                 .frame(height: KMLayout.aiBarHeight)
             }
@@ -139,7 +188,9 @@ struct KeyboardRootView: View {
                 layoutMode: model.layoutMode,
                 shiftState: model.shiftState,
                 isLandscape: model.isLandscape,
-                onTap: { key in model.tap(key) }
+                onTap: { key in model.tap(key) },
+                mascot: mascotConfig,
+                accent: themeAccent
             )
         case .numbers:
             NumberPadView(onTap: { key in model.tap(key) })
@@ -158,6 +209,12 @@ struct KeyboardRootView: View {
             ExtensionSettingsSheet(model: model)
         case .aiChat:
             ChatPanelView(model: model)
+        case .voice:
+            KMVoicePanel(
+                voice: KMVoiceInput.shared,
+                onClose: { model.closeVoiceInput() },
+                onCommit: { text in model.insertText(text) }
+            )
         }
     }
 

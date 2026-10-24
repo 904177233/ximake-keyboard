@@ -295,6 +295,16 @@ final class AppState: ObservableObject {
         updateSnapshot { $0.enableLearning = enabled }
     }
 
+    /// 修改「AI 联想词」开关（候选栏尾部上下文猜测胶囊）。
+    func setEnableAISuggestion(_ enabled: Bool) {
+        updateSnapshot { $0.enableAISuggestion = enabled }
+    }
+
+    /// 修改「输入纠错」开关。
+    func setEnableTypoCorrection(_ enabled: Bool) {
+        updateSnapshot { $0.enableTypoCorrection = enabled }
+    }
+
     /// 修改默认语气。
     func setDefaultTone(_ tone: String) {
         updateSnapshot { $0.defaultTone = tone }

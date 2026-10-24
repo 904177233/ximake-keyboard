@@ -100,6 +100,8 @@ public final class ConfigStore: ConfigStoring, @unchecked Sendable {
         snapshot.replyCount = current.replyCount
         snapshot.enableClipboardHistory = current.enableClipboardHistory
         snapshot.enableLearning = current.enableLearning
+        snapshot.enableAISuggestion = current.enableAISuggestion
+        snapshot.enableTypoCorrection = current.enableTypoCorrection
         snapshot.imageSize = current.imageSize
         save(snapshot)
         return snapshot
@@ -120,6 +122,10 @@ public final class ConfigStore: ConfigStoring, @unchecked Sendable {
     /// - v1 的 `replyCount` 若越界（老版本没有 clamp）→ 收敛到 1...5。
     /// - `providers` 为空（极端损坏）→ 灌入内置预设。
     /// - 迁移只改内存中的结构，**不隐式写盘**；下一次 `save(_:)` 时自然落盘为 v2。
+    ///
+    /// 另有两个**不升版本**的纯追加字段：`enableAISuggestion` / `enableTypoCorrection`
+    /// （都默认 `true`）。它们缺失时由 `ConfigSnapshot.init(from:)` 的容错解码填默认值，
+    /// 因此不需要版本迁移分支，老快照读出来就是「两个开关都开」——与老版本的实际行为一致。
     ///
     /// - Parameter snapshot: 从磁盘解码出的快照。
     /// - Returns: 已迁移到当前版本的新快照。

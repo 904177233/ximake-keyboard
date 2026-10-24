@@ -426,10 +426,10 @@ public final class KeyboardViewModel: ObservableObject {
     }
 
     /// 候选栏点击（上屏单个候选）。
-    /// - Parameter index: 候选下标。
+    /// - Parameter index: 候选下标（**已过滤后的可见下标**）。
     public func selectCandidate(at index: Int) {
-        guard candidates.indices.contains(index) else { return }
-        let candidate = candidates[index]
+        guard let absolute = candidateAbsoluteIndex(visibleIndex: index) else { return }
+        let candidate = candidates[absolute]
         engine.commit(candidate, input: composing)
         insertText(candidate.text)
         lastCommittedText = candidate.text
@@ -438,6 +438,19 @@ public final class KeyboardViewModel: ObservableObject {
         KMHaptics.candidate()
         // 上屏后启动 AI 联想防抖（design/04 §4.4 触发时机 A）。
         scheduleSuggestions()
+    }
+
+    /// 把「当前页的可见下标」换算成 `candidates` 里的绝对下标。
+    ///
+    /// 关掉「输入纠错」后可见列表会过滤掉 `isTypoCorrection` 候选，
+    /// 因此视图传进来的下标必须经过这一层换算，否则会点错词。
+    /// - Parameter index: 当前页内的可见下标。
+    /// - Returns: 绝对下标；越界返回 `nil`。
+    public func candidateAbsoluteIndex(visibleIndex: Int) -> Int? {
+        let page = currentPageCandidates
+        guard page.indices.contains(visibleIndex) else { return nil }
+        let target = page[visibleIndex]
+        return candidates.firstIndex(where: { $0.text == target.text && $0.pinyin == target.pinyin })
     }
 
     /// 候选栏长按（上屏并保持候选栏，供后续继续挑词）。
@@ -454,20 +467,31 @@ public final class KeyboardViewModel: ObservableObject {
         candidatePageIndex = min(max(candidatePageIndex + delta, 0), count - 1)
     }
 
+    /// 过滤掉被开关关闭的纠错候选。
+    ///
+    /// `PinyinEngine+TypoCorrection` 产出的候选带 `isTypoCorrection = true`；
+    /// 设置里关掉「输入纠错」（`snapshot.enableTypoCorrection == false`）后，
+    /// 这里在视图取数前统一滤掉，翻页计数也一并不再算它们。
+    private var visibleCandidates: [IMECandidate] {
+        snapshot.enableTypoCorrection ? candidates : candidates.filter { !$0.isTypoCorrection }
+    }
+
     /// 当前页候选。
     public var currentPageCandidates: [IMECandidate] {
+        let source = visibleCandidates
         let size = Self.candidatePageSize
         let start = candidatePageIndex * size
-        guard start < candidates.count else { return [] }
-        let end = min(start + size, candidates.count)
-        return Array(candidates[start..<end])
+        guard start < source.count else { return [] }
+        let end = min(start + size, source.count)
+        return Array(source[start..<end])
     }
 
     /// 候选总页数。
     public var candidatePageCount: Int {
         let size = Self.candidatePageSize
-        guard !candidates.isEmpty else { return 1 }
-        return (candidates.count + size - 1) / size
+        let count = visibleCandidates.count
+        guard count > 0 else { return 1 }
+        return (count + size - 1) / size
     }
 
     // MARK: - 页面
@@ -477,9 +501,15 @@ public final class KeyboardViewModel: ObservableObject {
     public func go(to target: Page) {
         guard page != target else { return }
         let leavingChat = page == .aiChat
+        let leavingVoice = page == .voice
         overlay = .none
         let wasExpanded = page.isExpanded
         page = target
+        if leavingVoice {
+            // 任何路径离开语音页都要停录音：否则麦克风会话会留在后台继续吃电与隐私额度
+            // （`closeVoiceInput()` 走同一条路，这里是兜底，防止从别处直接 `go(to:)`）。
+            KMVoiceInput.shared.cancel()
+        }
         if target != .result {
             cancelAI(silently: true)
             aiState = .idle
@@ -561,26 +591,5 @@ public final class KeyboardViewModel: ObservableObject {
         let context = contextTail
         panelContextPreview = context
         showsContextTruncationHint = proxyContext.count > Self.contextCharacterLimit
-    }
-
-    // MARK: - 提示
-
-    /// 展示一次 Toast 提示（自动消失）。
-    /// - Parameter message: 中文提示文案。
-    public func showToast(_ message: String) {
-        toastMessage = message
-        let expected = message
-        Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            guard let self else { return }
-            if self.toastMessage == expected {
-                self.toastMessage = nil
-            }
-        }
-    }
-
-    /// 关闭 Toast。
-    public func clearToast() {
-        toastMessage = nil
     }
 }

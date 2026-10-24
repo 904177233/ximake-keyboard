@@ -303,3 +303,86 @@ public struct Shadow: Equatable, Sendable {
 
 改色流程：**先改 `design/tokens.json`（design-lead 负责）→ 再同步 `Theme.swift` → 跑两个脚本**。
 `Theme.swift` 顶部的 `// tokens: 1.0` 必须与 `meta.version` 一致。
+
+---
+
+## 11. 主题系统（`AppTheme.swift` / `ThemeStore.swift`）
+
+> 施工图：`design/05-主题与小形象规范.md`。tokens 里对应 `theme` 组（本版新增，叶子 +57）。
+
+### 11.1 三层关系
+
+| 层 | 文件 | 职责 | 谁改 |
+| --- | --- | --- | --- |
+| 令牌 | `design/tokens.json` 的 `theme.presets` | 6 套主题的**浅色** 6 色唯一真相源（深色按 §1.2 推导） | design-lead |
+| 模型 | `ios/Shared/Theme/AppTheme.swift` | 把 hex 转成跟随深浅色的 `Color`，提供 `Preset` / `allPresets` / `default` | ai-service |
+| 持久化 | `ios/Shared/Theme/ThemeStore.swift` | 当前主题 id、自定义形象 PNG 与名字，读写 `SharedStore` | ai-service |
+
+**关键约束**：主题**不改** `Theme` 的静态常量（`Theme.accent` 等保持编译期常量语义），
+只提供运行时覆盖那 4 处主色的入口（候选栏首选字底 / AI 选中胶囊 / 对话旋钮 / 回车键）。
+
+### 11.2 6 套预设（浅色值 = tokens `theme.presets.<id>`）
+
+| id | `displayName` | `brandNote` | accent | tint | tint2 | deep | sub | canvas |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `ink` | 墨黑 | ChatGPT 系 | `#101010` | `#F7F7F5` | `#EBEBEA` | `#101010` | `#3A3A3E` | `#D7D7DC` |
+| `coral` | 珊瑚 | Claude 系 | `#D97757` | `#FDF3EE` | `#F5E2D9` | `#8A4B33` | `#6B4A3E` | `#DFD6D1` |
+| `indigo` | 靛蓝 | DeepSeek 系 | `#4D6BFE` | `#EEF1FF` | `#E0E5FC` | `#2B3B9E` | `#3A4570` | `#D3D8EC` |
+| `violet` | 星紫 | Gemini 系 | `#7A5AF8` | `#F2EFFF` | `#E7E1FD` | `#4530A8` | `#4A3F72` | `#D6D0EA` |
+| `sky` | 天青 | Kimi 系 | `#2AA5E8` | `#EBF7FE` | `#DCF0FC` | `#12628C` | `#2A5068` | `#CFDFE8` |
+| `pine` | 松绿 | 豆包 / 千问系 | `#10A37F` | `#EDF8F4` | `#DCF1E9` | `#0A6449` | `#2A4F44` | `#CFE0DA` |
+
+`AppTheme.default` = **靛蓝（indigo）**；`AppTheme.allPresets` 顺序即上表顺序。
+
+### 11.3 深色模式推导（design/05 §1.2）
+
+深色值**不写进 tokens**，由 `AppTheme.palette(for:)` 按下面算式从浅色值算出（代码里已算好两套 hex）：
+
+| 字段 | 深色算法 | 例（indigo） |
+| --- | --- | --- |
+| `accentDark` | accent × 0.88 + 255 × 0.12（混白 12%） | `#4D6BFE` → `#627DFE` |
+| `canvasDark` | 统一 `#1C1C1E` | `#D3D8EC` → `#1C1C1E` |
+| `tintDark` | accentDark + `38`（22% alpha） | `#627DFE38` |
+| `tint2Dark` | accentDark + `5C`（36% alpha） | `#627DFE5C` |
+| `deepDark` | accent × 0.55 + 255 × 0.45（混白 45%） | `#2B3B9E` → `#9DAEFE` |
+| `subDark` | accent × 0.18 + 255 × 0.82，再叠 `99`（60% alpha） | `#DFE4FF99` |
+
+实现方式：`AppTheme.adaptive(_:_:)`（文件内 private，与 `Theme.adaptive` 同实现但不可跨文件复用）
+返回 `UIColor { traits in ... }`，包成 `Color(uiColor:)` 后自动跟随系统外观。
+
+### 11.4 `ThemeStore`（存储键已加进 `SharedStore.SharedStoreKey`）
+
+| 成员 | 类型 | 说明 |
+| --- | --- | --- |
+| `shared` | `ThemeStore` | 全局实例 |
+| `currentThemeID` | `String` get/set | 值为 6 个 `Preset.rawValue` 或 `"custom"` |
+| `currentTheme` | `AppTheme` get | id 命中→该预设；`custom` 且有形象→自定义；否则→`AppTheme.default` |
+| `customMascotData` | `Data?` get/set | 512×512 PNG 原始数据 |
+| `customMascotName` | `String` get/set | 空串归一成「我的形象」 |
+| `hasCustomMascot` / `isUsingCustomMascot` | `Bool` | 是否已导入 / 是否正在用自定义形象 |
+| `showsMascot` | `Bool` get/set | 键盘右下角是否显示形象，默认 `true`（关掉后空格键占满整行） |
+| `clearCustomMascot()` | — | 删数据 + 删名字 + 若当前是 custom 则切回默认 |
+| `availableThemes` | `[AppTheme]` | = `AppTheme.allPresets` |
+
+存储键：`moyu.theme.current` / `moyu.theme.customMascot` / `moyu.theme.customMascotName` /
+`moyu.theme.showsMascot`（依次对应 `SharedStoreKey.themeCurrent` / `themeCustomMascot` /
+`themeCustomMascotName` / `themeShowsMascot`）。
+
+> **无 App Group 的降级（非 bug）**：`SharedStore` 会自动降到各自的 `UserDefaults.standard`，
+> 宿主 App 选的主题键盘扩展读不到；键盘内设置页可单独选主题（design/05 §2.2）。
+
+### 11.5 一致性校验（`consistency_check.py` §④）
+
+| 情况 | 级别 | code |
+| --- | --- | --- |
+| tokens 缺 `theme` 组 / `theme.presets` | P0 | `THEME-GROUP-MISSING` / `THEME-PRESETS-MISSING` |
+| 预设只在 tokens 有、Swift 无（或反之） | P0 | `THEME-PRESET-NOT-IN-SWIFT` / `THEME-PRESET-NOT-IN-TOKENS` |
+| tokens 某色值不是合法 hex | P0 | `THEME-TOKEN-HEX` |
+| Swift 浅色字段缺失/不可解析 | P0 | `THEME-SWIFT-HEX` |
+| 浅色 hex 与 tokens 不一致 | P1 | `THEME-HEX-MISMATCH`（报告写 `preset.field: tokens=#X swift=#Y`） |
+| 深色字段缺失/不可解析 | P2 | `THEME-DARK-HEX` |
+| `theme.mascot` 缺键 / symbols 不是 8 个 | P1 | `THEME-MASCOT-KEY` / `THEME-MASCOT-SYMBOLS` |
+
+当前统计：`theme_presets=6 套 | theme_colors_checked=36 | theme_colors_mismatch=0 | theme_dark_colors=36`。
+改主题配色的流程同样是 **先 tokens → 再 AppTheme.swift 的浅色字段 → 跑脚本**；
+深色字段改完不需要动 tokens（但请保持 §11.3 的算式，别写随手混色）。

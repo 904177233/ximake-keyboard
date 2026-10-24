@@ -142,7 +142,7 @@ enum KMLayout {
 
     // MARK: - AI 对话面板（design/04-AI对话与智能联想规范.md §6.1）
     //
-    // 说明：以下 15 个 sizing 与 3 个 motion 常量已写入 `design/tokens.json`（256 叶子），
+    // 说明：以下 15 个 sizing 与 3 个 motion 常量已写入 `design/tokens.json`（313 叶子），
     // 但 `ios/Shared/Theme/Theme.swift` 的对应令牌由 ai-service 维护，本文件暂以派生/字面量
     // 形式落地（每行标 `// TOKEN:`），待 Theme.Sizing / Theme.Motion 补齐同名令牌后
     // 可无痛改为直连，视图侧无需改动。
@@ -235,6 +235,33 @@ enum KMLayout {
     /// 对话面板总高（横屏 340 = 32 + 108 + 44 + 156）。
     static let aiChatLandscapeHeight: CGFloat = landscapeHeight + landscapeExtraHeight
 
+    // MARK: - 主题与小形象（design/05 §3.2）
+
+    /// 22 —— 小形象符号视觉尺寸（竖屏）。
+    static let mascotVisualSize: CGFloat = 22  // TOKEN: theme.mascot.visualSizePortrait
+
+    /// 18 —— 小形象符号视觉尺寸（横屏）。
+    static let mascotVisualSizeLandscape: CGFloat = 18  // TOKEN: theme.mascot.visualSizeLandscape
+
+    /// 30 —— 底行小形象角落格宽度（竖屏）。
+    static let mascotCornerWidth: CGFloat = 30  // TOKEN: theme.mascot.cornerCellWidthPortrait
+
+    /// 26 —— 底行小形象角落格宽度（横屏）。
+    static let mascotCornerWidthLandscape: CGFloat = 26  // TOKEN: theme.mascot.cornerCellWidthLandscape
+
+    /// 156 —— 有小形象时空格键宽度（design/05 §3.2 给的基准值）。
+    ///
+    /// 说明：底行 `42 + 42 + 156 + 88 + 30 + 6 × 4 = 382`，比内容宽 384 少 2pt，
+    /// 因此实现里空格键仍走弹性宽度（390pt 屏上实际 158pt），由它吸收这 2pt，
+    /// 避免行尾出现 2pt 空隙（否则形象格与右边距会错位）。
+    static let spaceBarWidthWithMascot: CGFloat = 156  // TOKEN: theme.mascot.spaceBarWidth
+
+    /// 2 —— 形象格在屏幕右边距之上再加的内边距（3 + 2 = 5pt，符合 §3.2）。
+    static let mascotTrailingInset: CGFloat = Theme.Spacing.xs
+
+    /// 1 —— 形象格与回车键之间在 `keyGap` 之上再加的间距（6 + 1 = 7pt，符合 §3.2）。
+    static let mascotReturnSpacing: CGFloat = 1
+
     // MARK: - 方法
 
     /// 指定宽度下的字母键宽；390pt 时正好 33。
@@ -292,7 +319,7 @@ enum KMLayout {
     static func keyboardHeight(isLandscape: Bool, page: KeyboardViewModel.Page, safeAreaBottom: CGFloat) -> CGFloat {
         if isLandscape {
             switch page {
-            case .aiPanel, .settings, .result, .aiChat:
+            case .aiPanel, .settings, .result, .aiChat, .voice:
                 return landscapeHeight + landscapeExtraHeight
             default:
                 return landscapeHeight
@@ -306,7 +333,8 @@ enum KMLayout {
             height += resultExtraHeight
         case .settings:
             height += aiPanelExtraHeight
-        case .aiChat:
+        case .aiChat, .voice:
+            // 语音页与对话页同高 438（复用 aiChatExtraHeight，不新增高度令牌）。
             height += aiChatExtraHeight
         default:
             break

@@ -44,17 +44,23 @@ public struct IMECandidate: Identifiable, Sendable, Equatable {
     /// 候选类型。
     public var kind: Kind
 
+    /// 是否为「输入纠错」候选（原始输入无候选或候选过少时由 `TypoCorrector` 追加）。
+    /// UI 可据此在尾部打 `[纠错]` 角标。
+    public var isTypoCorrection: Bool
+
     /// 创建候选。
     /// - Parameters:
     ///   - text: 上屏文本。
     ///   - pinyin: 输入全拼。
     ///   - score: 排序得分，默认 0。
     ///   - kind: 候选类型，默认 `.word`。
-    public init(text: String, pinyin: String, score: Double = 0, kind: Kind = .word) {
+    ///   - isTypoCorrection: 是否纠错候选，默认 `false`。
+    public init(text: String, pinyin: String, score: Double = 0, kind: Kind = .word, isTypoCorrection: Bool = false) {
         self.text = text
         self.pinyin = pinyin
         self.score = score
         self.kind = kind
+        self.isTypoCorrection = isTypoCorrection
     }
 }
 

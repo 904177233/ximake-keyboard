@@ -27,6 +27,12 @@ struct KeyRowsView: View {
     /// 按键回调。
     let onTap: (KeyboardKey) -> Void
 
+    /// 底行最右的小形象配置（`nil` 表示不显示，空格键自动回弹到 194 设计宽）。
+    var mascot: KMMascotConfig? = nil
+
+    /// 主题主色（回车键用；design/05 §1.1 允许的 4 处主色之一）。
+    var accent: Color = Theme.accent
+
     var body: some View {
         GeometryReader { proxy in
             let width = proxy.size.width
@@ -95,7 +101,13 @@ struct KeyRowsView: View {
             .padding(.horizontal, thirdInset)
             .frame(height: rowHeight)
 
-            bottomRow(height: rowHeight)
+            KeyRowsBottomRow(
+                isLandscape: isLandscape,
+                height: rowHeight,
+                accent: accent,
+                mascot: mascot,
+                onTap: onTap
+            )
         }
         .frame(height: KMLayout.keyRowsHeight, alignment: .top)
     }
@@ -271,43 +283,6 @@ struct KeyRowsView: View {
         .buttonStyle(KMKeyCapStyle(style: .space))
         .accessibilityLabel(Text("空格"))
         .accessibilityAddTraits(.isKeyboardKey)
-    }
-
-    /// 第 4 行：🌐 + 空格 + 🙂 + ⏎。
-    /// - Parameter height: 行高。
-    private func bottomRow(height: CGFloat) -> some View {
-        HStack(spacing: KMLayout.keyGap) {
-            functionKey(icon: "globe", fallback: "🌐",
-                        width: KMLayout.functionKeyWidth, height: height,
-                        accessibility: "切换键盘") {
-                onTap(.globe)
-            }
-
-            spaceKey(height: height, flexible: true)
-
-            functionKey(icon: "face.smiling", fallback: "🙂",
-                        width: KMLayout.functionKeyWidth, height: height,
-                        accessibility: "表情") {
-                onTap(.pageEmoji)
-            }
-
-            Button(action: {
-                KMHaptics.rigid()
-                onTap(.newline)
-            }) {
-                KMIconGlyph(symbol: "return", fallback: "⏎", size: 18, tint: Theme.textOnAccent)
-                    .frame(width: KMLayout.returnKeyWidth, height: height)
-                    .background(
-                        RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous)
-                            .fill(Theme.accent)
-                    )
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(KMKeyCapStyle(style: .accent))
-            .accessibilityLabel(Text("回车"))
-            .accessibilityAddTraits(.isKeyboardKey)
-        }
-        .frame(height: height)
     }
 
     // MARK: - 数据

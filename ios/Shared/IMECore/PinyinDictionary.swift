@@ -15,8 +15,8 @@ import Foundation
 /// 词库文件为 `ios/Shared/dict/base_dict.tsv`，每行：
 /// `拼音<TAB>词<TAB>词频<TAB>flags`；以 `#` 开头的行为注释。
 ///
-/// 加载策略：先按候选路径列表逐个尝试（兼容 App Bundle 根目录、`dict/` 子目录、
-/// 以及历史上的 `Resources/dict/` 文件夹引用三种打包方式），全部失败时退回内置极小词表，
+/// 加载策略：按候选路径列表逐个尝试（兼容 Bundle 根目录、`dict/` 子目录、
+/// 历史上的 `Resources/dict/` 三种打包方式），全部失败时退回内置极小词表，
 /// 保证键盘在词库缺失时仍可输入，不会崩溃。
 public final class PinyinDictionary {
 
@@ -60,13 +60,46 @@ public final class PinyinDictionary {
     private let sortedPinyinKeys: [String]
 
     /// 首字母串 -> 全拼键（按该全拼最高词频降序）。
-    private let initialsIndex: [String: [String]]
+    ///
+    /// **惰性构建**：建索引要为每条词做一次音节 DP 切分，词库扩到 33,160 条后
+    /// 这是冷启动最大的单项（Python 复刻 311 万次内层循环，Swift 侧估 47–187ms）。
+    /// 简拼只在用户打纯字母串时才用得上，绝大多数人第一次上屏用不到，
+    /// 故推迟到首次查询再建，把冷启动确定性开销压回解析 + 分组（约 30–40ms）。
+    private var initialsIndexStorage: [String: [String]]?
 
-    /// 首字母串的最短/最长长度，用于剪枝。
-    private let initialsLengthRange: ClosedRange<Int>
+    /// 首字母串的最短/最长长度（与 `initialsIndexStorage` 同时产出）。
+    private var initialsLengthRangeStorage: ClosedRange<Int>?
+
+    /// 索引构建锁（保护上面两个惰性字段）。
+    private let initialsLock = NSLock()
+
+    /// 首字母索引（惰性构建，首次访问时同步建好）。
+    private var initialsIndex: [String: [String]] {
+        ensureInitialsIndex()
+        return initialsIndexStorage ?? [:]
+    }
+
+    /// 首字母串的最短/最长长度（惰性构建）。
+    private var initialsLengthRange: ClosedRange<Int> {
+        ensureInitialsIndex()
+        return initialsLengthRangeStorage ?? 1...1
+    }
 
     /// 词文本 -> 最高词频（供排序打分快速取词频）。
     private let textFrequency: [String: Int]
+
+    // MARK: - 首字母索引惰性构建
+
+    /// 确保首字母索引已建好（幂等、线程安全，双检锁）。
+    private func ensureInitialsIndex() {
+        if initialsIndexStorage != nil { return }
+        initialsLock.lock()
+        defer { initialsLock.unlock() }
+        if initialsIndexStorage != nil { return }
+        let built = Self.buildInitialsIndex(allEntries)
+        initialsIndexStorage = built.index
+        initialsLengthRangeStorage = built.range
+    }
 
     // MARK: - 初始化
 
@@ -100,13 +133,12 @@ public final class PinyinDictionary {
 
         let sorted = Self.sortedEntries(resolvedEntries)
         let grouped = Self.groupByPinyin(sorted)
-        let initials = Self.buildInitialsIndex(sorted)
         self.allEntries = sorted
         self.entriesByPinyin = grouped
         self.textFrequency = Self.buildTextFrequency(sorted)
         self.sortedPinyinKeys = grouped.keys.sorted()
-        self.initialsIndex = initials.index
-        self.initialsLengthRange = initials.range
+        self.initialsIndexStorage = nil
+        self.initialsLengthRangeStorage = nil
         self.wordCount = sorted.count
         self.version = Self.readVersion(fallback: usedBuiltin ? "0.0.0-builtin" : "0.0.0")
         self.loadedPath = usedBuiltin ? "<builtin>" : (resolvedURL?.path ?? "<unknown>")
@@ -121,13 +153,12 @@ public final class PinyinDictionary {
     public init(entries: [DictionaryEntry], version: String = "test") {
         let sorted = Self.sortedEntries(entries)
         let grouped = Self.groupByPinyin(sorted)
-        let initials = Self.buildInitialsIndex(sorted)
         self.allEntries = sorted
         self.entriesByPinyin = grouped
         self.textFrequency = Self.buildTextFrequency(sorted)
         self.sortedPinyinKeys = grouped.keys.sorted()
-        self.initialsIndex = initials.index
-        self.initialsLengthRange = initials.range
+        self.initialsIndexStorage = nil
+        self.initialsLengthRangeStorage = nil
         self.wordCount = sorted.count
         self.version = version
         self.loadedPath = "<memory>"
@@ -274,10 +305,8 @@ public final class PinyinDictionary {
 
     /// 词库文件在 Bundle 中的候选路径列表。
     ///
-    /// 覆盖三种常见打包方式：
-    /// 1. `dict/` 以 folder reference 形式加入 -> `dict/base_dict.tsv`（**当前布局**）
-    /// 2. 旧布局 `Resources/dict/`（仅兼容保留，新工程已不再使用）
-    /// 3. TSV 被直接加入 Copy Bundle Resources -> Bundle 根目录
+    /// 覆盖三种打包方式：①`dict/` folder reference -> `dict/base_dict.tsv`（**当前布局**）
+    /// ②旧布局 `Resources/dict/`（仅兼容保留）③TSV 直接进 Copy Bundle Resources -> 根目录。
     ///
     /// - Returns: 候选 URL 数组（按优先级）。
     private static func candidateURLs() -> [URL] {
@@ -491,85 +520,6 @@ public final class PinyinDictionary {
             if character.isLetter || character.isNumber {
                 result.append(character)
             }
-        }
-        return result
-    }
-
-    // MARK: - 内置兜底词表
-
-    /// 随包词库缺失时使用的极小词表（50 条），保证键盘不至于完全不可用。
-    ///
-    /// 采用"空格分隔"的紧凑写法（而非词库的 TAB 分隔），解析时按空白切分，
-    /// 每行格式：`拼音 词 词频 flags`。这样内联字符串不会在源码里引入制表符
-    /// （编码规范要求源文件不含 TAB）。
-    /// - Returns: 词条数组。
-    private static func builtinSeedEntries() -> [DictionaryEntry] {
-        let seed = """
-        wo 我 900000 core
-        ni 你 850000 core
-        de 的 830000 core
-        le 了 800000 core
-        shi 是 780000 core
-        bu 不 700000 core
-        zai 在 690000 core
-        you 有 620000 core
-        he 和 600000 core
-        ren 人 580000 core
-        zhe 这 560000 core
-        na 那 540000 core
-        hao 好 520000 core
-        ma 吗 500000 core
-        ba 吧 480000 core
-        a 啊 460000 core
-        women 我们 300000 core
-        nimen 你们 180000 core
-        tamen 他们 160000 core
-        zhongguo 中国 129470 core
-        keyi 可以 70958 core
-        shenme 什么 59317 core
-        zenme 怎么 27339 core
-        yiqi 一起 15976 core
-        pengyou 朋友 9200 core
-        mingtian 明天 3264 core
-        xiexie 谢谢 5000 chat,bless
-        bukeqi 不客气 4200 chat,bless
-        duibuqi 对不起 3800 chat
-        meiguanxi 没关系 3600 chat
-        zaijian 再见 3400 chat
-        wanan 晚安 3200 chat,bless
-        zaoshanghao 早上好 3000 chat,bless
-        haode 好的 6500 chat
-        shoudao 收到 4000 chat
-        haha 哈哈 6800 chat
-        hahaha 哈哈哈 5000 chat
-        jiayou 加油 4100 chat,bless
-        xinku 辛苦 2800 chat
-        shengrikuaile 生日快乐 2600 chat,bless
-        xiangni 想你 2700 chat
-        xihuan 喜欢 5600 chat
-        ai 爱 9000 core
-        shuijiao 睡觉 3000 chat
-        chifan 吃饭 3200 chat
-        gongzuo 工作 5000 chat
-        xuexiao 学校 4200 core
-        shouji 手机 4789 core
-        dianhua 电话 3600 core
-        weixin 微信 4400 chat
-        """
-
-        var result: [DictionaryEntry] = []
-        for rawLine in seed.split(separator: "\n", omittingEmptySubsequences: true) {
-            let fields = rawLine.split(separator: " ", omittingEmptySubsequences: true)
-            guard fields.count >= 3 else { continue }
-            let pinyin = Self.normalize(String(fields[0]))
-            let word = String(fields[1])
-            let frequency = Int(fields[2]) ?? 0
-            let flags = fields.count >= 4 ? String(fields[3]) : ""
-            guard !pinyin.isEmpty, !word.isEmpty else { continue }
-            result.append(DictionaryEntry(pinyin: pinyin,
-                                          text: word,
-                                          frequency: frequency,
-                                          flags: flags))
         }
         return result
     }

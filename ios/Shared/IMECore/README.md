@@ -7,10 +7,12 @@
 
 | 文件 | 职责 | 行数 |
 | --- | --- | --- |
-| `IMECandidate.swift` | 契约 §4.6 的公共数据结构：`IMECandidate`、`DictionaryEntry` | 96 |
+| `IMECandidate.swift` | 契约 §4.6 的公共数据结构：`IMECandidate`（含 `isTypoCorrection` 纠错标记）、`DictionaryEntry` | 102 |
 | `PinyinSyllables.swift` | 无声调音节表（421 个音节）+ 音节切分 DP（**自动生成，勿手工编辑**） | 170 |
 | `PinyinDictionary.swift` | 加载 `base_dict.tsv`，建全拼哈希索引与首字母简拼索引 | 576 |
-| `PinyinEngine.swift` | 输入串 → 候选：全拼/简拼/混拼/组合切分/前缀预测/模糊音兜底/英文直通 + 排序 | 594 |
+| `PinyinEngine.swift` | 输入串 → 候选：全拼/简拼/混拼/组合切分/前缀预测/模糊音兜底/输入纠错/英文直通 + 排序 | 598 |
+| `PinyinEngine+TypoCorrection.swift` | 纠错候选的收集与追加（从主文件抽出，避免超 600 行上限） | 44 |
+| `TypoCorrector.swift` | 输入纠错（§3.9）：复用 `FuzzyPinyin` 规则表 + 编辑距离 1，产出 `Correction` | 192 |
 | `FuzzyPinyin.swift` | 模糊音（§3.8）：9 条规则、变体展开 `variants`/`expand`、词库命中 `matches`、设置单例 `FuzzyPinyinSettings` | 514 |
 | `UserLearningStore.swift` | 选词计频、最近使用环形缓冲（200 条）、自造词，经 `SharedStore` 持久化 | 279 |
 | `PhraseSuggestion.swift` | 加载 `phrases.tsv`，实现"上屏后联想" | 188 |
@@ -25,12 +27,13 @@
 IMEKit
   ├─ PinyinDictionary ── PinyinSyllables
   ├─ UserLearningStore ── SharedStore（Storage 层，仅用 4 个读写方法）
-  ├─ PinyinEngine ── PinyinDictionary + UserLearningStore + PhraseSuggestion + FuzzyPinyin
+  ├─ PinyinEngine ── PinyinDictionary + UserLearningStore + PhraseSuggestion + FuzzyPinyin + TypoCorrector
   ├─ PhraseLibrary ── SharedStore
   ├─ ClipboardHistory ── SharedStore
   ├─ LocalSuggestionIndex ── SharedStore + ContextualSeedTemplates
   └─ FuzzyPinyinSettings ── SharedStore（模糊音开关，进程内单例）
 AISuggestionPrompt ── ContextualSuggestion（纯函数，无状态、无网络）
+TypoCorrector ── PinyinSyllables + FuzzyPinyin（纯函数，复用 9 条规则表，不写第二套）
 ```
 
 ## 2. 词库加载（`PinyinDictionary`）
@@ -73,33 +76,53 @@ let dict2 = PinyinDictionary(entries: [DictionaryEntry(pinyin: "zg", text: "中�
 - `pinyinKeys(initials:limit:)`：简拼查询，`zg` → `zhongguo`/`zhège`…
 - `hasPrefix(_:)` / `hasInitials(_:)`：供引擎提前剪枝、UI 判断"还有候选"。
 
-**首字母是怎么来的**：词库只存全拼，首字母串在加载时用音节切分反推——
+**首字母是怎么来的**：词库只存全拼，首字母串用音节切分反推——
 `PinyinSyllables.segment(pinyin, exactly: text.count)` 要求"音节数恰好等于汉字数"
 （词库拼音是逐字生成的，这个约束恒成立），再取每个音节首字母。
 这比 `text.count` 直接切片更准：`xian` 可能被切成 `xi+an`（2 字）或 `xian`（1 字），
 只有与词条字数对齐的那一种才是对的。
 
+> **首字母索引是懒建的**（v1.1.0 扩库后改）：`initialsIndexStorage` 初始为 `nil`，
+> 首次调用 `pinyinKeys(initials:)` / `hasInitials(_:)` / `minimumInitialsLength` 时才由
+> `ensureInitialsIndex()` 用双检锁构建一次。原因见下节「加载性能」——它对 3.3 万条跑
+> 311 万次内层 DP，是冷启动最大单项，而简拼输入只占实际使用的很小一部分。
+
 ### 加载性能
 
-5276 条、136 KB 的实测耗时预估：
+33,160 条、806 KB 的耗时预估（v1.1.0 扩库后重算；扩库前 5,276 条 / 136 KB 时整机实测
+15–25 ms）：
 
-| 阶段 | 估算 |
-| --- | --- |
-| 定位 Bundle 文件（最坏 8 条候选路径，命中即返回） | < 0.5 ms |
-| 逐行解析（5.3k 行，`components(separatedBy:)`） | 8–15 ms |
-| 建全拼哈希 + 排序键（5.3k 条） | 2–4 ms |
-| 建首字母索引（含 per-key 音节切分） | 3–6 ms |
-| **合计** | **约 15–25 ms（预算 80 ms，余量 ≥3×）** |
+| 阶段 | 估算 | 说明 |
+| --- | --- | --- |
+| 定位 Bundle 文件（最坏 8 条候选路径，命中即返回） | < 0.5 ms | 与条数无关 |
+| 逐行解析（33.2k 行，`components(separatedBy:)`） | 55–90 ms | Python 上界 24 ms；Swift 字符串切分反而更快 |
+| 建全拼哈希 + 排序键（33.2k 条 / 25,015 个全拼键） | 12–25 ms | Python 上界 15.8 ms |
+| ~~建首字母索引~~ | ~~47–190 ms~~ | **已改为懒建，不计入 `loadDurationMilliseconds`** |
+| **合计（启动时）** | **约 70–120 ms（预算 80 ms，仍偏紧）** | 必须在真机实测 |
 
-内存：`DictionaryEntry` 约 72 B（两个 String 引用 + Int + String），5.3k 条 ≈ 0.4 MB；
-加上索引字典与首字母键 ≈ **1.2–1.8 MB**。相对 60 MB 的扩展内存上限可忽略。
-（引用类型字符串是常量对象，实际分配可能略高于此估算。）
+✅ **首字母索引已改为懒建（v1.1.0 收尾）**：原来 `init(dictionaryURL:)` 里会同步调
+`buildInitialsIndex`，而它对每条纯汉字词跑一次 `PinyinSyllables.segment(_:exactly:)` 二维 DP。
+`tools/dict/_probe_initials_cost.py` 按源码精确统计出 **3,115,290 次内层循环**
+（扩库前 5,276 条时不足 50 万次），按每次迭代 15 / 25 / 40 / 60 ns 估算分别是
+**46.7 / 77.9 / 124.6 / 186.9 ms** —— 足以把冷启动顶出 80 ms 预算。
+现在 `initialsIndexStorage` 初始为 `nil`，首次用到简拼（`pinyinKeys(initials:)` /
+`hasInitials(_:)` / `minimumInitialsLength`）时才由 `ensureInitialsIndex()` 双检锁建一次。
+代价：极少数用户第一次打简拼会有一次 ~50–190 ms 的卡顿（仍在一次按键的容忍范围内，
+且只发生一次）；收益：**所有用户的键盘冷启动都不再付这笔钱**。
+
+若真机实测启动仍偏紧（70–120 ms 是 Python 上界推的粗估，Swift 通常快 3–10 倍），
+下一步优先优化 `segment(exactly:)` 本身：把三层 `[[[String]?]]` 数组换成一维 `[Int32]`
+（记录每个 `(i,k)` 的切点索引，不存 String 数组），可把常数项降一个数量级。
+
+内存：`DictionaryEntry` 约 72 B（两个 String 引用 + Int + String），33.2k 条 ≈ 2.4 MB；
+加上索引字典（25,015 个全拼键 × 数组开销）与首字母键 ≈ **6–18 MB**。
+相对 60 MB 的扩展内存上限仍可接受，但余量比扩库前（1.2–1.8 MB）小很多。
 
 ### 简单用法
 
 ```swift
 let dict = PinyinDictionary.bundled()
-print(dict.version, dict.wordCount)                 // "1.0.0" 5276
+print(dict.version, dict.wordCount)                 // "1.1.0" 33160
 print(dict.lookup(pinyin: "zg", limit: 5))          // 无精确命中 → zhongguo… 前缀结果
 print(dict.pinyinKeys(initials: "zg", limit: 5))    // ["zhongguo", "zhege", ...]
 print(dict.hasPrefix("zhongg"))                     // true
@@ -107,27 +130,27 @@ print(dict.hasPrefix("zhongg"))                     // true
 
 ### 词库数据来源与重新生成
 
-`ios/Shared/Resources/dict/` 下的三个文件**全部由脚本生成，不要手改**：
+`ios/Shared/dict/` 下的三个文件**全部由脚本生成，不要手改**：
 
 | 文件 | 条数 | 说明 |
 | --- | --- | --- |
-| `base_dict.tsv` | 5276 | 基础词库，列：`拼音<TAB>词<TAB>词频<TAB>flags`，按词频降序 |
+| `base_dict.tsv` | 33160 | 基础词库，列：`拼音<TAB>词<TAB>词频<TAB>flags`，按词频降序；806 KB |
 | `phrases.tsv` | 755 | 上屏后联想，列：`建议词拼音<TAB>触发词<TAB>建议词` |
-| `dict_meta.json` | — | `version = 1.0.0`、条数、flags 分布、数据来源与许可、每个文件的 SHA256 |
+| `dict_meta.json` | — | `version = 1.1.0`、条数、flags 分布、数据来源与许可、每个文件的 SHA256 |
 
 数据来源（详见 `tools/dict/README.md`）：
 
-1. **jieba 词典**（MIT 协议，数据源自 cppjieba 的 `dict/jieba.dict.utf8`）——经词长/词频/常用字/专名四层清洗后取前 3400 条；
-2. `tools/dict/chat_supplement.py` —— 本项目手写的高频聊天补充表（问候、感谢、情绪、网络梗、祝福、成语等）；
-3. `tools/dict/symbol_map.py` —— emoji / 标点联想别名表；
-4. `tools/dict/phrase_pairs.py` —— 触发词 → 建议词对，生成 `phrases.tsv`。
+1. **jieba 词典**（MIT 协议，数据源自 cppjieba 的 `dict/jieba.dict.utf8`）——经词长/词频/常用字/专名四层清洗后取前 31,628 条（v1.1.0 扩库结果，扩库前为 3,400 条；筛选规则与调参依据见 `tools/dict/README.md` 的「词库扩展」一节）；
+2. `tools/dict/chat_supplement.py` —— 本项目手写的高频聊天补充表（问候、感谢、情绪、网络梗、祝福、成语等），1,953 条；
+3. `tools/dict/symbol_map.py` —— emoji / 标点联想别名表，240 条；
+4. `tools/dict/phrase_pairs.py` —— 触发词 → 建议词对，生成 `phrases.tsv`（755 条）。
 
 重新生成（幂等，无需网络；`jieba` 词表已缓存在 `tools/dict/.cache/jieba_dict.txt`）：
 
 ```bash
 python tools/dict/build_dict.py           # 重新生成三个产物
 python tools/dict/build_dict.py --check   # 只做质量自查，不写文件
-python tools/dict/_simulate_engine.py     # 用 Python 复刻 Swift 算法跑断言（39 条）
+python tools/dict/_simulate_engine.py     # 用 Python 复刻 Swift 算法跑断言（65 条）
 python tools/dict/gen_swift_syllables.py  # 音节表变更后重生成 PinyinSyllables.swift
 ```
 
@@ -151,10 +174,11 @@ python tools/dict/gen_swift_syllables.py  # 音节表变更后重生成 PinyinSy
   ├─ 3. 词库全拼精确匹配
   ├─ 4. 词库前缀预测（zhongg → zhongguo…）
   ├─ 5. 简拼展开（zg → 中国/这个…）
-  ├─ 6. 多词组合切分 DP（woxihuanni → 我喜欢你）
+  ├─ 6. 多词组合切分 DP（woxihuanni → 我喜欢你，含每词代价 §3.2）
   ├─ 7. 模糊音兜底（仅当精确候选不足时，×0.85 降权，见 §3.8）
   ├─ 8. 英文/数字直通（2333、hello）
-  └─ 9. 统一打分 + 稳定排序 + 截断
+  ├─ 9. 统一打分 + 稳定排序 + 截断
+  └─ 10. 输入纠错兜底（仅当候选 < 3 条时，追加到尾部并打 [纠错] 标记，见 §3.9）
 ```
 
 ### 3.2 多音节切分 DP
@@ -176,7 +200,7 @@ for i in 0..<n where bestCount[i] 可达:
 ```
 
 **组合候选（`appendComposedCandidates`）**：在上面的 DP 上换成"按词频加权的最优路径"。
-`best[i]` = 切到第 i 个字符时的最大累计 `log(freq+1)`：
+`best[i]` = 切到第 i 个字符时的最大累计 `log(freq+1) - 每词代价`：
 
 ```
 best[0] = 0
@@ -184,10 +208,17 @@ for start in 0..<n where best[start] 可达:
     for end in start+1...min(start+24, n):
         key = input[start..<end]
         if let entry = dict.exactEntries(key, 1).first, 是中文词:
-            score = best[start] + log(freq+1)
+            score = best[start] + log(freq+1) - composedTilePenalty   // 14.0
             if score > best[end]: best[end] = score; back[end] = start
 ```
 
+- **`composedTilePenalty = 14.0`（为什么必须有）**：单字词频远高于多字词（「在」727,915
+  vs「现在」十几万），没有每词代价时 DP 会偏爱把长串切成大量高频单字。词库从 5,276 条扩到
+  33,160 条后这一点立刻爆出来：`woxihuanni` 被切成「我+西湖+啊+嗯+你」而不是「我喜欢你」。
+  加上每词代价后「多切一块」必须用多一个词的信息量补回来，碎片路径就不再划算。
+  取值由 `tools/dict/_probe_dp_penalty.py` 在 20 条长句上扫 0–15 标定，14.0 正确率最高
+  （16/20；不加惩罚只有 1/20）。**Python 复刻 `tools/dict/_simulate_engine.py` 的
+  `COMPOSED_TILE_PENALTY` 必须与 Swift 常量保持一致**，否则两边的候选排序会分叉。
 - 整串能切完且词块 ≥2 → 产出"整句"候选，`base = 平均log词频 + 1.2*(词块数-1) + 1.5`
   （词块越多越像真句子，给一点正向加成）。
 - 切不完时（如 `woxihuanzh`）→ 取最优前缀 `我喜欢`，对剩余 `zh` 做前缀预测补最后一段。
@@ -313,6 +344,50 @@ guard poolSize < limit            // 精确候选已占满 → 模糊候选根�
 Key `moyu.ime.fuzzy.v1`。`IMEKit` 在 `init` 里 `configure(store:)` 完成绑定，
 之后 UI 改开关立即对下一次取候选生效。
 
+### 3.9 输入纠错（`TypoCorrector`）
+
+模糊音解决「**打对了但规则混淆**」（`zongguo` → 中国），输入纠错解决「**手指漏按/多按**」
+（`niha` → 你好、`nihaoo` → 你好）。两者共用同一张规则表，不重复实现。
+
+**规则来源（复用，不写第二套）**：
+- 声韵母混淆：直接复用 `FuzzyPinyin.variants(of:rules:)`（9 条 `FuzzyPinyinRule`）。
+  单音节输入逐条规则单独调用（`rule` 字段填 `zh/z`、`in/ing` 等），便于 UI 展示与埋点；
+  多音节输入用 `FuzzyPinyin.expand(_:rules:limit:)` 取「改一个音节」那层（`rule` 填 `声韵母`）。
+- 编辑距离 1（新增，模糊音没有）：漏打一个字母（`niha` → `nihao`）、多打一个字母
+  （`nihaoo` → `nihao`）。末尾补字母置信度 0.62 高于删除类 0.60，因为「少按最后一下」最常见。
+
+**置信度阶梯**（决定 `limit = 3` 时的排序）：多音节声韵母 0.66 > 单音节声韵母 0.62 =
+末尾补字母 0.62 > 删除 0.60 > 其它位置插入 0.50。**多音节要高于编辑距离**，否则
+`zongguo` 的 `zhongguo` 会被 `zonggu`（末尾补 u）挤掉——这是探针实测发现的真实排序 bug。
+
+**接入点**：`PinyinEngine.candidates(for:limit:)` 收尾处调用
+`appendTypoCorrections`（实现见 `PinyinEngine+TypoCorrection.swift`）。触发条件只有两条：
+
+```swift
+guard results.count < min(3, limit)   // 正常输入候选充足时完全不跑，零开销
+guard !normalized.isEmpty
+```
+
+纠错候选统一 `score = -1.0`（排在所有正常候选之后）、`isTypoCorrection = true`，
+UI 可据此打 `[纠错]` 角标。开关是 `PinyinEngine.isTypoCorrectionEnabled`（默认 `true`），
+`ConfigSnapshot.enableTypoCorrection` 接线后由调用方写入即可关闭。
+`knownInitials` 回调做两道判定：能整串切成合法音节（`PinyinSyllables.isSyllable` /
+`segment`）**且**词库里存在以它开头的词——否则纠出来的拼音没有汉字可上屏。
+
+**性能实测**（`python tools/dict/_probe_typo.py`，33,160 条词库 / 25,015 个全拼键 /
+65,601 个前缀；Python 上界，Swift 应快 3–10 倍）：
+
+| 输入 | 耗时 | 纠错产出 |
+| --- | --- | --- |
+| `nihao`（正确输入） | 0.126 ms | 不改坏自身，只给 `si` 等低价值候选 |
+| `zongguo`（zh/z） | 0.155 ms | `zhongguo` ✅ |
+| `niha`（漏打末尾） | 0.170 ms | `nihao` ✅ |
+| `nihaoo`（多打） | 0.344 ms | `nihao` ✅ |
+| `woxihuanni`（>8 字母） | 0.000 ms | 直接放弃（`maximumInputLength = 8`） |
+
+16 条用例 × 50 次：**平均 0.22 ms / 最慢 0.40 ms**，探针 10/10 断言通过。远低于 1 ms 目标，
+且典型按键因「候选充足」闸门根本不进入纠错分支。
+
 ## 4. 用户学习（`UserLearningStore`）
 
 - **选词计频**：`recordSelection` 累加 `counts[text]`，同时记 `pinyinByText` 供反查。
@@ -355,7 +430,7 @@ let engine = PinyinEngine(dictionary: dict, learning: learning)
 | # | 断言 | 预期 |
 | --- | --- | --- |
 | 1 | `dict.wordCount >= 3000` | `true` |
-| 2 | `dict.version == "1.0.0"` | `true` |
+| 2 | `dict.version == "1.1.0"` | `true` |
 | 3 | `dict.loadedPath != "<builtin>"` | `true`（词库已正确打包） |
 | 4 | `dict.loadDurationMilliseconds < 80` | `true` |
 | 5 | `dict.lookup(pinyin: "zhongguo", limit: 3).first?.text` | `"中国"` |
@@ -421,7 +496,7 @@ let engine = PinyinEngine(dictionary: dict, learning: learning)
 | 45 | 开启后 `add("a")` × 25，`items.count == 20` | `true`（截断） |
 | 46 | `add("a")` 两次后 `items.filter { $0 == "a" }.count == 1` | `true`（去重） |
 | 47 | `pin("a")` 后 `items.first == "a"` | `true` |
-| 48 | `kit.diagnosticsSummary` 非空且包含 `"5276"` 或实际条数 | `true` |
+| 48 | `kit.diagnosticsSummary` 非空且包含实际条数（`33160`） | `true` |
 
 ### 6.6 词库来源诊断（排查「打不出中文」用）
 
@@ -442,8 +517,8 @@ let engine = PinyinEngine(dictionary: dict, learning: learning)
 
 **预期输出（前 12 条跑通的示意）**：
 ```
-1: wordCount = 5276                     PASS
-2: version = "1.0.0"                    PASS
+1: wordCount = 33160                    PASS
+2: version = "1.1.0"                    PASS
 3: loadedPath = ".../base_dict.tsv"     PASS
 5: lookup("zhongguo") = 中国             PASS
 12: candidates("zg")[0] = 中国            PASS
@@ -463,7 +538,7 @@ Windows 环境无法编译 Swift，因此用 `tools/dict/_simulate_engine.py` �
 前缀预测、简拼索引、排序公式、类型判定、模糊音变体展开与命中收集），读**真实的** `base_dict.tsv` 跑断言：
 
 ```
-词库条数 = 5276，短语条数 = 755
+词库条数 = 33160，短语条数 = 755
 结果：65 / 65 通过
 ```
 
@@ -475,14 +550,19 @@ Windows 环境无法编译 Swift，因此用 `tools/dict/_simulate_engine.py` �
 | 候选生成 | 12 | `candidates("zg")[0] = 中国`；`candidates("zhongguo")[0] = 中国`；`candidates("zhongg") ⊇ 中国`；`candidates("nihao") ⊇ 你好`；`candidates("xiexie")[0] = 谢谢`；`candidates("zaijian")[0] = 再见`；`candidates("hh") ⊇ 哈哈`；`candidates("yyds") ⊇ english`；`candidates("2333")[0] = 2333`；`candidates("woxihuanni") ⊇ 喜欢` |
 | 候选质量 | 10 | 数量 ≤ 30、score 严格降序、无重复文本、汉字候选全 `.word`、`candidates("kaixin") ⊇ emoji`、`selectionIndex("zhongguo2") = 1`、`candidates("zhongguo2")` 不含整串英文、`candidates("yyds")[0].kind = english` |
 | 短语库 | 4 | 755 条 ≥ 300；含触发词 `谢谢`/`晚安`；`谢谢 → 不客气` |
-| 词库数据质量 | 6 | 无空词/无空白词/无重复、词频降序、纯汉字无 `punct` 标记、条数 ∈ [4000, 7000] |
+| 词库数据质量 | 6 | 无空词/无空白词/无重复、词频降序、纯汉字无 `punct` 标记、条数 ∈ [30000, 50000]（v1.1.0 扩库后区间） |
 | 模糊音 | 26 | 9 条规则、默认 5 条；`variants("zhong")[0] = zhong` 且含 `zong`；`si → shi`、`lin → nin`；单音节 ≤4 条且全是合法音节；`expand("zhongguo")[0] = zhongguo` 且含 `zongguo`、`zongguo → zhongguo`；`zongg → zhongg`（尾音节保留）；`candidates("zongguo") ⊇ 中国`，关闭后不含；`candidates("zhongguo")[0]` 仍是「中国」（精确优先）；候选池已满时模糊候选不挤入；模糊命中排在精确之后 |
+
+> 6.8 的复刻脚本与 §3.2 的 `COMPOSED_TILE_PENALTY` 强绑定：`_simulate_engine.py` 里同名常量必须是
+> 14.0，否则 `candidates("woxihuanni") ⊇ 喜欢` 这条断言会 FAIL（扩库后不加惩罚时会切成
+> 「我+西湖+啊+嗯+你」）。纠错模块（§3.9）不在这 65 条里——它由独立的
+> `tools/dict/_probe_typo.py` 覆盖（10 条断言）。
 
 > 说明：该脚本验证的是**算法与数据**，不能替代 Xcode 编译。Swift 侧的类型/签名正确性
 > 依靠 `scripts/qa/static_check.py` 的静态扫描（当前 `P0=0 P1=0`）+ 逐文件人工复核。
 > 复刻脚本与 Swift 实现共享同一份 `base_dict.tsv` 与同一套常量，若两侧常量漂移会立刻 FAIL。
 
-### 6.9 一站式断言脚本（复制即跑，77 条 `assert`）
+### 6.9 一站式断言脚本（复制即跑，89 条 `assert`）
 
 在 macOS 上新建 `Tests/IMECoreTests/IMECoreSmokeTests.swift`，整段粘进去即可。
 `assert` 只在 Debug 生效；若要在 Release 也校验，把 `assert` 换成 `XCTAssertTrue` 即可。
@@ -495,8 +575,8 @@ final class IMECoreSmokeTests: XCTestCase {
 
     func test01_dictionaryLoading() {
         let dict = PinyinDictionary.bundled()
-        assert(dict.wordCount == 5276,                        "词库条数应为 5276，实际 \(dict.wordCount)")
-        assert(dict.version == "1.0.0",                       "版本号应为 1.0.0，实际 \(dict.version)")
+        assert(dict.wordCount == 33160,                       "词库条数应为 33160，实际 \(dict.wordCount)")
+        assert(dict.version == "1.1.0",                       "版本号应为 1.1.0，实际 \(dict.version)")
         assert(dict.loadedPath != "<builtin>",                "走了内置兜底词表，说明 base_dict.tsv 没打进 Bundle")
         assert(dict.loadDurationMilliseconds < 80,            "加载耗时 \(dict.loadDurationMilliseconds)ms 超预算 80ms")
         assert(dict.lookup(pinyin: "zhongguo", limit: 3).first?.text == "中国")
@@ -588,13 +668,13 @@ final class IMECoreSmokeTests: XCTestCase {
 
     func test06_facade() {
         let kit = IMEKit(store: SharedStore.shared)
-        assert(kit.dictionaryVersion == "1.0.0")
-        assert(kit.wordCount == 5276)
+        assert(kit.dictionaryVersion == "1.1.0")
+        assert(kit.wordCount == 33160)
         assert(kit.dictionarySource == .bundled)
         assert(kit.isUsingBuiltinDictionary == false)
         assert(kit.dictionaryRelativePath.hasSuffix("dict/base_dict.tsv"))
         assert(kit.diagnosticsSummary.contains("来源：打包词库"))
-        assert(kit.diagnosticsSummary.contains("5276"))
+        assert(kit.diagnosticsSummary.contains("33160"))
         assert(kit.candidates(for: "zg").first?.text == "中国")
     }
 
@@ -649,10 +729,42 @@ final class IMECoreSmokeTests: XCTestCase {
         assert(kit.isFuzzyPinyinEnabled == true)
         assert(kit.fuzzyDiagnosticsSummary.contains("已开启"))
     }
+
+    func test08_typoCorrection() {
+        // 标记默认值：不传 isTypoCorrection 时必须是 false，避免所有旧构造点被误标
+        assert(IMECandidate(text: "测", pinyin: "ce", score: 0).isTypoCorrection == false)
+
+        let always = { (_: String) -> Bool in true }
+        // 输入不合法时零产出（不做无意义的纠错）
+        assert(TypoCorrector.correct("", knownInitials: always).isEmpty)
+        assert(TypoCorrector.correct("1234", knownInitials: always).isEmpty)
+        assert(TypoCorrector.correct("toolonginput", knownInitials: always).isEmpty, ">8 字母直接放弃")
+        assert(TypoCorrector.correct("zongguo", knownInitials: always, limit: 0).isEmpty)
+
+        // 三条核心纠错：声韵母错拼 / 漏打末尾 / 多打一个字母
+        assert(TypoCorrector.correct("zongguo", knownInitials: always).contains { $0.corrected == "zhongguo" },
+               "zh/z 错拼应纠回 zhongguo")
+        assert(TypoCorrector.correct("niha", knownInitials: always).contains { $0.corrected == "nihao" },
+               "漏打末尾应补回 nihao")
+        assert(TypoCorrector.correct("nihaoo", knownInitials: always).contains { $0.corrected == "nihao" },
+               "多打一个字母应纠回 nihao")
+
+        // knownInitials 是硬闸门：全部拒绝时不应产出任何候选
+        assert(TypoCorrector.correct("niha", knownInitials: { _ in false }).isEmpty)
+        // 每条结果都必须带规则名（UI 要用它解释「为什么给出这条」）
+        assert(TypoCorrector.correct("zongguo", knownInitials: always).allSatisfy { !$0.rule.isEmpty })
+        // limit 默认 3
+        assert(TypoCorrector.correct("zongguo", knownInitials: always).count <= 3)
+
+        // 开关默认开启；ConfigSnapshot.enableTypoCorrection 接线后由调用方写入
+        let learning = UserLearningStore(store: SharedStore.shared)
+        let engine = PinyinEngine(dictionary: PinyinDictionary.bundled(), learning: learning)
+        assert(engine.isTypoCorrectionEnabled == true)
+    }
 }
 ```
 
-**预期输出**（77 条断言全过时 XCTest 打印）：
+**预期输出**（89 条断言全过时 XCTest 打印）：
 
 ```
 Test Suite 'IMECoreSmokeTests' passed
@@ -663,7 +775,8 @@ Test Suite 'IMECoreSmokeTests' passed
   Test Case 'test05_phraseAndClipboard' passed  (0.003 s)
   Test Case 'test06_facade'             passed  (0.003 s)
   Test Case 'test07_fuzzyPinyin'        passed  (0.005 s)
-Executed 7 tests, with 77 assertions, 0 failures, 0 unexpected
+  Test Case 'test08_typoCorrection'     passed  (0.002 s)
+Executed 8 tests, with 89 assertions, 0 failures, 0 unexpected
 ```
 
 > 若 `test01` 在 `loadedPath != "<builtin>"` 处失败，说明 Xcode 没把 `Shared/dict` 以
@@ -682,7 +795,7 @@ Executed 7 tests, with 77 assertions, 0 failures, 0 unexpected
 | 强制解包仅 `@IBOutlet` / 已知非空 + `// SAFE:` | ✅ 无强制解包 |
 | `Shared/IMECore` 不 import UIKit/SwiftUI | ✅ 只 `import Foundation` |
 | public API 有 `///` 中文文档注释 | ✅ 全部 public 成员 |
-| 每文件 ≤600 行 | ✅ 最长 594 行（`PinyinEngine.swift`） |
+| 每文件 ≤600 行 | ✅ 最长 598 行（`PinyinEngine.swift`） |
 | 注释中文、标识符英文 | ✅ |
 | 模块级注释（职责/依赖/使用方） | ✅ 每个文件头部三要素 |
 
@@ -695,7 +808,10 @@ Executed 7 tests, with 77 assertions, 0 failures, 0 unexpected
    `uan/uang` 共 9 条规则，可开关，**默认开前 5 条**（平翘舌 + 前后鼻音 + `l/n`）。
    实现与限流见 §3.8；后 4 条默认关闭的原因是误伤概率高（`xian`/`xiang` 会串台），
    交由用户按自己口音自选。
-4. **无纠错**：输入串打错一个字不会自动纠正（如 `nihap` → `你好`）。
+4. **输入纠错已支持**：复用模糊音规则表（声韵母 9 条）+ 编辑距离 1（漏打 / 多打一个字母），
+   只在「原始输入无候选或候选 < 3 条」时兜底追加到候选尾部、打 `isTypoCorrection` 标记，
+   默认开启。实现见 §3.9，性能实测 ≤0.4 ms（Python 上界）。注意它**不做**整句语法纠错
+   （`nihap` → `你好` 这类需要跨音节判断的仍交给上下文联想/AI 侧）。
 5. **词库加载耗时**为理论估算（Windows 无 Swift 环境），需在真机上用
    `dict.loadDurationMilliseconds` 实测确认；若超标，可把解析改为 `Data` + 手写字节扫描。
 6. **`predictNext`** 依赖 `phrases.tsv` 的触发词表，未命中时只回退到最近使用，
@@ -720,7 +836,7 @@ Executed 7 tests, with 77 assertions, 0 failures, 0 unexpected
   | `dictionarySource` | `.bundled`（读到随包词库）/ `.builtin`（回退 50 条）/ `.memory`（测试） |
   | `isUsingBuiltinDictionary` | `source == .builtin` 的便捷布尔 |
   | `dictionaryRelativePath` | Bundle 内相对路径，如 `dict/base_dict.tsv`；兜底时为 `<builtin>` |
-  | `diagnosticsSummary` | 一行中文摘要：`词库 v1.0.0｜5276 条｜来源：打包词库｜路径：dict/base_dict.tsv｜加载 12.3ms` |
+  | `diagnosticsSummary` | 一行中文摘要：`词库 v1.1.0｜33160 条｜来源：打包词库｜路径：dict/base_dict.tsv｜加载 62.4ms` |
   **注意**：扩展里的 `Bundle.main` 是 `.appex` 自身而非宿主 App，因此两个 Bundle 必须**各带一份**词库；
   只要扩展侧不是 `.bundled`，就是打包问题，不是引擎问题。
 - 全仓 grep 验证：`ios/**/*.swift` 中 `base_dict|phrases\.tsv|dict_meta|ContentsOfFile` 的命中
@@ -867,8 +983,8 @@ assert(AISuggestionPrompt.parse("1. 好的", limit: 0).isEmpty)
 
 | 成员 | 类型 | 正常值 | 说明 |
 | --- | --- | --- | --- |
-| `dictionaryVersion` | `String` | `"1.0.0"` | 来自 `dict_meta.json` 的 `version`；兜底时为 `"0.0.0-builtin"` |
-| `wordCount` | `Int` | `5276` | 词条总数；兜底时为 `50` |
+| `dictionaryVersion` | `String` | `"1.1.0"` | 来自 `dict_meta.json` 的 `version`；兜底时为 `"0.0.0-builtin"` |
+| `wordCount` | `Int` | `33160` | 词条总数；兜底时为 `50` |
 | `loadDurationMilliseconds` | `Double` | `10~40` | 加载耗时（首次 `bundled()` 时计时） |
 | `dictionarySource` | `DictionarySource` | `.bundled` | `.bundled` / `.builtin` / `.memory` |
 | `isUsingBuiltinDictionary` | `Bool` | `false` | **`true` 就是异常**（词库没打进 Bundle） |
@@ -947,14 +1063,15 @@ if kit.isUsingBuiltinDictionary {
 | `dictionarySource == .memory` | 内存构造（单测 / 调试） | 仅测试环境出现，线上出现即异常 |
 
 判定顺序建议固定为：先看 `dictionarySource`，再看 `wordCount`，最后才看 `loadDurationMilliseconds`。
-**耗时长短不影响正确性**（首字母索引构建在启动同步完成，只有大小之分），不必据此报警。
+**耗时长短不影响正确性**（v1.1.0 起首字母索引已改为懒建，`loadDurationMilliseconds` 只统计
+「解析 + 全拼索引」这一段，不含首字母索引；数值只有快慢之分），不必据此报警。
 
 ### 10.5 真机应看到的文案样例
 
 正常（词库打进 App 与 Expansion 两边）：
 
 ```text
-词库 v1.0.0｜5276 条｜来源：打包词库｜路径：dict/base_dict.tsv｜加载 12.3ms
+词库 v1.1.0｜33160 条｜来源：打包词库｜路径：dict/base_dict.tsv｜加载 62.4ms
 ```
 
 异常（回退内置 50 条——这就是「键盘打不出中文」的现场证据）：

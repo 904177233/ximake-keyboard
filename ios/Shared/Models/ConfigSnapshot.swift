@@ -42,11 +42,16 @@ public struct ConfigSnapshot: Codable, Equatable, Sendable {
     /// 默认**生图**服务商的 id（v2 新增）。与 `defaultProviderID` 相互独立：
     /// 对话与生图可以是两家不同的服务商（例如 DeepSeek 对话 + 即梦生图）。
     public var imageProviderID: String?
+    /// 是否启用「AI 联想词」胶囊（候选栏尾部独立区域的上下文猜测词），默认开启。
+    public var enableAISuggestion: Bool
+    /// 是否启用输入纠错（原始输入无候选/候选过少时按声韵母规则给出带 `[纠错]` 标记的候选），默认开启。
+    public var enableTypoCorrection: Bool
 
     /// 成员初始化。
     ///
     /// 前 8 个参数与 docs/02 §4.3 的顺序一致（宿主 App 的 `AppConfigStore` 依赖该顺序），
     /// `imageProviderID` 作为第 9 个参数追加，默认 nil，因此老调用点无需改动。
+    /// `enableAISuggestion` / `enableTypoCorrection` 作为第 10、11 个参数追加，默认 true。
     public init(
         version: Int = ConfigSnapshot.currentVersion,
         providers: [AIProviderConfig] = [],
@@ -56,7 +61,9 @@ public struct ConfigSnapshot: Codable, Equatable, Sendable {
         enableClipboardHistory: Bool = false,
         enableLearning: Bool = true,
         imageSize: String = "1024x1024",
-        imageProviderID: String? = nil
+        imageProviderID: String? = nil,
+        enableAISuggestion: Bool = true,
+        enableTypoCorrection: Bool = true
     ) {
         self.version = version
         self.providers = providers
@@ -67,6 +74,8 @@ public struct ConfigSnapshot: Codable, Equatable, Sendable {
         self.enableLearning = enableLearning
         self.imageSize = imageSize
         self.imageProviderID = imageProviderID
+        self.enableAISuggestion = enableAISuggestion
+        self.enableTypoCorrection = enableTypoCorrection
     }
 
     // MARK: - 容错解码
@@ -74,6 +83,7 @@ public struct ConfigSnapshot: Codable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case version, providers, defaultProviderID, defaultTone, replyCount
         case enableClipboardHistory, enableLearning, imageSize, imageProviderID
+        case enableAISuggestion, enableTypoCorrection
     }
 
     /// 容错解码：任何字段缺失/类型不符都回退到默认值，保证老快照（v1）能直接读。
@@ -90,6 +100,8 @@ public struct ConfigSnapshot: Codable, Equatable, Sendable {
         self.imageSize = (try? container.decodeIfPresent(String.self, forKey: .imageSize)) ?? "1024x1024"
         // v1 快照没有这个字段 → nil，属于预期行为。
         self.imageProviderID = try? container.decodeIfPresent(String.self, forKey: .imageProviderID)
+        self.enableAISuggestion = (try? container.decodeIfPresent(Bool.self, forKey: .enableAISuggestion)) ?? true
+        self.enableTypoCorrection = (try? container.decodeIfPresent(Bool.self, forKey: .enableTypoCorrection)) ?? true
     }
 
     /// 显式编码（保证字段齐全、顺序稳定，便于排查）。
@@ -104,6 +116,8 @@ public struct ConfigSnapshot: Codable, Equatable, Sendable {
         try container.encode(enableLearning, forKey: .enableLearning)
         try container.encode(imageSize, forKey: .imageSize)
         try container.encodeIfPresent(imageProviderID, forKey: .imageProviderID)
+        try container.encode(enableAISuggestion, forKey: .enableAISuggestion)
+        try container.encode(enableTypoCorrection, forKey: .enableTypoCorrection)
     }
 
     // MARK: - 默认值工厂
@@ -127,7 +141,9 @@ public struct ConfigSnapshot: Codable, Equatable, Sendable {
             enableClipboardHistory: false,
             enableLearning: true,
             imageSize: "1024x1024",
-            imageProviderID: PresetProviders.defaultImagePreset?.id
+            imageProviderID: PresetProviders.defaultImagePreset?.id,
+            enableAISuggestion: true,
+            enableTypoCorrection: true
         )
     }
 
@@ -144,7 +160,9 @@ public struct ConfigSnapshot: Codable, Equatable, Sendable {
             enableClipboardHistory: false,
             enableLearning: true,
             imageSize: "1024x1024",
-            imageProviderID: PresetProviders.defaultImagePreset?.id
+            imageProviderID: PresetProviders.defaultImagePreset?.id,
+            enableAISuggestion: true,
+            enableTypoCorrection: true
         )
     }
 
