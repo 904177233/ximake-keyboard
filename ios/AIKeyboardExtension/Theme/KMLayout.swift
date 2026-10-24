@@ -9,6 +9,7 @@
 //
 
 import CoreGraphics
+import Foundation
 
 /// 键盘布局度量（纯计算，无状态）。
 enum KMLayout {

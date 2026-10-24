@@ -366,7 +366,7 @@ struct ChatMessageListView: View {
                 .foregroundColor(Theme.textSecondary)
             HStack(spacing: KMLayout.sugChipGap) {
                 ForEach(KeyboardViewModel.chatSamplePrompts, id: \.self) { prompt in
-                    KMPillChip(prompt, style: .tag, isSelected: false, isEnabled: true) {
+                    KMPillChip(title: prompt, style: .tag, isSelected: false, isEnabled: true) {
                         model.sendChatSample(prompt)
                     }
                 }

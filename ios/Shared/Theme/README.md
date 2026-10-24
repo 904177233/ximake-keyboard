@@ -208,6 +208,19 @@ AI 区：`aiChipHeight`(30) / `aiChipGap`(8) / `aiChipMinWidth`(56) / `aiBarInse
 | `toastDuration` | 2.0 | `Theme.Motion.toastDuration` | Toast 停留时长 |
 | `reducedMotionScale` | 0 | `Theme.Motion.reducedMotionScale` | 开启「减弱动态效果」时的缩放系数 |
 
+`design/04-AI对话与智能联想规范.md` §6（方案 A）新增的 3 个 motion 键**全部复用已有数值**，
+不新增独立常量（避免同一数值两处定义、日后改一处漏一处），映射关系如下：
+
+| tokens 键 | 值 | 复用哪个 Swift 常量 | 用途 |
+| --- | --- | --- | --- |
+| `suggestDebounce` | 0.35 | `Theme.Motion.springDuration`（同值 0.35） | 智能联想输入防抖 |
+| `knobPress` | 0.08 | `Theme.Motion.keyPress` | 对话旋钮按下缩放时长 |
+| `knobActiveFade` | 0.15 | `Theme.Motion.fast` | 旋钮激活态淡入淡出 |
+
+> 键盘侧 `ios/AIKeyboardExtension/Theme/KMLayout.swift` 已就地把它们包成语义名
+> （`KMLayout.suggestDebounce` / `knobPress` / `knobActiveFade`）并标注 `// TOKEN: motion.xxx`；
+> 共享层不再复制一份，`consistency_check.py` 的数值覆盖因此仍为 100%。
+
 契约 3 个：`fast`(Double) / `normal`(Double) / `spring`(Animation)。
 
 ```swift

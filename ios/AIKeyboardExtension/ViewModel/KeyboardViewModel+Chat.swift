@@ -460,10 +460,15 @@ extension KeyboardViewModel {
                 if Task.isCancelled { return }
                 elapsed += 1
                 guard let self else { return }
-                var progress = self.chatImageProgress ?? KMImageProgress(prompt: prompt)
-                progress.elapsed = elapsed
-                progress.stage = Self.imageStage(for: elapsed)
-                self.chatImageProgress = progress
+                // `KMImageProgress` 的 `elapsed` / `stage` 都是 `let`（值语义不可变），
+                // 因此这里重建一个新值而不是原地改写；`expected` 沿用已有区间。
+                let current = self.chatImageProgress
+                self.chatImageProgress = KMImageProgress(
+                    prompt: prompt,
+                    elapsed: elapsed,
+                    expected: current?.expected ?? 5...20,
+                    stage: Self.imageStage(for: elapsed)
+                )
             }
         }
     }

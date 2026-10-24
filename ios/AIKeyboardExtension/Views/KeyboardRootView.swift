@@ -26,6 +26,11 @@ private func pageShowsChrome(_ page: KeyboardViewModel.Page) -> Bool {
 /// 旋钮状态：不可用时 disabled、回答中 busy、已打开 active，否则 idle。
 /// - Parameter model: 键盘状态机。
 /// - Returns: 旋钮外观状态。
+///
+/// 必须标注 `@MainActor`：`KeyboardViewModel` 是 `@MainActor` 隔离的，
+/// 其 `aiAvailability` / `chatPhase` / `isChatOpen` 不能在非隔离上下文里读取
+/// （否则报 “main actor-isolated property … can not be referenced from a non-isolated context”）。
+@MainActor
 private func chatKnobState(for model: KeyboardViewModel) -> KMChatKnobState {
     if model.aiAvailability == .noFullAccess || model.aiAvailability == .notConfigured || model.aiAvailability == .offline {
         return .disabled
