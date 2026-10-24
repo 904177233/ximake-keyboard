@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>墨语 · 双色主题 + 右下角小形象</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background:#EDEDF0;
+    font-family:"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif;
+    padding:40px 44px 56px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .hd { margin-bottom:30px; }
+  .hd h1 { font-size:26px; font-weight:600; color:#1C1C1E; letter-spacing:-.2px; }
+  .hd p  { font-size:14px; color:#7A7A80; margin-top:8px; line-height:1.65; }
+  .grid { display:flex; flex-wrap:wrap; gap:38px 34px; }
+
+  .card { width:468px; }
+  .card .lab {
+    display:flex; align-items:baseline; gap:9px; margin-bottom:11px;
+  }
+  .card .lab b { font-size:16px; font-weight:600; color:#1C1C1E; }
+  .card .lab span { font-size:12.5px; color:#8A8A90; }
+  .card .sw { margin-left:auto; display:flex; gap:5px; }
+  .card .sw i { width:17px; height:17px; border-radius:5px; display:block; }
+
+  /* ---------- 键盘 ---------- */
+  .kb {
+    width:468px; height:309.6px;
+    border-radius:13px; overflow:hidden;
+    display:flex; flex-direction:column;
+    box-shadow:0 13px 27px rgba(0,0,0,.11), 0 2px 6px rgba(0,0,0,.06);
+    position:relative;
+  }
+  .cand {
+    height:52.8px; flex:none; display:flex; align-items:center;
+    padding:0 12px; gap:16px; position:relative;
+  }
+  .cand .ch { font-size:22px; font-weight:500; letter-spacing:.4px; }
+  .cand .c1 { font-size:19px; font-weight:600; padding:3px 10px; border-radius:7px; }
+  .cand .cn { font-size:17px; }
+
+  .aibar {
+    height:48px; flex:none; display:flex; align-items:center;
+    padding:0 12px; gap:9px;
+  }
+  .pill {
+    font-size:12.5px; padding:5px 11px; border-radius:13px;
+    display:flex; align-items:center; gap:5px; white-space:nowrap;
+  }
+  .knob {
+    margin-left:auto; width:40.8px; height:40.8px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; flex:none;
+  }
+
+  .keys { flex:1; padding:0 4.8px; display:flex; flex-direction:column; justify-content:space-between; }
+  .row { display:flex; gap:7.2px; }
+  .k {
+    flex:1; border-radius:7px; display:flex; align-items:center; justify-content:center;
+    font-size:20px; font-weight:400; position:relative;
+  }
+  .k.fn { font-size:14px; }
+  .k.sp { flex:0 0 auto; }
+
+  /* 右下角小形象 */
+  .mascot {
+    position:absolute; right:9px; bottom:6px;
+    display:flex; align-items:flex-end; justify-content:center;
+    pointer-events:none;
+  }
+  .mascot svg { display:block; }
+
+  /* ---------- 档位对比 ---------- */
+  .tiers { margin-top:56px; }
+  .tiers h2 { font-size:19px; font-weight:600; color:#1C1C1E; margin-bottom:6px; }
+  .tiers .sub { font-size:13.5px; color:#7A7A80; margin-bottom:22px; }
+  .trow { display:flex; gap:30px; flex-wrap:wrap; }
+  .tbox {
+    background:#fff; border-radius:12px; padding:16px 18px 15px; width:250px;
+    box-shadow:0 2px 9px rgba(0,0,0,.06);
+  }
+  .tbox .tname { font-size:14px; font-weight:600; color:#1C1C1E; margin-bottom:3px; }
+  .tbox .tdesc { font-size:12px; color:#8A8A90; line-height:1.55; margin-bottom:13px; height:36px; }
+  .tbox .tdemo { display:flex; align-items:center; gap:16px; }
+  .tbox .tdemo .box {
+    width:56px; height:56px; border-radius:11px; background:#F4F4F7;
+    display:flex; align-items:center; justify-content:center; flex:none;
+  }
+  .tbox .tdemo .sz { font-size:11.5px; color:#9A9AA0; line-height:1.9; }
+</style>
+</head>
+<body>
+
+<div class="hd">
+  <h1>墨语 · 双色主题 + 右下角小形象</h1>
+  <p>每套 = 一个 AI 品牌主色 + 一个中性底色。<b>全键盘只有 4 处出现主色</b>（首选字、AI 胶囊、对话旋钮、回车键），其余全是浅底白键。<br>
+     右下角小形象先按「极简符号」画 —— 它只有 20px，这是唯一能既被认出来、又不踩版权线的尺寸。</p>
+</div>
+
+<div class="grid">
+
+  <!-- 1 墨黑 · ChatGPT -->
+  <div class="card">
+    <div class="lab"><b>墨黑</b><span>ChatGPT 系</span>
+      <span class="sw"><i style="background:#101010"></i><i style="background:#F7F7F5;border:1px solid #E2E2DF"></i></span></div>
+    <div class="kb" style="background:#D7D7DC" data-theme="ink">
+      <div class="cand" style="background:#FFFFFF">
+        <div class="ch" style="color:#101010">nihao</div>
+        <div class="c1" style="background:#101010;color:#FFFFFF">你好</div>
+        <div class="cn" style="color:#3A3A3E">拟好</div>
+        <div class="cn" style="color:#3A3A3E">你</div>
+      </div>
+      <div class="aibar" style="background:#F7F7F5">
+        <div class="pill" style="background:#101010;color:#FFFFFF">润色</div>
+        <div class="pill" style="background:#EBEBEA;color:#4A4A4E">扩写</div>
+        <div class="pill" style="background:#EBEBEA;color:#4A4A4E">翻译</div>
+        <div class="pill" style="background:#EBEBEA;color:#4A4A4E">回复</div>
+        <div class="knob" style="background:#101010"></div>
+      </div>
+      <div class="keys">
+        <div class="row"><div class="k" style="background:#FFF">q</div><div class="k" style="background:#FFF">w</div><div class="k" style="background:#FFF">e</div><div class="k" style="background:#FFF">r</div><div class="k" style="background:#FFF">t</div><div class="k" style="background:#FFF">y</div><div class="k" style="background:#FFF">u</div><div class="k" style="background:#FFF">i</div><div class="k" style="background:#FFF">o</div><div class="k" style="background:#FFF">p</div></div>
+        <div class="row"><div class="k" style="background:#FFF">a</div><div class="k" style="background:#FFF">s</div><div class="k" style="background:#FFF">d</div><div class="k" style="background:#FFF">f</div><div class="k" style="background:#FFF">g</div><div class="k" style="background:#FFF">h</div><div class="k" style="background:#FFF">j</div><div class="k" style="background:#FFF">k</div><div class="k" style="background:#FFF">l</div></div>
+        <div class="row"><div class="k fn" style="background:#EBEBEA;flex:0 0 52px">⇧</div><div class="k" style="background:#FFF">z</div><div class="k" style="background:#FFF">x</div><div class="k" style="background:#FFF">c</div><div class="k" style="background:#FFF">v</div><div class="k" style="background:#FFF">b</div><div class="k" style="background:#FFF">n</div><div class="k" style="background:#FFF">m</div><div class="k fn" style="background:#EBEBEA;flex:0 0 52px">⌫</div></div>
+        <div class="row"><div class="k fn" style="background:#EBEBEA;flex:0 0 52px">123</div><div class="k fn" style="background:#EBEBEA;flex:0 0 52px">🌐</div><div class="k sp" style="background:#FFF;flex:1">空格</div><div class="k fn" style="background:#101010;color:#FFF;flex:0 0 52px">return</div></div>
+      </div>
+      <div class="mascot" data-m="star" style="width:24px;height:24px"></div>
+    </div>
+  </div>
+
+  <!-- 2 珊瑚 · Claude -->
+  <div class="card">
+    <div class="lab"><b>珊瑚</b><span>Claude 系</span>
+      <span class="sw"><i style="background:#D97757"></i><i style="background:#FDF3EE;border:1px solid #F0DCD3"></i></span></div>
+    <div class="kb" style="background:#DFD6D1" data-theme="coral">
+      <div class="cand" style="background:#FFFDFC">
+        <div class="ch" style="color:#8A4B33">nihao</div>
+        <div class="c1" style="background:#D97757;color:#FFFFFF">你好</div>
+        <div class="cn" style="color:#6B4A3E">拟好</div>
+        <div class="cn" style="color:#6B4A3E">你</div>
+      </div>
+      <div class="aibar" style="background:#FDF3EE">
+        <div class="pill" style="background:#D97757;color:#FFFFFF">润色</div>
+        <div class="pill" style="background:#F5E2D9;color:#8A4B33">扩写</div>
+        <div class="pill" style="background:#F5E2D9;color:#8A4B33">翻译</div>
+        <div class="pill" style="background:#F5E2D9;color:#8A4B33">回复</div>
+        <div class="knob" style="background:#D97757"></div>
+      </div>
+      <div class="keys">
+        <div class="row"><div class="k" style="background:#FFF">q</div><div class="k" style="background:#FFF">w</div><div class="k" style="background:#FFF">e</div><div class="k" style="background:#FFF">r</div><div class="k" style="background:#FFF">t</div><div class="k" style="background:#FFF">y</div><div class="k" style="background:#FFF">u</div><div class="k" style="background:#FFF">i</div><div class="k" style="background:#FFF">o</div><div class="k" style="background:#FFF">p</div></div>
+        <div class="row"><div class="k" style="background:#FFF">a</div><div class="k" style="background:#FFF">s</div><div class="k" style="background:#FFF">d</div><div class="k" style="background:#FFF">f</div><div class="k" style="background:#FFF">g</div><div class="k" style="background:#FFF">h</div><div class="k" style="background:#FFF">j</div><div class="k" style="background:#FFF">k</div><div class="k" style="background:#FFF">l</div></div>
+        <div class="row"><div class="k fn" style="background:#F5E2D9;flex:0 0 52px">⇧</div><div class="k" style="background:#FFF">z</div><div class="k" style="background:#FFF">x</div><div class="k" style="background:#FFF">c</div><div class="k" style="background:#FFF">v</div><div class="k" style="background:#FFF">b</div><div class="k" style="background:#FFF">n</div><div class="k" style="background:#FFF">m</div><div class="k fn" style="background:#F5E2D9;flex:0 0 52px">⌫</div></div>
+        <div class="row"><div class="k fn" style="background:#F5E2D9;flex:0 0 52px">123</div><div class="k fn" style="background:#F5E2D9;flex:0 0 52px">🌐</div><div class="k sp" style="background:#FFF;flex:1">空格</div><div class="k fn" style="background:#D97757;color:#FFF;flex:0 0 52px">return</div></div>
+      </div>
+      <div class="mascot" data-m="hair" style="width:24px;height:24px"></div>
+    </div>
+  </div>
+
+  <!-- 3 靛蓝 · DeepSeek -->
+  <div class="card">
+    <div class="lab"><b>靛蓝</b><span>DeepSeek 系</span>
+      <span class="sw"><i style="background:#4D6BFE"></i><i style="background:#EEF1FF;border:1px solid #D9DFFC"></i></span></div>
+    <div class="kb" style="background:#D3D8EC" data-theme="indigo">
+      <div class="cand" style="background:#FCFDFF">
+        <div class="ch" style="color:#2B3B9E">nihao</div>
+        <div class="c1" style="background:#4D6BFE;color:#FFFFFF">你好</div>
+        <div class="cn" style="color:#3A4570">拟好</div>
+        <div class="cn" style="color:#3A4570">你</div>
+      </div>
+      <div class="aibar" style="background:#EEF1FF">
+        <div class="pill" style="background:#4D6BFE;color:#FFFFFF">润色</div>
+        <div class="pill" style="background:#E0E5FC;color:#2B3B9E">扩写</div>
+        <div class="pill" style="background:#E0E5FC;color:#2B3B9E">翻译</div>
+        <div class="pill" style="background:#E0E5FC;color:#2B3B9E">回复</div>
+        <div class="knob" style="background:#4D6BFE"></div>
+      </div>
+      <div class="keys">
+        <div class="row"><div class="k" style="background:#FFF">q</div><div class="k" style="background:#FFF">w</div><div class="k" style="background:#FFF">e</div><div class="k" style="background:#FFF">r</div><div class="k" style="background:#FFF">t</div><div class="k" style="background:#FFF">y</div><div class="k" style="background:#FFF">u</div><div class="k" style="background:#FFF">i</div><div class="k" style="background:#FFF">o</div><div class="k" style="background:#FFF">p</div></div>
+        <div class="row"><div class="k" style="background:#FFF">a</div><div class="k" style="background:#FFF">s</div><div class="k" style="background:#FFF">d</div><div class="k" style="background:#FFF">f</div><div class="k" style="background:#FFF">g</div><div class="k" style="background:#FFF">h</div><div class="k" style="background:#FFF">j</div><div class="k" style="background:#FFF">k</div><div class="k" style="background:#FFF">l</div></div>
+        <div class="row"><div class="k fn" style="background:#E0E5FC;flex:0 0 52px">⇧</div><div class="k" style="background:#FFF">z</div><div class="k" style="background:#FFF">x</div><div class="k" style="background:#FFF">c</div><div class="k" style="background:#FFF">v</div><div class="k" style="background:#FFF">b</div><div class="k" style="background:#FFF">n</div><div class="k" style="background:#FFF">m</div><div class="k fn" style="background:#E0E5FC;flex:0 0 52px">⌫</div></div>
+        <div class="row"><div class="k fn" style="background:#E0E5FC;flex:0 0 52px">123</div><div class="k fn" style="background:#E0E5FC;flex:0 0 52px">🌐</div><div class="k sp" style="background:#FFF;flex:1">空格</div><div class="k fn" style="background:#4D6BFE;color:#FFF;flex:0 0 52px">return</div></div>
+      </div>
+      <div class="mascot" data-m="whale" style="width:26px;height:24px"></div>
+    </div>
+  </div>
+
+  <!-- 4 星紫 · Gemini -->
+  <div class="card">
+    <div class="lab"><b>星紫</b><span>Gemini 系</span>
+      <span class="sw"><i style="background:#7A5AF8"></i><i style="background:#F2EFFF;border:1px solid #DFD8FD"></i></span></div>
+    <div class="kb" style="background:#D6D0EA" data-theme="violet">
+      <div class="cand" style="background:#FDFCFF">
+        <div class="ch" style="color:#4530A8">nihao</div>
+        <div class="c1" style="background:#7A5AF8;color:#FFFFFF">你好</div>
+        <div class="cn" style="color:#4A3F726">拟好</div>
+        <div class="cn" style="color:#4A3F72">你</div>
+      </div>
+      <div class="aibar" style="background:#F2EFFF">
+        <div class="pill" style="background:#7A5AF8;color:#FFFFFF">润色</div>
+        <div class="pill" style="background:#E7E1FD;color:#4530A8">扩写</div>
+        <div class="pill" style="background:#E7E1FD;color:#4530A8">翻译</div>
+        <div class="pill" style="background:#E7E1FD;color:#4530A8">回复</div>
+        <div class="knob" style="background:#7A5AF8"></div>
+      </div>
+      <div class="keys">
+        <div class="row"><div class="k" style="background:#FFF">q</div><div class="k" style="background:#FFF">w</div><div class="k" style="background:#FFF">e</div><div class="k" style="background:#FFF">r</div><div class="k" style="background:#FFF">t</div><div class="k" style="background:#FFF">y</div><div class="k" style="background:#FFF">u</div><div class="k" style="background:#FFF">i</div><div class="k" style="background:#FFF">o</div><div class="k" style="background:#FFF">p</div></div>
+        <div class="row"><div class="k" style="background:#FFF">a</div><div class="k" style="background:#FFF">s</div><div class="k" style="background:#FFF">d</div><div class="k" style="background:#FFF">f</div><div class="k" style="background:#FFF">g</div><div class="k" style="background:#FFF">h</div><div class="k" style="background:#FFF">j</div><div class="k" style="background:#FFF">k</div><div class="k" style="background:#FFF">l</div></div>
+        <div class="row"><div class="k fn" style="background:#E7E1FD;flex:0 0 52px">⇧</div><div class="k" style="background:#FFF">z</div><div class="k" style="background:#FFF">x</div><div class="k" style="background:#FFF">c</div><div class="k" style="background:#FFF">v</div><div class="k" style="background:#FFF">b</div><div class="k" style="background:#FFF">n</div><div class="k" style="background:#FFF">m</div><div class="k fn" style="background:#E7E1FD;flex:0 0 52px">⌫</div></div>
+        <div class="row"><div class="k fn" style="background:#E7E1FD;flex:0 0 52px">123</div><div class="k fn" style="background:#E7E1FD;flex:0 0 52px">🌐</div><div class="k sp" style="background:#FFF;flex:1">空格</div><div class="k fn" style="background:#7A5AF8;color:#FFF;flex:0 0 52px">return</div></div>
+      </div>
+      <div class="mascot" data-m="spark" style="width:24px;height:24px"></div>
+    </div>
+  </div>
+
+  <!-- 5 天青 · Kimi -->
+  <div class="card">
+    <div class="lab"><b>天青</b><span>Kimi 系</span>
+      <span class="sw"><i style="background:#2AA5E8"></i><i style="background:#EBF7FE;border:1px solid #CFE9F9"></i></span></div>
+    <div class="kb" style="background:#CFDFE8" data-theme="sky">
+      <div class="cand" style="background:#FBFDFF">
+        <div class="ch" style="color:#12628C">nihao</div>
+        <div class="c1" style="background:#2AA5E8;color:#FFFFFF">你好</div>
+        <div class="cn" style="color:#2A5068">拟好</div>
+        <div class="cn" style="color:#2A5068">你</div>
+      </div>
+      <div class="aibar" style="background:#EBF7FE">
+        <div class="pill" style="background:#2AA5E8;color:#FFFFFF">润色</div>
+        <div class="pill" style="background:#DCF0FC;color:#12628C">扩写</div>
+        <div class="pill" style="background:#DCF0FC;color:#12628C">翻译</div>
+        <div class="pill" style="background:#DCF0FC;color:#12628C">回复</div>
+        <div class="knob" style="background:#2AA5E8"></div>
+      </div>
+      <div class="keys">
+        <div class="row"><div class="k" style="background:#FFF">q</div><div class="k" style="background:#FFF">w</div><div class="k" style="background:#FFF">e</div><div class="k" style="background:#FFF">r</div><div class="k" style="background:#FFF">t</div><div class="k" style="background:#FFF">y</div><div class="k" style="background:#FFF">u</div><div class="k" style="background:#FFF">i</div><div class="k" style="background:#FFF">o</div><div class="k" style="background:#FFF">p</div></div>
+        <div class="row"><div class="k" style="background:#FFF">a</div><div class="k" style="background:#FFF">s</div><div class="k" style="background:#FFF">d</div><div class="k" style="background:#FFF">f</div><div class="k" style="background:#FFF">g</div><div class="k" style="background:#FFF">h</div><div class="k" style="background:#FFF">j</div><div class="k" style="background:#FFF">k</div><div class="k" style="background:#FFF">l</div></div>
+        <div class="row"><div class="k fn" style="background:#DCF0FC;flex:0 0 52px">⇧</div><div class="k" style="background:#FFF">z</div><div class="k" style="background:#FFF">x</div><div class="k" style="background:#FFF">c</div><div class="k" style="background:#FFF">v</div><div class="k" style="background:#FFF">b</div><div class="k" style="background:#FFF">n</div><div class="k" style="background:#FFF">m</div><div class="k fn" style="background:#DCF0FC;flex:0 0 52px">⌫</div></div>
+        <div class="row"><div class="k fn" style="background:#DCF0FC;flex:0 0 52px">123</div><div class="k fn" style="background:#DCF0FC;flex:0 0 52px">🌐</div><div class="k sp" style="background:#FFF;flex:1">空格</div><div class="k fn" style="background:#2AA5E8;color:#FFF;flex:0 0 52px">return</div></div>
+      </div>
+      <div class="mascot" data-m="moon" style="width:24px;height:24px"></div>
+    </div>
+  </div>
+
+  <!-- 6 松绿 · 豆包/千问 -->
+  <div class="card">
+    <div class="lab"><b>松绿</b><span>豆包 / 千问系</span>
+      <span class="sw"><i style="background:#10A37F"></i><i style="background:#EDF8F4;border:1px solid #CFEBE1"></i></span></div>
+    <div class="kb" style="background:#CFE0DA" data-theme="pine">
+      <div class="cand" style="background:#FBFEFD">
+        <div class="ch" style="color:#0A6449">nihao</div>
+        <div class="c1" style="background:#10A37F;color:#FFFFFF">你好</div>
+        <div class="cn" style="color:#2A4F44">拟好</div>
+        <div class="cn" style="color:#2A4F44">你</div>
+      </div>
+      <div class="aibar" style="background:#EDF8F4">
+        <div class="pill" style="background:#10A37F;color:#FFFFFF">润色</div>
+        <div class="pill" style="background:#DCF1E9;color:#0A6449">扩写</div>
+        <div class="pill" style="background:#DCF1E9;color:#0A6449">翻译</div>
+        <div class="pill" style="background:#DCF1E9;color:#0A6449">回复</div>
+        <div class="knob" style="background:#10A37F"></div>
+      </div>
+      <div class="keys">
+        <div class="row"><div class="k" style="background:#FFF">q</div><div class="k" style="background:#FFF">w</div><div class="k" style="background:#FFF">e</div><div class="k" style="background:#FFF">r</div><div class="k" style="background:#FFF">t</div><div class="k" style="background:#FFF">y</div><div class="k" style="background:#FFF">u</div><div class="k" style="background:#FFF">i</div><div class="k" style="background:#FFF">o</div><div class="k" style="background:#FFF">p</div></div>
+        <div class="row"><div class="k" style="background:#FFF">a</div><div class="k" style="background:#FFF">s</div><div class="k" style="background:#FFF">d</div><div class="k" style="background:#FFF">f</div><div class="k" style="background:#FFF">g</div><div class="k" style="background:#FFF">h</div><div class="k" style="background:#FFF">j</div><div class="k" style="background:#FFF">k</div><div class="k" style="background:#FFF">l</div></div>
+        <div class="row"><div class="k fn" style="background:#DCF1E9;flex:0 0 52px">⇧</div><div class="k" style="background:#FFF">z</div><div class="k" style="background:#FFF">x</div><div class="k" style="background:#FFF">c</div><div class="k" style="background:#FFF">v</div><div class="k" style="background:#FFF">b</div><div class="k" style="background:#FFF">n</div><div class="k" style="background:#FFF">m</div><div class="k fn" style="background:#DCF1E9;flex:0 0 52px">⌫</div></div>
+        <div class="row"><div class="k fn" style="background:#DCF1E9;flex:0 0 52px">123</div><div class="k fn" style="background:#DCF1E9;flex:0 0 52px">🌐</div><div class="k sp" style="background:#FFF;flex:1">空格</div><div class="k fn" style="background:#10A37F;color:#FFF;flex:0 0 52px">return</div></div>
+      </div>
+      <div class="mascot" data-m="dot" style="width:24px;height:24px"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- 形象档位 -->
+<div class="tiers">
+  <h2>右下角形象 · 三档可选</h2>
+  <div class="sub">同一个位置、同一套配色，只是形象精细度不同。在最右侧 24px 的格子里，这三档的识别率差距其实很小，但版权风险差很多。</div>
+  <div class="trow">
+
+    <div class="tbox">
+      <div class="tname">A · 极简符号（推荐）</div>
+      <div class="tdesc">纯几何：鲸尾弧线 / 四角星 / 月牙。不含任何角色的脸部与发型。</div>
+      <div class="tdemo">
+        <div class="box" data-m="whale" style="width:56px;height:56px"></div>
+        <div class="sz">24 pt 主尺寸<br>16 pt 紧凑</div>
+      </div>
+    </div>
+
+    <div class="tbox">
+      <div class="tname">B · 剪影</div>
+      <div class="tdesc">有头的轮廓和发梢走势，没有五官、没有服饰细节。能认出发型。</div>
+      <div class="tdemo">
+        <div class="box" data-m="hair" style="width:56px;height:56px"></div>
+        <div class="sz">24 pt 主尺寸<br>16 pt 紧凑</div>
+      </div>
+    </div>
+
+    <div class="tbox">
+      <div class="tname">C · Q 版小人</div>
+      <div class="tdesc">带眼睛和腮红的最小角色。最像「有个小家伙在角落」，但需要原创绘制。</div>
+      <div class="tdemo">
+        <div class="box" data-m="chibi" style="width:56px;height:56px"></div>
+        <div class="sz">24 pt 主尺寸<br>16 pt 紧凑</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// 极简符号库：全部为几何路径，不含任何第三方素材
+const C = {
+  ink:   '#101010', coral:'#D97757', indigo:'#4D6BFE',
+  violet:'#7A5AF8', sky:'#2AA5E8', pine:'#10A37F'
+};
+const THEME = {
+  ink:'#101010', coral:'#D97757', indigo:'#4D6BFE',
+  violet:'#7A5AF8', sky:'#2AA5E8', pine:'#10A37F'
+};
+
+function svgFor(kind, color, size) {
+  const w = size, h = size;
+  const s = size / 24; // 以 24 为基准缩放
+  let body = '';
+
+  if (kind === 'whale') {
+    // 鲸尾：一条上扬的弧 + 分叉尾鳍
+    body = `<path d="M4 17 C6 9, 13 6, 19 8 C16 10, 15 13, 15 16 C13 13, 9 13, 7 17 Z"
+              fill="${color}"/>`;
+  } else if (kind === 'hair') {
+    // 橙发剪影：圆头 + 波浪发梢
+    body = `<path d="M12 4 C7 4, 4.5 7.6, 4.5 12 C4.5 14.2, 5.3 16.2, 6.6 17.6
+                     C6.2 15.6, 6.6 14.2, 7.6 13.4 C7.4 15.2, 8 16.6, 9 17.4
+                     C9.6 15.4, 10.6 14.2, 12 14 C13.4 14.2, 14.4 15.4, 15 17.4
+                     C16 16.6, 16.6 15.2, 16.4 13.4 C17.4 14.2, 17.8 15.6, 17.4 17.6
+                     C18.7 16.2, 19.5 14.2, 19.5 12 C19.5 7.6, 17 4, 12 4 Z"
+              fill="${color}"/>`;
+  } else if (kind === 'spark') {
+    // 四角星
+    body = `<path d="M12 3 C12.9 8.2, 15.8 11.1, 21 12 C15.8 12.9, 12.9 15.8, 12 21
+                     C11.1 15.8, 8.2 12.9, 3 12 C8.2 11.1, 11.1 8.2, 12 3 Z"
+              fill="${color}"/>`;
+  } else if (kind === 'star') {
+    body = `<path d="M12 3.5 L14.3 9.2 L20.5 9.6 L15.7 13.6 L17.2 19.6
+                     L12 16.3 L6.8 19.6 L8.3 13.6 L3.5 9.6 L9.7 9.2 Z"
+              fill="${color}"/>`;
+  } else if (kind === 'moon') {
+    body = `<path d="M15.8 3.6 A9 9 0 1 0 15.8 20.4 A7.2 7.2 0 0 1 15.8 3.6 Z"
+              fill="${color}"/>`;
+  } else if (kind === 'dot') {
+    body = `<circle cx="12" cy="12" r="7.2" fill="${color}"/>`;
+  } else if (kind === 'chibi') {
+    // Q 版小人：头 + 两撮发 + 眼 + 腮红
+    body = `<circle cx="12" cy="12" r="8.6" fill="${color}"/>
+            <circle cx="9.2" cy="11.4" r="1.15" fill="#fff"/>
+            <circle cx="14.8" cy="11.4" r="1.15" fill="#fff"/>
+            <ellipse cx="6.6" cy="14.2" rx="1.5" ry="1" fill="#fff" opacity=".55"/>
+            <ellipse cx="17.4" cy="14.2" rx="1.5" ry="1" fill="#fff" opacity=".55"/>`;
+  }
+  return `<svg width="${w}" height="${h}" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">${body}</svg>`;
+}
+
+// 填充键盘右下角形象
+document.querySelectorAll('.mascot').forEach(el => {
+  const kind = el.dataset.m;
+  const kb = el.closest('.kb');
+  const theme = kb ? kb.dataset.theme : 'ink';
+  const color = THEME[theme] || '#101010';
+  const size = parseFloat(el.style.width) || 24;
+  el.innerHTML = svgFor(kind, color, size);
+});
+
+// 填充档位演示
+document.querySelectorAll('.tbox .box').forEach(el => {
+  const kind = el.dataset.m;
+  const color = '#4D6BFE';
+  el.innerHTML = svgFor(kind, color, 34);
+});
+</script>
+</body>
+</html>
