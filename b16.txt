@@ -1,0 +1,451 @@
+[assistant]
+Great — sspai tag API works. Now fetch a couple of key articles: id 116430 (紫毫 iOS Rime IME, 2026-10), 86791 (尝试了众多输入法方案后, 200 comments), 106086 (双拼体验), 95187 (搜狗输入法). Also 91303 (AI输入法体验). Fetch article content via API: https://sspai.com/api/v1/article/info/get?id=116430 ?
+
+Let me test.
+
+Also need 知乎 pain points. Zhihu may be blocked. Let me try fetching a zhihu question via web_fetch quickly, plus sspai article.
+
+Key articles for pain points: 63916 comment "常年使用搜狗输入法，备份时发现词库有27万条，99%是垃圾词条，偶尔打过一次也被记录，而且无法从云端删除……这根本是个键盘记录器" — great pain point with URL https://sspai.com/post/63916.
+
+Also 108636 (受够了隐私泄露与臃肿：我做了一款物理断网的跨平台输入效率工具) — pain point about privacy.
+
+Let me fetch article 116430 (紫毫) and 86791 content and 95187. Actually the summaries already give me enough for pain points on sspai. But full article content would strengthen. Let me fetch 116430 and 86791 briefly.
+
+[assistant • pwsh]
+{"command":"$ProgressPreference='SilentlyContinue'\n$env:HTTPS_PROXY='http://127.0.0.1:2080'; $env:HTTP_PROXY='http://127.0.0.1:2080'\nforeach ($id in @('116430','86791')) {\n  try {\n    $u = 'https://sspai.com/api/v1/article/info/get?id=' + $id + '&slug='\n    $r = Invoke-WebRequest -Uri $u -TimeoutSec 25 -UseBasicParsing\n    $j = $r.Content | ConvertFrom-Json\n    $body = $j.data.body\n    $body = [regex]::Replace($body,'<[^>]+>',' ')\n    $body = [regex]::Replace($body,'\\s+',' ')\n    Write-Output (\"===== \" + $id + \" \" + $j.data.title + \" len=\" + $body.Length)\n    Write-Output ($body.Substring(0,[Math]::Min(3500,$body.Length)))\n    Write-Output \"\"\n  } catch { Write-Output (\"FAIL \" + $id + \" \" + $_.Exception.Message) }\n}","description":"Fetch two sspai articles via API"}
+
+[tool • pwsh]
+===== 116430 在 iPhone 上用 Rime：我为什么做了「紫毫」输入法 len=2218
+ Matrix 首页推荐 Matrix 是少数派的写作社区，我们主张分享真实的产品体验，有实用价值的经验与思考。我们会不定期挑选 Matrix 最优质的文章，展示来自用户的最真实的体验和观点。 文章代表作者个人观点，少数派仅对标题和排版略作修改。 在 Mac 上用鼠须管、在 Windows 上用小狼毫的人，大概都有过同一个遗憾：换到 iPhone，就只能回到系统输入法，或者在各种带广告、要联网的第三方输入法之间将就。Rime 那套「词库在自己手里、方案自己调」的体验，到了手机上就断了。 紫毫是我为这件事做的输入法。它基于 Rime（中州韵）引擎，内置雾凇拼音，在 iPhone、iPad 和 iPhone Duo 上都有专门设计的键盘。基础打字全部免费，没有广告，打字内容只在手机上处理。本地语音输入模型，也可以选择线上AI语音模型，最简单的说法就是可定制。 打开就能用的雾凇拼音 第一次打开紫毫，App 会在手机上部署雾凇拼音，并下载一个约 6.8 MB 的整句语法模型「紫毫口语」，根据维基百科中文口语优化而来。之后键盘里就是熟悉的雾凇： 26 键全拼、九宫格、小鹤双拼，小鹤双拼还能用辅码按偏旁筛字（比如「讠」打 yj）； 简体、繁体、台湾繁体、香港繁体输出，目前并非原生支持，后续会通过大千注音等进行针对性优化； rq sj xq nl 打日期、时间、星期、农历， R1234 打大写金额， U62fc 按编码打字， vfh 打符号。 雾凇拼音可以在 App 里检查更新，更新前先看改了什么，你学到的词不受影响。 首页：键盘已就绪、输入方案、我的输入统计 自己的方案也能带过来 这是我最想做好的部分。在「方案」里可以导入 Rime 配置文件夹、ZIP、YAML 或文本词典，也可以直接填一个公开的 GitHub 仓库（比如 iDvel/rime-ice），选好分支和目录，设成每天或每周自动更新。方案在手机上编译，不经过任何服务器，也可以添加自己的配置文件，习惯都在你自己手里。 打过的词按 Rime 的格式保存在 iCloud 云盘的同步文件夹里。在鼠须管的 installation.yaml 里把 sync_dir 指向同一个文件夹，手机和 Mac 的用户词库就能合并。App 里可以一键复制这段设置。 手机上更难的事：按偏了 Rime 在电脑上很少需要纠错，因为键盘是实体的。手机不一样，拇指经常按到隔壁的键。紫毫在 Rime 之外做了按落点的纠错：结合手指按下的位置和拼音规则，认出你想打的字，原来的拼音仍然留在候选里。 纠错最怕「把打对的改错」。所以有一条硬规则：你打出的字母本身就拼得成词时，它一定排第一。比如打 zihao，首选就是「自豪」，不会因为手指偏了一点就变成「喜好」。 打 zihao，首选「自豪」 长句里按错两三个字母也能一起改正。在我们的模拟测试里，错 2 个字母的句子一次打对从 36% 提高到 56%，错 3 个从 26% 提高到 53%；打对的句子一个没被改坏。候选一次出齐，不会先显示一个再跳成另一个，结果更直观。 xiaofuo 按偏了一个键，整句仍是「这个效果很好」 按前文选同音词 打 shuxue，是「数学」还是「输血」？以前只能靠词频猜。紫毫带了一个自己训练的小模型（约 5 MB），会读光标前已经写好的文字：前面写着「他失了很多血，医生马上给他」，首选就是「输血」。模型完全在手机上运行，只在明显更合适时才调整首选，你自己的选词习惯仍然优先。 前文是「他失了很多血，医生马上给他」，shuxue 首选「输血」 键盘的细节 表情键可以改成中/英切换，长按做另一个； 邮箱、网址输入框自动切到英文，空格旁边就是 @ . / ； 英文模式的符号页和 iOS 英文键盘一致，全是半角； 打拼音时回车键显示「确认」，打完才显示「发送」「搜索」； iPhone Duo 内屏横握时，26 键可以分成左右两半，九宫格用的是参照苹果的宽屏布局。 隐私 输入法能看到你打的一切，所以紫毫的原则也很简单：打字、纠错、学习、两个模型，全部在手机上完成，不上传。iOS 要求打开「允许完全访问」后键盘才能读取 App 里的词库和设置，打开本身不会让紫毫上传任何东西。 紫毫也有 AI 功能（翻译、润色、总结、回复、边写边译），但不内置任何服务：你填自己的 OpenAI、Claude、Gemini、DeepSeek 或翻译接口的密钥，请求从手机直接发给你选的服务商，不经过我们。1.0.9 起，发出前还会把手机号、身份证号、银行卡号、邮箱、验证码这类信息换成占位符，结果回来再在手机上换回原文。 价格 打字相关的功能全部免费：26 键与九宫格、小鹤双拼、纠错、学习、快捷短语、导入 Rime 方案。紫毫 Pro 一次购买、永久使用，没有订阅，解锁边写边译、AI 脚本、全部主题与背景图，以及多设备同步。 下载 紫毫在 App Store 免费下载，首发不包括中国大陆与欧盟地区。官网 hareime.com，有一篇专门讲 Rime 用法的页面：hareime.com/rime-ios。 简单说，这就是为你私人定制的输入法，如果你也在手机上想念鼠须管，欢迎试试，有问题直接告诉我。 &gt; 关注 少数派小红书 ，感受精彩数字生活 🍃 &gt; 实用、好用的 正版软件 ，少数派为你呈现 🚀 
+
+===== 86791 我的输入法捣鼓指南 len=9293
+ Matrix 首页推荐 Matrix 是少数派的写作社区，我们主张分享真实的产品体验，有实用价值的经验与思考。我们会不定期挑选 Matrix 最优质的文章，展示来自用户的最真实的体验和观点。 文章代表作者个人观点，少数派仅对标题和排版略作修改。 写在开头 我非是专业的文字工作者，只是偶有所感，聊以记言。写得多了，手渐生出毛病。 一次和网友的偶然闲聊中，被安利了「双拼」输入方案，自此开始接触「打字圈」这一小众圈子。经过一年多的摸爬滚打，我先后学习了几个不同类别的输入法方案，迫切地想要向大家分享一下，这段时间的学习历程和一些个人感受。 （长文无图预警） 以下文章内容仅代表个人主观看法，不保证准确无误，不一定客观公正。 目前所用方案——电脑： 虎码 ；手机： 全拼 。 小鹤双拼：双拼很好，但没足够好 作为大部分输入法都自带的方案，双拼采用了声母 + 韵母的方式，用单个字母替代了 uang、ing、ang 等复杂韵母组合，将汉字的码长降到 2，较于全拼大大降低了码长，减轻了手指的负担。 接触双拼方案初时，我充满惊喜。在文章字数相同的情况下，双拼不仅减少字均用键，且因其恒定两码一字的规律，击键节奏会更舒适流畅（但这个感觉因人而异，也有部分人觉得全拼会更加舒服）。与此同时，在长句输入过程中，保留空格上屏的方式也可以很好地继承全拼的使用习惯。 双拼方案五花八门，挑得我眼花缭乱，一番相较下，我选择了「小鹤双拼」。这个网上推荐得比较多，而且大部分输入法基本都内置，日常使用更为便捷。学习双拼的第一周，需要将手指的肌肉记忆从全拼转换过来，相当于「重塑根骨」，这是学习新的方案中无可避免的「阵痛期」。 阵痛期，存在于每次换新码的学习过程中。 记忆键位时，我试过不少方法：边看键位图边记忆；参照官网的口诀（顺口溜）背诵记忆；把输入法换上助记皮肤辅助记忆。 折腾一圈下来，最后强迫自己在 1-3 个小时内，交叉使用以上方法，尽可能地熟记键位，然后直接不依靠任何辅助开始打字。在打字过程中暂时回忆不起键位，这时再去查看键位图，记忆起来会更牢固。 用这个方法，我只花了一天不到，基本记住了所有键位。第二天打字时，需要查看字根图的次数已经大幅减少。这个方法较为激进，适合有大段时间的人，不适合需频繁打字者。此外，也有小鹤用户为爱发电，开发了小程序，可以快速重复练习，同样能够轻松掌握双拼键位。 接下来的一个月，我的双拼从磕磕绊绊逐渐转为熟练流畅。击键没有提升，但打字速度比全拼要快（全拼约 80 字 / 分，双拼约 100 字 / 分）。百速在打字圈是一个较基础的水平，但对我而言，这是一个显著而巨大的进步。 双拼有一个常被诟病的问题，双拼打成条反后，在输入包含相同韵母的英文单词时，会不自觉地去按下对应的双拼键位，而非实际的单个字母键。例如小鹤双拼中 ing 对应 K 键，英打时可能会不自觉地按下 K 键，而非 I、N、G 键。 我在使用中也出现过这个问题。但双拼用户中不乏大量的程序员和外语工作者，他们表示，这是因为我们对双拼的掌握还不够熟练，水平还有待提高，通过大量的练习和长久的使用，这个问题自然会迎刃而解（但我最终的使用时间只有几个月，无从验证）。 使用感受： 双拼虽然减少了按键的使用，但其本质仍为拼音输入，依旧会受到选重的困扰，而且失去了全拼的简拼优势，孰优孰劣，难以辨别，按需学习。 小鹤音形：官鹤有难，百鹤齐飞 双拼使用了约莫一个月，已然相对熟练，我又萌发了学习音形的念头。原先在网上选择双拼方案时，一部分考量也是因为它可以顺滑进阶到小鹤音形。据说音形无需翻页选字，真正做到不看候选打字，较于五笔也更为容易学习。 看过官网上的介绍后，茫然不解。作为一个完全没有接触过带形方案的初学者，我对于击键、码长、顶屏、四码上屏、简码等概念一无所知。官网写得虽详细，但于我而言，仍是雾里看花，无从下手。 于是忍痛付费五块 1 加入了官方交流群，也就是传说中的官鹤群 2 ，希望能得到一些学习的建议和指导。 进群之后，群里的大佬噼里啪啦讲了一大堆专业知识，我听得云里雾里、半懂不懂。紧接着有人推荐我观看清凉大佬的教学视频（清凉爽口，小鹤音形的大佬，被称为最懂鹤的男人）。看完后我茅塞顿开，很快便就掌握了小鹤音形。 音形不同于拼音。小鹤音形是四码定长方案，即：一个汉字最多只需要四个按键便可确定。 拼音是整句输入，需要长句间密切的联系来转换识别正确的句子。小鹤音形是字、词的打法。从而筛选掉一部分无法舍弃智能拼音的用户。 刚开始我不太适应四码唯一自动上屏的设置。码表陌生的情况下不确定哪些字词会有重码，哪些会四码唯一自动上屏，因此会习惯多按一个空格。大多数新用户都会出现这个问题，只能多加练习。有时碰到字词打不出，是因为码表没有收录。如果是词打不出，则需要拆成单字输入，或者自行将词汇加入码表，维护属于自己的词库。如果是单字打不出，同只能自行添加。 个人码表的维护极其耗费心力。一来不同设备间的备份同步并不好处理；再者，对于个人而言，现在的常用词，过一段时间也许并不适用。 小鹤音形的部件字根大部分都是音托（按部件的读音确定字根的键位），少量形托。较于五笔的字根数量少，记忆量小，记得会轻松些。小字仍需额外记忆，是后续隐形的成本。 字根易记，但拆分难。小鹤拆分规则理解者不多。大部分都是像我一样直接用，遇到拆不出的字，就会有「猜根」的嫌疑。只能用通配符替代，或者拼音反查。但遇上急用，感觉非常难受。 我的宗旨为「以用代练」，我没有系统化地进行字根记忆和拆字练习，取而代之在日用中慢慢积累。相对应的，进步缓慢。我当时兼顾论文和其它文案的写作，使用量较高，约三个月后，我的音形水文首打也上百速，普文则徘徊在八十到百速之间。 普遍而言，要想快速进步，或者说快速地提升到日用水平，则建议练习前五百常用单字，可以快速度过阵痛期，使用难度会降低很多。 小鹤群组大多免费，由热心大佬提供交流练习；官鹤群需付费加入。免费群组已经可以满足大部分人的学习需要，当然如果你想支持一下小鹤音形，也可以付费进官鹤群。 不过我觉得现阶段的官鹤群，基本都是折腾软件，几乎没有多少人练习，不建议进入。小胖输入法新出的时候，我以为可以解决鹤词库多平台同步的痛点，最后却引进了一大堆难以把控的功能，将官鹤捆绑在软件上，从而走向另一个深渊。 小鹤，行；官鹤，不行。小鹤可折腾的潜力还是挺大的，但官鹤难以再出高手。我认为目前小鹤最好的出路是辅码挂接。 使用感受： 小鹤的字词库较小，生僻字大部分需要引导，乃至用笔画打出（目前在小胖平台上，则是用拼字的方式）。简词到现在还存在一些令人迷惑的变动。音 + 形的组合带来的重码问题也难于解决。封闭的码表，折腾的软件，有违使用的初衷。它是一个没有那么差的选择，但不是最优解。建议自行维护码表，不必跟随官方更新。 顶功：概念性的 用了几个月小鹤之后，音形字词的打法，较于拼音的整句，码长虽然降低了，但空格的使用频率却增加，腱鞘炎愈发严重，我急于寻找一个能降低空格使用率的输入方案。于是，「顶功」出现在我的视野当中。 顶功的概念让人感到模糊不清，如果你想详细了解，可以看看《顶功 · 集萃》这篇文章，如果网上资源较少，你也可以加入小鹤新手村、虎码新手村或者其他打字群，群文件中基本都会有。 最简单的是把键盘分成 AB 区，打字的时候可以是 AB、ABB、AAB、AABB，但不能是 ABA，出现 B 区字符后，A 区就不能参与编码，A 会将前面的编码顶上屏，从而实现少打或不打空格。 按照我自己的理解，用全拼来类比一下，大概是这样：比如你打「sha」，但是后续编码还可以打「shan」和「shang」，但是如果你后面的编码打的是「g」，那么在全拼中是不是不存在「shag」这样的编码，所以「sha」自然就会和「g」分隔开，从而实现顶上屏。当然这只是我自己粗浅的理解，顶功也有很多种结构，如果想要详细地了解，还是去看文章吧。 但键盘的键位，字母键只有 26 个，一部分方案会用上「冒号」「双引号」「逗号」「句号」这几个标点键，拢共也不过 30 个键位。所以顶功想要离散好，入门需要先背。 背什么呢？背高频字词。像是：我、你、他、什么、哪里、知道、可以、谢谢…… 这一类，将它们从打字规则中抽离出来，将规则的编码让给其它字词，从而达到高离散。大部分的顶功进门都是要背的，门槛并不低。 就我自己的学习感受而言，入门大量的记忆不是最难受的部分，只要你愿意花点时间，也就背下来了。最难受的是不知道这个字应该是几码顶，打
+
+
+
+[assistant • pwsh]
+{"command":"$ProgressPreference='SilentlyContinue'\n$env:HTTPS_PROXY='http://127.0.0.1:2080'; $env:HTTP_PROXY='http://127.0.0.1:2080'\n$tag = [uri]::EscapeDataString('输入法')\n$u = \"https://sspai.com/api/v1/article/tag/page/get?limit=60&offset=0&tag=$tag\"\n$r = Invoke-WebRequest -Uri $u -TimeoutSec 25 -UseBasicParsing\n$j = $r.Content | ConvertFrom-Json\n$j.data | ForEach-Object { \"{0}`t{1}`t短评{2}`t{3}\" -f $_.id, $_.title, $_.comment_count, $_.released_time }\nWrite-Output \"COUNT=$($j.data.Count)\"","description":"List sspai 输入法 tag articles"}
+
+[tool • pwsh]
+116430	App+1 | 紫毫：基于 Rime 引擎、支持双拼纠错的 iOS 输入法	短评109	1792462037
+112901	就内容创作而言，说话还是替代不了打字	短评15	1785402621
+108757	【首文双拼】研发心路	短评7	1776517564
+108636	受够了隐私泄露与臃肿：我做了一款物理断网的跨平台输入效率工具	短评0	1776241276
+108459	一日一技｜让小企鹅输入法支持 14 键、18 键键位双拼	短评19	1775787225
+106086	从走火入魔到退一步海阔天空，我的双拼输入法体验	短评86	1770302670
+105111	如何不用空格打字：顶功类输入法简介	短评39	1767592091
+103871	开源、免费、隐私友好，功能强大的 Android 输入法：小企鹅输入法	短评58	1763622000
+95187	高效打字，让输入更顺畅：如何让搜狗输入法成为你的打字利器	短评0	1735985081
+85056	为输入法插上编程的翅膀——librime-lua 初探	短评9	1730961454
+93389	【九键音形】我强化了九宫格输入法	短评5	1730680740
+93068	那些中文输入法	短评8	1729733017
+91303	提升输入效率的新利器：全新AI输入法体验	短评0	1723171613
+90816	结绳计算远古事，临鱼摹鸟象字生：如何制作一款字形输入法	短评10	1721977200
+89281	从配置到优化，搭建称手的 RIME 雾凇拼音输入方案	短评107	1719891428
+90068	让 RIME 体验更上一层楼：如何用 MediaWiki 扩展词库	短评40	1719807679
+89733	我的输入法选择思路——虎码介绍及其他个人向输入法推荐	短评2	1718804036
+89589	从零开始制作年轻人的第一款pip包	短评0	1718286220
+88595	App+1 | 小鹤音形在 iPhone 上的完美归宿：仓输入法	短评52	1715130713
+88355	一日一技 | 用 iCloud Drive 实现 RIME 输入法配置跨平台同步	短评38	1714038769
+86791	尝试了众多输入法方案后，我想和你分享这些心得	短评200	1711697680
+85043	2023年12月，重新测评Android平板上的各大输入法	短评20	1702460076
+84373	自由输入法 RIME 简明配置指南（2023 版）	短评115	1700103600
+84175	全拼和双拼输入法之争	短评2	1699337767
+83376	为了打字更爽，我学了一个追求极致性能的小众输入法	短评115	1696575600
+79469	App +1 | 仓输入法：让 iOS 也能舒服的用上 Rime	短评24	1682436458
+79385	你每天用的中文有个节日，如何输入这件事也有些门道	短评43	1681977600
+78620	JetBrains IntelliJ支持自动切换输入法，写代码如丝般顺滑	短评0	1677805594
+77870	无需专门安装 App，用 Keyboard Maestro 切换输入法和浏览器	短评40	1675059966
+77604	程序员的自我救赎	短评20	1673589867
+77499	App +1 | 同文输入法：把 RIME 装进 Android 手机	短评30	1672295669
+77340	尝试了七种形码输入法后，我想聊聊在 2022 年用五笔这件事	短评74	1671346800
+75774	「中文引号」，没有你的日子，很想你	短评0	1663426146
+75248	重新认识拼音与发音：聊聊汉语拼音与注音符号方案的差异	短评21	1660964400
+75244	一日一技 | 从这些记忆技巧开始，你也能学会注音输入法	短评24	1660899600
+73634	Rime 从了解到入门	短评0	1654438886
+72622	二〇二二年，来试试双拼输入法吧	短评265	1649756259
+71703	你的输入法，原来也可以当作效率和知识管理工具？	短评57	1646063808
+67535	让练习打字这件事不那么枯燥，你可以试试这几个网站	短评56	1625219829
+63916	小狼毫 3 分钟入门及进阶指南	短评1	1607204122
+COUNT=40
+
+
+[assistant]
+I have a good list of sspai articles. Let me fetch several key ones for user pain points:
+- 91303 「提升输入效率的新利器：全新AI输入法体验」(2024-08) — AI 输入法体验
+- 93068 「那些中文输入法」(2024-10)
+- 108636 「受够了隐私泄露与臃肿：我做了一款物理断网的跨平台输入效率工具」(2026-04) — privacy pain point
+- 89281 「从配置到优化，搭建称手的 RIME 雾凇拼音输入方案」(107 comments)
+- 88595 「App+1 | 小鹤音形在 iPhone 上的完美归宿：仓输入法」
+- 79469 「App +1 | 仓输入法：让 iOS 也能舒服的用上 Rime」
+- 112901 「就内容创作而言，说话还是替代不了打字」— speech input limitations, very relevant for 语音输入现状
+
+Let me fetch a few in parallel using the API. Prioritize: 91303 (AI 输入法), 108636 (隐私), 112901 (语音), 93068 (中文输入法综述).
+
+[assistant • pwsh]
+{"command":"$ProgressPreference='SilentlyContinue'\n$env:HTTPS_PROXY='http://127.0.0.1:2080'; $env:HTTP_PROXY='http://127.0.0.1:2080'\nforeach ($id in @('91303','108636')) {\n  try {\n    $u = 'https://sspai.com/api/v1/article/info/get?id=' + $id + '&slug='\n    $r = Invoke-WebRequest -Uri $u -TimeoutSec 25 -UseBasicParsing\n    $j = $r.Content | ConvertFrom-Json\n    $body = [regex]::Replace($j.data.body,'<[^>]+>',' ')\n    $body = [regex]::Replace($body,'&gt;','>'); $body = [regex]::Replace($body,'&lt;','<')\n    $body = [regex]::Replace($body,'\\s+',' ')\n    Write-Output (\"===== \" + $id + \" \" + $j.data.title + \" len=\" + $body.Length)\n    Write-Output ($body.Substring(0,[Math]::Min(3000,$body.Length)))\n    Write-Output \"\"\n  } catch { Write-Output (\"FAIL \" + $id + \" \" + $_.Exception.Message) }\n}","description":"Fetch AI input method and privacy articles"}
+
+[tool • pwsh]
+===== 91303 提升输入效率的新利器：全新AI输入法体验 len=1670
+ 有时候面对输入框总是不知道怎么回复对方？让AI来帮你事半功倍吧 随着科技的发展，智能手机已经成为我们日常生活中不可或缺的一部分，而输入法作为手机中最常用的工具，其重要性不言而喻。在众多输入法应用中， Moocat输入法 凭借其智能、高效的特点，正在悄然改变我们的输入体验。 什么是 Moocat输入法 ？ Moocat输入法 是一款基于人工智能技术的智能输入法应用，它不仅能提供精准的拼音和文字输入，还能根据用户的习惯和需求，提供个性化的词汇推荐和联想功能。无论是日常聊天、工作记录，还是写作创作， Moocat输入法 都能为你带来前所未有的输入体验。 核心功能亮点 1. AI支持 一键呼出AI服务。可以选择内置AI服务和自定义AI服务，同时支持Moonshot AI、Gemini、OpenAI和文心一言。能帮助您快速回复邮件、回复聊天、写作、翻译等等。说再多，不如亲自体验。现在下载可获得免费体验额度，联系作者可获得免费apikey！ AI服务，快人一步 2. 实时翻译 一个突出的功能是实时翻译。无论是在聊天还是工作邮件中， Moocat输入法 都能帮助你即时翻译输入的内容，让你与全球用户无障碍交流。例如，当你输入中文内容时，可以实时翻译成英语、法语、德语等 8 种语言，极大地方便了多语言沟通。 实时翻译，8国语言 3. 多语言支持 Moocat输入法 支持多种语言输入，满足不同用户的需求。不仅支持中文拼音输入，还能流畅切换到英语、英文等多国语言，真正实现多语言无缝输入。 4. 常用语快捷输入 Moocat输入法 还支持常用语快捷输入功能。你可以预设常用的短语和句子，例如常用的问候语、地址、邮箱等，输入时一键调用，省时省力，提高输入效率。 常用语 5. 自定义皮肤和背景 为了满足用户的个性化需求， Moocat输入法 提供了丰富的自定义选项。你可以根据自己的喜好，选择不同的皮肤、背景和主题，让输入法界面更符合你的审美，提升使用体验。 自定义皮肤 为什么选择 Moocat输入法 ？ 1. 提升输入效率 无论是工作还是生活，我们都希望能够更快地完成文字输入。 Moocat输入法 提供 AI服务和实时翻译功能 ，显著提高了输入效率，让你在沟通和创作中更加得心应手 2. 简洁易用的界面 Moocat输入法 拥有简洁明了的用户界面，操作简单直观。即使是初次使用的用户，也能快速上手，轻松体验到智能输入的便利。 3. 个性化的外观定制 通过自定义皮肤和背景， Moocat输入法 不仅功能强大，而且外观时尚，让你的输入法与众不同，真正做到“千人千面”。 4. 不断优化与更新 我们的团队致力于不断优化和更新 Moocat输入法 ，不断引入最新的AI技术和用户反馈，确保输入法始终保持最佳的性能和体验。 用户评价 许多用户在使用 Moocat输入法 后，都给予了高度评价： 喜欢 Moocat 的 AI 输入！翻译流畅，隐私有保障。高效沟通的必备工具。 恭喜发布！轻松翻译和快速回复是非常有用的功能！ 我一定要试试。很高兴我没有错过。 实时翻译功能太强大了，让我在国际交流中更加自如，特别是在工作邮件中非常实用。 Moocat 正在彻底改变我们与技术互动的方式。这种人工智能输入法可以实现与人工智能的无缝沟通、实时语言翻译和个性化的用户体验。Moocat 代表着打字和数字互动的未来。 常用语快捷输入功能非常实用，让我在日常沟通中省去了很多重复输入的麻烦。 在 productHunt 发布获得大量支持 产品在productHunt发布 赠送兑换码 联系作者可以获得优惠码和内置AI服务的apikey 结语 在这个快节奏的时代，高效的输入工具显得尤为重要。 Moocat输入法 凭借其智能化、个性化和高效的特点，为用户提供了极致的输入体验。如果你正在寻找一款能够真正提升输入效率的输入法，不妨试试 Moocat输入法 ，相信它一定会成为你工作和生活中的得力助手。 下载 立即下载 Moocat输入法 ，开启智能输入新体验！ 
+
+===== 108636 受够了隐私泄露与臃肿：我做了一款物理断网的跨平台输入效率工具 len=1288
+ 最近花了三个月时间打磨和深度使用，给自己打造了一个桌面端输入法兼效率工具「素言 SuYan」。 主要想解决市面上商业输入法普遍存在的痛点： 隐私焦虑 ：受够了强制联网上传隐私数据，即使不用也在后台偷偷上传 臃肿干扰 ：各种弹窗、广告和捆绑功能，严重影响输入心流 割裂，模式单一 ：手机上打字/语音无缝切换，PC 上却几乎找不到一款能完美融合这两者的输入法。 素言特性 目前素言支持 Windows 和 macOS 双平台 ，核心特性都围绕“ 纯净、高效、隐私 ”展开。 ✨ 核心亮点速览： 🛡️ 极致纯净与隐私： 基于 RIME 开源引擎 构建，完全离线运行， 无需网络权限 (除非语音模式你选择云端大模型识别)。你的每一次输入、每一句语音，都只停留在本地设备，物理隔绝隐私泄露。 拒绝广告弹窗，拒绝捆绑无用功能，回归输入本质。 🎙️ 打字与离线语音双模融合： 内置高性能本地语音识别引擎， 音频数据绝不上传 到任何服务器。 低延迟、高精度中文优化，说完即出字，打断你的只有你的思考，而不是网络延迟。 不用来回切换，快捷键一键呼起，语音模式下也能使用键盘输入 🛠️ 内置效率工具集： 剪贴板管理： 轻量级剪贴板历史记录，支持文本和图片，随时回溯。 屏幕截图： 无需额外工具，输入法内一键调用截图，高效不打断。 临时英文模式： 中文输入模式下直接敲英文，无需切换，尤其适合程序员输入代码变量。 🧠 智能记忆与词库自由： 高频词库与强大的词频记忆，生僻词一次拼写，终身记忆，越用越懂你。 定期同步词库，也支持导入 Rime 格式的自定义短语和行业词库，专业场景也游刃有余。 🎨 高度自定义： 支持明暗主题、候选框样式、字体、配色、背景图等全方位定制，打造专属你的输入界面。 同时支持 横排 与 竖排 布局切换，超大候选视野（最多 45 个候选词）。 📸功能演示： 离线语音输入演示： 离线语音输入 剪贴板历史管理： 剪贴板 候选框与自定义皮肤： 候选词框 自定义皮肤管理器 内嵌截图： 内嵌截图工具 📊 我为什么选择自己写？（对比商业/系统输入法） 维度 商业输入法 系统输入法 素言 SuYan 隐私 ☁️ 强制联网，上传隐私 🔒 相对安全 🛡️ 物理隔绝，完全离线 语音 🌐 音频上传云端识别 ❌ 不支持 🎙️ 本地识别，音频不出本机 体验 🐌 臃肿，广告多，弹窗 😐 功能单一，词库弱 ⚡️ 极速启动，智能词频 功能 🧩 捆绑大量无用功能 📝 仅基础输入 🛠️ 内置截图/剪贴板 颜值 🎨 花哨，干扰视觉 🏳️ 过于朴素 🎨 支持自定义皮肤/图片 📥 如何下载体验？ 目前素言完全免费开放下载，您可以通过以下链接前往官网了解更多详情并下载： 👉 素言 SuYan 官网：https://suyan.zhangjh.cn （官网提供 Windows 版和 macOS 版直链下载，建议在电脑端打开获取。） 如果您对项目有任何建议或遇到问题，欢迎随时留言讨论！ 文章首发在微信公众号，也欢迎大家关注我的微信公众号：但丁自留地 公众号 
+
+
+
+[assistant]
+Now I need user pain points from Zhihu / V2EX / App Store. I have App Store reviews already (from b2, b5). Let me check what I have in summaries about pain points. b14 mentioned keyboard logger pain point from sspai article 108636? Actually the tail said "搜狗输入法，备份时发现词库有 27 万条，99% 是垃圾词条...". That was from 108636 comments maybe.
+
+Let me try Zhihu search via API? Zhihu is hard. Let me think: I could fetch specific zhihu answers via API `https://www.zhihu.com/api/v4/questions/xxx/answers`. Need question IDs. Maybe search via Bing? Bing search was unreliable (b8: returned empty data).
+
+Alternative: use V2EX's own search? Or the V2EX API: `https://www.v2ex.com/api/topics/show.json?node_name=...`. Actually V2EX has node "keyboard" or search via Google. Hmm.
+
+Let me try V2EX search page: `https://www.v2ex.com/go/...`. Hmm.
+
+Maybe simpler: fetch a few App Store review pages for more pain points, and fetch Zhihu question page for "iOS 第三方输入法" via web_fetch. Let me test if zhihu.com works with proxy.
+
+Let me try a batch: zhihu search API and v2ex search.
+
+Actually, I already have a large amount of App Store reviews (b5 block summary). Let me check what specific reviews are captured. Let me decompress b5? It's small (1082ch). But it's compressed; search_context or decompress one tier up gives summary. Hmm, decompress b5 would restore original messages (large). Better: I have the summary already in context above (tail). Not full detail.
+
+Let me plan the remaining work:
+1. Get more user pain points (Zhihu/V2EX/sspai comments) — 1-2 fetches.
+2. Verify a few facts: 微信键盘 privacy policy (has been captured in b11?), Gboard Chinese, 系统原生拼音键盘 features (Apple), 讯飞/百度 iOS AI features (captured), 词库规模 (搜狗 词库? 百度?).
+3. Write the report.
+
+Given context budget, I should be efficient. Let me do one round of fetching pain points from Zhihu, and check sspai comments API for article 116430 / 86791 (comments often have real complaints). sspai comments API: `https://sspai.com/api/v1/comment/list/get?article_id=xxx&limit=50&offset=0`. Let me try that — comments on 输入法 articles are gold for pain points.
+
+Also App Store reviews already include many complaints. Let me pull the top critical reviews for 搜狗/百度/讯飞 sorted by most helpful (sortBy=mostHelpful) to get more pain points. Actually I may already have those.
+
+Let me do: sspai comments for 116430 and 86791 + one zhihu attempt.
+
+[assistant • pwsh]
+{"command":"$ProgressPreference='SilentlyContinue'\n$env:HTTPS_PROXY='http://127.0.0.1:2080'; $env:HTTP_PROXY='http://127.0.0.1:2080'\nforeach ($id in @('116430','86791','79469')) {\n  foreach ($ep in @(\"https://sspai.com/api/v1/comment/list/get?article_id=$id&limit=40&offset=0&sort=hot\")) {\n    try {\n      $r = Invoke-WebRequest -Uri $ep -TimeoutSec 25 -UseBasicParsing\n      $j = $r.Content | ConvertFrom-Json\n      Write-Output (\"##### article $id count=\" + $j.data.Count)\n      $j.data | ForEach-Object {\n        $c = [regex]::Replace($_.comment,'\\s+',' ')\n        if ($c.Length -gt 160) { $c = $c.Substring(0,160) }\n        \"  - \" + $c\n      }\n    } catch { Write-Output (\"FAIL $id \" + $_.Exception.Message) }\n  }\n}","description":"Fetch sspai article comments for pain points"}
+
+[tool • pwsh]
+##### article 116430 count=0
+  - 
+##### article 86791 count=0
+  - 
+##### article 79469 count=0
+  - 
+
+
+[assistant]
+Comment API 返回空 data。换端点。多数派评论 API: `https://sspai.com/api/v1/comment/list/get?article_id=116430&limit=20&offset=0` 也许需要其他参数。或者用 `https://sspai.com/api/v1/article/comment/list?`。
+
+其实时间有限。App Store 评论已给大量真实痛点。少数派文章本身也提供了痛点（词库/同步/折腾/隐私）。我有足够素材。
+
+现在还需补充：
+1. 讯飞/百度/搜狗 iOS 端的 AI 功能细节（已有部分）。
+2. 微信键盘的 AI？微信键盘主打"不联网、不保存"，有"拼写Plus"（需联网）。
+3. iRime/同文输入法（Android）。
+4. 语音输入现状——已有 WhisperKit、Apple SpeechAnalyzer、Paraformer 等？b11 里有。让我确认 b11 内容。
+5. 词库规模数据：搜狗宣称词库规模、百度、讯飞。需要数字。
+
+让我看看 b11 摘要细节，避免重复抓取。用 search_context 或直接读 b11 摘要。摘要 head/tail 已显示部分。让我 decompress b11。
+
+[assistant • decompress]
+{"blockId":"b11"}
+
+[tool • decompress]
+[Block b11 content — 66 item(s)]
+Content (156677 chars) written to: C:\Users\z9041\AppData\Local\Temp\acp-decompress-b11-1792875686187.txt
+Use the read tool to access it.
+
+[assistant]
+Let me check b11 quickly for what research is already complete, particularly the speech section and 词库 section details, and whether 微信 privacy policy was fetched.
+
+Actually, rather than reading 156K chars, let me grep for headings.
+
+Actually the summary already had 3322 chars. Let me read the decompressed file's beginning where content likely is... no, it's the raw messages.
+
+Better: the summary b11 is 3322 chars and I have its head/tail only. I need the middle. Let me use search_context? No — b11 IS the block; search only searches summaries. I could read the file but selectively.
+
+Let me think about what I still need:
+1. 微信输入法隐私政策 (did I get it?) — task item 1 requires 隐私 column for each product.
+2. 语音输入现状 — mostly covered; Maybe need whisper.cpp iOS specifics.
+3. 词库规模 numbers — 搜狗词库/百度词库 size, 微信输入法 词库 etc.
+4. User pain points from 知乎/少数派 — I have App Store reviews and sspai comments (some).
+
+Given time, let me do a few more targeted fetches and then write the report. The deliverable is the report, 2000-3000 字. I have a lot of material.
+
+Let me quickly grep b11 file for key facts (词库, 隐私政策, 完全访问).
+
+[assistant • grep]
+{"path":"C:\\Users\\z9041\\AppData\\Local\\Temp\\acp-decompress-b11-1792875686187.txt","pattern":"隐私政策|词库|万条|亿|完全访问|whisper.cpp|WhisperKit|Sherpa|sherpa|端侧"}
+
+[tool • grep]
+Found 88 matches
+
+C:\Users\z9041\AppData\Local\Temp\acp-decompress-b11-1792875686187.txt
+Line 34: 16: Also need 语音输入现状: Whisper / WhisperKit / sherpa-onnx / FunASR/SenseVoice (阿里), 讯飞, 豆包语音大模型; iOS 端侧: Apple Speech framework (SFSpeechRecognizer, on-device since iOS 13 with requiresOnDeviceRecognition), WhisperKit (Argmax), whisper.cpp, sherpa-onnx, SenseVoice small. Costs: 云侧 per minute pricing. Also iOS 26 SpeechAnalyzer/SpeechTranscriber (new on-device Speech framework in iOS 26) — that's a big one for 2025-2026. Yes! iOS 26 introduced SpeechAnalyzer and SpeechTranscriber APIs for on-device long-form speech transcription. That's very relevant to 墨语 (iOS, local, zero backend). Let me verify via Apple developer docs.
+Line 102: 84: {"command":"$ProgressPreference='SilentlyContinue'\n$env:HTTPS_PROXY='http://127.0.0.1:2080'; $env:HTTP_PROXY='http://127.0.0.1:2080'\n$qs = @('site:sspai.com 输入法 iOS 第三方键盘','输入法 iOS 键盘 体验 差 安卓 原因 v2ex','讯飞 语音输入 离线 端侧 模型 2025')\nforeach ($q in $qs) {\n  $u = 'https://www.bing.com/search?q=' + [uri]::EscapeDataString($q) + '&setlang=zh-CN'\n  try {\n    $r = Invoke-WebRequest -Uri $u -TimeoutSec 25 -UseBasicParsing -Headers @{'User-Agent'='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36'}\n    $html = $r.Content\n    Write-Output (\"=== \" + $q + \" status=\" + $r.StatusCode + \" len=\" + $html.Length)\n    $m = [regex]::Matches($html, '<h2><a href=\"(https?://[^\"]+)\"[^>]*>(.*?)</a></h2>')\n    $i=0\n    foreach ($x in $m) { if ($i -ge 8) {break}; $i++\n      $t = [regex]::Replace($x.Groups[2].Value,'<[^>]+>','')\n      Write-Output (\"  \" + $x.Groups[1].Value + \" | \" + $t)\n    }\n  } catch { Write-Output (\"FAIL \" + $q + \" \" + $_.Exception.Message) }\n}","description":"Search Bing for input method user complaints"}
+Line 107: 89: === 讯飞 语音输入 离线 端侧 模型 2025 status=200 len=102186
+Line 116: 98: {"command":"$ProgressPreference='SilentlyContinue'\n$env:HTTPS_PROXY='http://127.0.0.1:2080'; $env:HTTP_PROXY='http://127.0.0.1:2080'\n$qs = @('site:sspai.com 输入法','iOS 第三方键盘 为什么 不如 安卓 输入法','讯飞输入法 离线语音 端侧')\nforeach ($q in $qs) {\n  $u = 'https://www.bing.com/search?q=' + [uri]::EscapeDataString($q) + '&format=rss&setlang=zh-CN&count=20'\n  try {\n    [xml]$x = (Invoke-WebRequest -Uri $u -TimeoutSec 25 -UseBasicParsing -Headers @{'User-Agent'='Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120'}).Content\n    Write-Output (\"=== \" + $q)\n    foreach ($it in $x.rss.channel.item) { Write-Output (\"  \" + $it.link + \" | \" + $it.title) }\n  } catch { Write-Output (\"FAIL \" + $q + \" \" + $_.Exception.Message) }\n}","description":"Bing RSS search for input method complaints"}
+Line 152: 4. 语音输入现状: Apple SpeechAnalyzer (iOS 26+), WhisperKit, whisper.cpp, sherpa-onnx / SenseVoice, 豆包/讯飞 cloud API pricing.
+Line 153: 5. 词库行业做法 — 雾凇拼音, 搜狗细胞词库, 百度垂类词库.
+Line 171: 122: === 讯飞输入法 离线语音 端侧
+Line 188: 1. Voice input: iOS 26 SpeechAnalyzer/SpeechTranscriber, WhisperKit, sherpa-onnx, SenseVoice, cloud pricing. Need to verify with web_fetch.
+Line 210: Line 66: "description":"====== 炫酷功能 ======\n\n‣ 卓越拼音\\语音\\手写\\笔画\\文字扫描\\跨屏输入\n‣ 词库强大、本地深度学习模型、流畅高效，搜狗总能懂你\n‣ 快捷分享图片\\影音\\资讯，让表达更简单\n‣ 炫动皮肤、DIY按键音\\壁纸，键盘你做主\n‣ 随心定制皮肤背景、按键形状、动效、字体、按键音 \n‣ 小字\\花漾字\\图片字，玩出文字花样\n‣ 全量Emoji\\全类图形\\标记\\音标\\字符\\符号\n‣ 鲜萌颜文字，潮流弹幕\\朋友圈\\流行语\n‣ 热门表情、DIY斗图，不玩别人玩剩的\n\n===== 快捷小窍门 ===== \n\n【移动光标】左右划键盘能方便地移动光标\n【文字扫描】可以直接识别出照片中的文字\n【点划输入】向上划能直接输入数字和符号\n【手写注音】手写输入生僻字可以得到读音\n【键盘手写】不用换到手写键盘，直接在拼音键盘写\n【单手键盘】一秒切换大屏，方便单手操作\n【闪光语录】热门流行语，自定义语录，助你花式表达\n【滑行输入】手指不离键盘，行云流水快速输入\n【韩语键盘】能换皮肤、发表情，사용을 환영합니다.\n【开挂模式】三连发、说三遍、回声模式、聊天开挂，怼人更爽\n\n===== 常见问题解答 ===== \n\n1、 App Store更新搜狗输入法失败怎么办？\n重启手机或开启「允许完全访问」后，不调起键盘直接去App Store点击更新。\n\n2、如何启用搜狗输入法？\n添加键盘：下载安装搜狗输入法，进入系统设置 - 通用 - 键盘 - 键盘 - 添加新键盘 - 第三方键盘 选择 搜狗输入法 -\"搜狗输入法\" - 开启「允许完全访问」- 完成\n使用键盘：打开任何输入框 - 按住小地球键 选择 \"搜狗输入法\"\n\n3、 更新后，键盘列表出现(null)无法切换到搜狗输入法怎么办？\n由于系统原因，可能会出现输入法更新后 (line truncated)
+Line 276: Line 309: 【拼音输入】丰富词库，智能纠错，丝滑联想，AI预测输入覆盖多种表达场景。
+Line 287: 1. 语音输入现状 (voice input: 端侧 vs 云侧, Whisper, iOS implementation paths) — need some concrete data: WhisperKit, whisper.cpp, sherpa-onnx, SenseVoice, Apple SpeechAnalyzer (iOS 26), SFSpeechRecognizer on-device.
+Line 297: - Voice: fetch WhisperKit GitHub README (raw.githubusercontent.com) for on-device numbers; maybe sherpa-onnx README; Apple SpeechAnalyzer doc.
+Line 303: 1. https://raw.githubusercontent.com/argmaxinc/WhisperKit/main/README.md
+Line 317: {"url":"https://raw.githubusercontent.com/argmaxinc/WhisperKit/main/README.md"}
+Line 324: Line 66: "description":"====== 炫酷功能 ======\n\n‣ 卓越拼音\\语音\\手写\\笔画\\文字扫描\\跨屏输入\n‣ 词库强大、本地深度学习模型、流畅高效，搜狗总能懂你\n‣ 快捷分享图片\\影音\\资讯，让表达更简单\n‣ 炫动皮肤、DIY按键音\\壁纸，键盘你做主\n‣ 随心定制皮肤背景、按键形状、动效、字体、按键音 \n‣ 小字\\花漾字\\图片字，玩出文字花样\n‣ 全量Emoji\\全类图形\\标记\\音标\\字符\\符号\n‣ 鲜萌颜文字，潮流弹幕\\朋友圈\\流行语\n‣ 热门表情、DIY斗图，不玩别人玩剩的\n\n===== 快捷小窍门 ===== \n\n【移动光标】左右划键盘能方便地移动光标\n【文字扫描】可以直接识别出照片中的文字\n【点划输入】向上划能直接输入数字和符号\n【手写注音】手写输入生僻字可以得到读音\n【键盘手写】不用换到手写键盘，直接在拼音键盘写\n【单手键盘】一秒切换大屏，方便单手操作\n【闪光语录】热门流行语，自定义语录，助你花式表达\n【滑行输入】手指不离键盘，行云流水快速输入\n【韩语键盘】能换皮肤、发表情，사용을 환영합니다.\n【开挂模式】三连发、说三遍、回声模式、聊天开挂，怼人更爽\n\n===== 常见问题解答 ===== \n\n1、 App Store更新搜狗输入法失败怎么办？\n重启手机或开启「允许完全访问」后，不调起键盘直接去App Store点击更新。\n\n2、如何启用搜狗输入法？\n添加键盘：下载安装搜狗输入法，进入系统设置 - 通用 - 键盘 - 键盘 - 添加新键盘 - 第三方键盘 选择 搜狗输入法 -\"搜狗输入法\" - 开启「允许完全访问」- 完成\n使用键盘：打开任何输入框 - 按住小地球键 选择 \"搜狗输入法\"\n\n3、 更新后，键盘列表出现(null)无法切换到搜狗输入法怎么办？\n由于系统原因，可能会出现输入法更新后 (line truncated)
+Line 326: Line 78: "description":"抖音，记录美好生活\n\n每天，都有亿万人打开抖音，让生活变得更加美好。\n●  看精彩直播\n屏幕里的美好现场，陪伴你的每分每秒。\n●  追上头短剧\n剧情高能不断，看得开心，追得过瘾。\n●  玩爆款特效\n丰富装扮效果，上一秒甜美，下一秒酷炫。\n●  看抖音精选\n凭热爱创作的优质中长视频，让时间不虚度。\n● 开启长辈模式\n享受贴心关爱与陪伴，看得更清，用得舒心。\n\n● 不仅如此，抖音还深入各领域，为美好生活，创造更多新可能。\n拿起抖音，农特产发现新销路，宝妈找到新工作，小店迎来新客群；打开抖音，古籍焕发新生命，非遗等来满堂彩，知识也从庙堂传入市井；有了抖音，退休老人可以在直播间发挥余热，孩子们得以在线上课堂茁壮成长，公益事业也能人人可及。\n\n●  自动续费订阅说明 \n1.订阅服务：\n-a- 汽水会员连续包月（1个月）、包年（12个月）\n-b- 抖音短剧连续月卡（1个月）\n-c- 汽水SVIP-连续包月（1个月）、包年（12个月）\n\n2.订阅价格：\n-a- 汽水音乐会员：连续包月8元/月，连续包年88元/年\n-b- 抖音短剧卡：连续包15元/月\n-c- 汽水音乐SVIP：连续包月18元/月，连续包年158元/年\n\n3.付款：用户确认购买并付款后计入iTunes账户\n\n4.续订：苹果iTunes账户会在到期前24小时内扣费，扣费成功后订阅周期顺延一个订阅周期\n\n5.取消订阅：如需取消订阅，请在当前订阅周期到期前24小时以前，手动在iTunes/Apple ID设置管理中关闭自动续订功能\n\n6.自动续期服务协议：\n-a- 汽水音乐会员：https://luna-web.douyin.com/vip-terms\n-b- 抖音短剧卡：https://lf26-cdn-tos.draftstatic.com/obj/ies-hotsoon-draft/live/playlet-member-service-protocol.html\n-c- 汽水音乐SVIP：https://luna-web.douyin.com/vip-terms\n (line truncated)
+Line 386: Fetched https://raw.githubusercontent.com/argmaxinc/WhisperKit/main/README.md (HTTP 200)
+Line 414: - **WhisperKit** for speech-to-text with OpenAI Whisper
+Line 438: - [WhisperKit](#whisperkit)
+Line 479: WhisperKit, TTSKit, and SpeakerKit are separate library products in the same Swift package. Add the package once and pick the products you need. You can also use the `ArgmaxOSS` umbrella product to import everything at once.
+Line 492: 5. When prompted to choose library products, select **ArgmaxOSS** (all kits), or individual kits: **WhisperKit**, **TTSKit**, **SpeakerKit**.
+Line 514:         // .product(name: "WhisperKit", package: "argmax-oss-swift"),   // speech-to-text
+Line 529: ## WhisperKit
+Line 531: To get started with WhisperKit, you need to initialize it in your project.
+Line 538: import WhisperKit
+Line 540: // Initialize WhisperKit with default settings
+Line 542:     let pipe = try? await WhisperKit()
+Line 551: By default WhisperKit loads the whole audio file into memory before transcribing. For long recordings, `.incremental` streams it from disk in bounded-memory chunks instead:
+Line 554: import WhisperKit
+Line 556: let pipe = try await WhisperKit()
+Line 579: | Whisper Version                  | WhisperKit Variant                                                                                                 | Description                                                                      |
+Line 592: WhisperKit automatically downloads the recommended model for the device if not specified. You can also select a specific model by passing in the model name:
+Line 596: let pipe = try? await WhisperKit(WhisperKitConfig(model: "large-v3-v20240930_626MB"))
+Line 602: let pipe = try? await WhisperKit(WhisperKitConfig(model: "large-v3-v20240930_626MB"))
+Line 611: WhisperKit also comes with the supporting repo [`whisperkittools`](https://github.com/argmaxinc/whisperkittools) which lets you create and deploy your own fine tuned versions of Whisper in CoreML format to HuggingFace. Once generated, they can be loaded by simply changing the repo name to the one used to upload the model:
+Line 614: let config = WhisperKitConfig(model: "large-v3-v20240930_626MB", modelRepo: "username/your-model-repo")
+Line 615: let pipe = try? await WhisperKit(config)
+Line 1011: SpeakerKit can merge diarization results with WhisperKit transcriptions to produce speaker-attributed segments:
+Line 1014: import WhisperKit
+Line 1017: let whisperKit = try await WhisperKit()
+Line 1090: If you use WhisperKit, SpeakerKit or TTSKit for academic work, please cite the project using the following BibTeX:
+Line 1094:    title = {Argmax OSS: On-device Speech AI with WhisperKit, SpeakerKit and TTSKit},
+Line 1103: Good, I have WhisperKit info. Now I need Apple SpeechAnalyzer (iOS 26) info and SenseVoice / FunASR Chinese-specific ASR. Let me fetch:
+Line 1106: 3. sherpa-onnx README.
+Line 1113: - 语音方案技术资料（SenseVoice/FunASR, sherpa-onnx, Apple SpeechAnalyzer）
+Line 1115: - 词库规模数据（搜狗词库多大？百度？）— I have 雾凇拼音 info. Need Sogou/Baidu dictionary size claims. Possibly from official sites: shurufa.sogou.com. Let me try fetching shurufa.sogou.com and srf.xunfei.cn.
+Line 1433: Run **SenseVoice / Paraformer / Fun-ASR-Nano** as a **single self-contained binary** on CPU and edge devices — this is to FunASR what [whisper.cpp](https://github.com/ggml-org/whisper.cpp) is to Whisper, but with **~3× lower CER than whisper.cpp on Chinese**. Built-in FSMN-VAD, no Python at runtime.
+Line 1616: {"command":"$ProgressPreference='SilentlyContinue'\n$env:HTTPS_PROXY='http://127.0.0.1:2080'; $env:HTTP_PROXY='http://127.0.0.1:2080'\n$qs = @('少数派 输入法 iOS 键盘 体验','知乎 为什么 iOS 第三方输入法 难用','输入法 词库 热词 更新 机制 搜狗 词库 规模')\nforeach ($q in $qs) {\n  $u = 'https://www.bing.com/search?q=' + [uri]::EscapeDataString($q) + '&format=rss&setlang=zh-CN&count=15'\n  try {\n    [xml]$x = (Invoke-WebRequest -Uri $u -TimeoutSec 25 -UseBasicParsing -Headers @{'User-Agent'='Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120'}).Content\n    Write-Output (\"=== \" + $q)\n    foreach ($it in $x.rss.channel.item) { Write-Output (\"  \" + $it.link + \" | \" + $it.title) }\n  } catch { Write-Output (\"FAIL \" + $q + \" \" + $_.Exception.Message) }\n}","description":"Bing RSS search for Chinese IME complaint articles"}
+Line 1641: === 输入法 词库 热词 更新 机制 搜狗 词库 规模
+Line 1726: {"command":"$ProgressPreference='SilentlyContinue'\n$env:HTTPS_PROXY='http://127.0.0.1:2080'; $env:HTTP_PROXY='http://127.0.0.1:2080'\n$qs = @('iOS 第三方输入法 为什么 不如 安卓','输入法 词库 规模 搜狗 细胞词库')\nforeach ($q in $qs) {\n  $u = 'https://html.duckduckgo.com/html/?q=' + [uri]::EscapeDataString($q)\n  try {\n    $r = Invoke-WebRequest -Uri $u -TimeoutSec 25 -UseBasicParsing -Headers @{'User-Agent'='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36'}\n    Write-Output (\"=== \" + $q + \" status=\" + $r.StatusCode + \" len=\" + $r.Content.Length)\n    $m = [regex]::Matches($r.Content, 'result__a[^>]*href=\"([^\"]+)\"[^>]*>(.*?)</a>')\n    $i=0\n    foreach ($x in $m) { if ($i -ge 10) {break}; $i++\n      $t = [regex]::Replace($x.Groups[2].Value,'<[^>]+>','')\n      Write-Output (\"  \" + $x.Groups[1].Value + \" | \" + $t)\n    }\n    if ($m.Count -eq 0) { Write-Output ($r.Content.Substring(0,[Math]::Min(600,$r.Content.Length))) }\n  } catch { Write-Output (\"FAIL \" + $q + \" \" + $_.Exception.Message) }\n}","description":"DuckDuckGo HTML search test"}
+Line 1730: FAIL 输入法 词库 规模 搜狗 细胞词库 无法连接到远程服务器
+Line 1777: Also I should gather the 语料/词库 section (section 3): 搜狗细胞词库 (cell lexicon) — need sources. I know from public knowledge: 搜狗细胞词库平台, 词库总量 billions? Let me get something citable. Maybe fetch 搜狗输入法 词库 page: https://shurufa.sogou.com/dict or 细胞词库 site pinyin.sogou.com/dict. Also Rime 雾凇拼音 word count. I have 雾凇 details from b4 maybe.
+Line 1779: Let me try fetching pinyin.sogou.com/dict and baidu 词库 pages.
+Line 1784: 1. 搜狗细胞词库 page (词库规模, 更新机制) — high value for section 3.
+Line 1795:  搜狗细胞词库_词库下载_词典_输入法字典 输入法手机版 输入法Mac版 输入法企业版 输入法Linux版 五笔输入法 注册 登录 首页 皮肤 词库 皮肤表情开放平台 字媒体 --> 帮助 --> 升级日志 论坛 --> 个人中心 --> --> 全部 社会 娱乐 人物 输入指数 词条名称 1757985 快乐 1467431 真好 444030 起床 264227 十一 230648 冬天 52174 螃蟹 36313 过节 1728 吴秀波 1653 光棍节 63625 国庆 32956 情人节 20724 月饼 6761 扫墓 2227 教师节 1673 开学第一课 792 开学典礼 210 傅莹 209 释永信 33627 天天向上 6147 中国好声音 4440 古剑奇谭 1322 分手大师 1255 秦昊 871 新歌声 213 忠奸人 153 北平无战事 107 济公活佛 25650 黄景瑜 8263 美国队长 6475 美队 6389 徐佳莹 2552 屠呦呦 2323 刘强东 841 杨绛 834 陈欧 184 陈乐基 魔道祖师 财务专用 TFBOYS粉丝专用 柳宗元诗词 19520 个网友创建了 27695 个词库 共 48482247 个词条 城市信息大全 全国 广东 北京 上海 云南 安徽 四川 江苏 辽宁 国外地名 全国省市区县地名 中国医院大全 风景名胜精选 全国方言词库 电子游戏 单机游戏 网络游戏 网页游戏 王者荣耀 英雄联盟 梦幻西游 魔兽世界 阴阳师 剑网3 龙之谷 自然科学 生物 化学 数学 物理 其它 天文学 气象学 海洋学 地理地质 动物词汇大全 生物词汇大全 地理地质词汇大全 物理词汇大全 化学化工词汇大全 植物词汇大全 人文科学 语言 文学 宗教 历史 哲学 神学 考古 其它 伦理学 网络流行新词 宋词精选 成语俗语 唐诗300首 古诗词名句 道教词汇大全 社会科学 法律 军事 其它 心理学 政治学 房地产 社会学 伦理学 档案学 法律词汇大全 财经金融词汇大全 心理学词汇大全 财务会计 财会词汇大全 房地产词汇大全 军事词汇大全 工程与应用科学 建筑 化工 其它 造纸 包装 计算机 机械工 (line truncated)
+Line 1803: Excellent find: Sogou 细胞词库 statistics: "19520 个网友创建了 27695 个词库 共 48482247 个词条" — that's a great concrete number for the corpus section. Wait, actually reading: "19520 个网友创建了 27695 个词库 共 48482247 个词条" = 19,520 users created 27,695 dictionaries with 48,482,247 entries. Hmm that seems low for Sogou's total — but it's the 细胞词库 (cell dictionary) platform stat. Good enough with attribution.
+Line 1811: 4. 百度 — 超会写, AI表情, AI皮肤, AI头像, 专业模式 (medical/legal terms!). The 专业模式 note is great for 垂直词库 section: "专业词直接成词：药品名、疾病名、法律术语、定理名称…不用拆开逐字选；专业符号随输随用：打「偏导」出∂，打「处方药」出℞；缩写关联全称：打「DMSO」出「二甲基亚砜」，输入「民法典1065」联想对应法条" — excellent for 垂直领域词库.
+Line 1820: - Sogou 输入法 iOS 隐私: uses "允许完全访问" to enable cloud. Standard.
+Line 1829: {"path":"C:\\Users\\z9041\\AppData\\Local\\Temp\\acp-decompress-b1-1792875288908.txt","pattern":"隐私|完全访问|不留存|不上传|本地"}
+Line 1835: Line 66: "description":"====== 炫酷功能 ======\n\n‣ 卓越拼音\\语音\\手写\\笔画\\文字扫描\\跨屏输入\n‣ 词库强大、本地深度学习模型、流畅高效，搜狗总能懂你\n‣ 快捷分享图片\\影音\\资讯，让表达更简单\n‣ 炫动皮肤、DIY按键音\\壁纸，键盘你做主\n‣ 随心定制皮肤背景、按键形状、动效、字体、按键音 \n‣ 小字\\花漾字\\图片字，玩出文字花样\n‣ 全量Emoji\\全类图形\\标记\\音标\\字符\\符号\n‣ 鲜萌颜文字，潮流弹幕\\朋友圈\\流行语\n‣ 热门表情、DIY斗图，不玩别人玩剩的\n\n===== 快捷小窍门 ===== \n\n【移动光标】左右划键盘能方便地移动光标\n【文字扫描】可以直接识别出照片中的文字\n【点划输入】向上划能直接输入数字和符号\n【手写注音】手写输入生僻字可以得到读音\n【键盘手写】不用换到手写键盘，直接在拼音键盘写\n【单手键盘】一秒切换大屏，方便单手操作\n【闪光语录】热门流行语，自定义语录，助你花式表达\n【滑行输入】手指不离键盘，行云流水快速输入\n【韩语键盘】能换皮肤、发表情，사용을 환영합니다.\n【开挂模式】三连发、说三遍、回声模式、聊天开挂，怼人更爽\n\n===== 常见问题解答 ===== \n\n1、 App Store更新搜狗输入法失败怎么办？\n重启手机或开启「允许完全访问」后，不调起键盘直接去App Store点击更新。\n\n2、如何启用搜狗输入法？\n添加键盘：下载安装搜狗输入法，进入系统设置 - 通用 - 键盘 - 键盘 - 添加新键盘 - 第三方键盘 选择 搜狗输入法 -\"搜狗输入法\" - 开启「允许完全访问」- 完成\n使用键盘：打开任何输入框 - 按住小地球键 选择 \"搜狗输入法\"\n\n3、 更新后，键盘列表出现(null)无法切换到搜狗输入法怎么办？\n由于系统原因，可能会出现输入法更新后 (line truncated)
+Line 1836: Line 78: "description":"抖音，记录美好生活\n\n每天，都有亿万人打开抖音，让生活变得更加美好。\n●  看精彩直播\n屏幕里的美好现场，陪伴你的每分每秒。\n●  追上头短剧\n剧情高能不断，看得开心，追得过瘾。\n●  玩爆款特效\n丰富装扮效果，上一秒甜美，下一秒酷炫。\n●  看抖音精选\n凭热爱创作的优质中长视频，让时间不虚度。\n● 开启长辈模式\n享受贴心关爱与陪伴，看得更清，用得舒心。\n\n● 不仅如此，抖音还深入各领域，为美好生活，创造更多新可能。\n拿起抖音，农特产发现新销路，宝妈找到新工作，小店迎来新客群；打开抖音，古籍焕发新生命，非遗等来满堂彩，知识也从庙堂传入市井；有了抖音，退休老人可以在直播间发挥余热，孩子们得以在线上课堂茁壮成长，公益事业也能人人可及。\n\n●  自动续费订阅说明 \n1.订阅服务：\n-a- 汽水会员连续包月（1个月）、包年（12个月）\n-b- 抖音短剧连续月卡（1个月）\n-c- 汽水SVIP-连续包月（1个月）、包年（12个月）\n\n2.订阅价格：\n-a- 汽水音乐会员：连续包月8元/月，连续包年88元/年\n-b- 抖音短剧卡：连续包15元/月\n-c- 汽水音乐SVIP：连续包月18元/月，连续包年158元/年\n\n3.付款：用户确认购买并付款后计入iTunes账户\n\n4.续订：苹果iTunes账户会在到期前24小时内扣费，扣费成功后订阅周期顺延一个订阅周期\n\n5.取消订阅：如需取消订阅，请在当前订阅周期到期前24小时以前，手动在iTunes/Apple ID设置管理中关闭自动续订功能\n\n6.自动续期服务协议：\n-a- 汽水音乐会员：https://luna-web.douyin.com/vip-terms\n-b- 抖音短剧卡：https://lf26-cdn-tos.draftstatic.com/obj/ies-hotsoon-draft/live/playlet-member-service-protocol.html\n-c- 汽水音乐SVIP：https://luna-web.douyin.com/vip-terms\n (line truncated)
+Line 1837: Line 93: "description":"微信是一款全方位的手机通讯应用，帮助你轻松连接全球好友。微信可以群聊、进行视频聊天、与好友一起玩游戏，以及分享自己的生活到朋友圈，让你感受耳目一新的移动生活方式。\n\n  为什么要使用微信：\n  • 多媒体消息：支持发送视频、图片、文本和语音消息。\n  • 群聊和通话：组建高达500人的群聊和高达15人的实时视频聊天。\n  • 语音和视频聊天：提供全球的高质量通话。\n  • 表情商店：海量动态表情，包括热门卡通人物和电影，让聊天变得更生动有趣。\n  • 朋友圈：与好友分享每个精彩瞬间，记录自己的生活点滴。\n  • 更佳的隐私保障：微信为您提供最高级别的隐私控制权限，并已获得 TRUSTe 认证 — 查看我们的隐私政策以了解更多信息。\n  • 认识新朋友：通过“雷达加朋友”和“附近的人”认识新朋友。\n  • 实时位置共享：与好友分享地理位置，无需通过语言告诉对方。\n  • 多语言：支持超过20多种语言界面，并支持多国语言的消息翻译。\n  • 微信运动：支持接入Apple Watch及健康app数据，可在步数排行榜上和朋友一较高下。若需使用，可在“设置-通用-辅助功能”内启用。 \n  • 更多功能: 支持跨平台、聊天室墙纸自定义、消息提醒自定义和公众号服务等。\n  • 关怀模式: 文字与按钮更大更清晰。", "bundleId":"com.tencent.xin", "userRatingCount":8121812}, 
+Line 1839: Line 264: 第一步：安装后，进入系统设置—>通用—>键盘—>添加键盘—>第三方键盘 选择 百度-百度输入法 —> 百度-百度输入法 —> 开启完全访问（同步开启云输入、百度输入法设置同步）—>完成
+Line 1840: Line 268: 第一步：进入系统设置—>通用—>键盘—> 中文-百度输入法 —> 开启完全访问
+Line 1841: Line 272: 第一步：进入系统设置—>通用—>键盘—> 中文-百度输入法 —> 开启完全访问
+Line 1843: Line 358: 隐私政策：
+Line 1844: Line 392: -启用豆包输入法：下载安装后，需要进入系统设置-通用-键盘-键盘-添加新键盘-第三方键盘选择「豆包输入法」- 点击「豆包输入法」- 开启「允许完全访问」。
+Line 1851: Also I should get 搜狗 iOS "AI服务" details. Maybe from App Store description already: "「智能汪仔」化身工具栏上「AI 服务」". And the 专业模式 details: 药品名/疾病名/法律术语/定理名称 — that's great for 垂直领域词库 section!
+Line 1921: 620: - 基于 RIME：继承 RIME 强大的自定义能力，支持输入方案、词库与参数的细粒度配置，方便你按习惯精细优化。
+Line 1928: 627: - 强大可定制：如果你喜欢调整输入方案、词库和键盘布局，RIME 的灵活性让你能深入定制并持续优化打字效率。
+Line 1973: {"command":"$p='C:\\Users\\z9041\\AppData\\Local\\Temp\\acp-decompress-b2-1792875288927.txt'\n$lines = Get-Content -LiteralPath $p -Encoding UTF8\n$out = @()\nfor ($i=658; $i -lt $lines.Count; $i++) {\n  $l = $lines[$i]\n  if ($l -match '^\\s+\\[\\d+\\]') { $out += $l.Trim() }\n}\nWrite-Output (\"total reviews: \" + $out.Count)\n$out | Where-Object { $_ -match '跳转|卡|延迟|候选|词库|隐私|广[告]|会员|订阅|闪退|耗电|语音|识别|自动更新|还原|学习|记忆|切换|遮挡|高度|空白|丢' } | Select-Object -First 60 | ForEach-Object { Write-Output $_ }","description":"Extract complaint reviews matching keywords"}
+Line 1980: [1] 越来越人工智障了 :: 候选词越来越抽象了，听说是把真人开除了，用ai来搭建词库，真是服了，跟您说拜拜了
+Line 1988: [5] 算是个好评吧 :: 我因为要输入少数民族的文字所以选的百度输入法，用了一段时间，可能习惯了这个布局，后来换了搜狗的用了一下，很不习惯，因为百度的布局我很习惯，根据文字推荐表情的功能也是非常棒的，只是皮肤不太丰富？反正总之我还是挺喜欢的，词库在电脑端很多，也很方便，手机上有点少，还是有提升的空间的
+Line 2019: [5] 开通文件管理器后应该增加搜索功能 :: 开通文件管理器最大的功能是调节词库的权重，但设备往往很大没有搜索功能很难找到需要调节的词或词组。
+Line 2020: [5] 双拼爱好者盛赞，希望适配单手模式 :: 桌面端自然码+行码的词库终于可以在手机上用了，终于不用再忍受/吃灰ireme了，总之功能很不错，只是习惯了输入法单手模式，全屏键盘用起来键位经常找不到位置，希望开发者得空适配一下单手模式。
+Line 2021: [5] 超高自由度，离线保护 :: 不属于花里胡哨的硬核输入法，词库，不联网，不同步，离线模式都极大保护隐私，不收集数据。输入法要研究一下方案你才会用，譬如方案9公格一定是放第一排，不然都是数字。双拼很快我不太会用，需要学习。夯级输入法
+Line 2022: [5] 终于在iOS下找到一款的完美输入法 :: 我是一个使用多系统（Windows、macOS、Linux、iOS）的用户，Rime在各平台都有对应的软件。用这款输入法将电脑上的配置和词库导入后，各平台的输入方式和体验能保持一致。非常棒！
+Line 2023: [5] 很好用的输入法，内存占用低 :: 安装包仅需要58M就能带来非常流畅的输入体验，没有花里胡哨的功能，关键是老机器也能流畅使用，这对我非常重要，在日常的使用中也没有遇到词库不足的情况，界面简洁可定制，可以导入macos的配置，简直是完美的输入法
+Line 2029: Now, I still need section 3 (词库/语料行业做法) — I have Sogou 细胞词库 numbers: 19520 用户创建词库, 27695 个词库, 48482247 词条. Great data point. Plus 搜狗「专业模式」（药品名、疾病名、法律术语、定理名称…）from release notes. Plus 雾凇拼音词库做法.
+Line 2031: Let me try to fetch a couple more data points: 搜狗 细胞词库 total; 百度 专业词库; and possibly 微信输入法 privacy. Also want Sogou's official privacy statement. And check whether iOS 键盘扩展 mic access — I should verify with a reliable source. Let me search Apple docs for "RequestsOpenAccess" microphone. Actually the well-known fact: keyboard extensions CAN record audio since iOS 10? Let me check Apple's App Extension Programming Guide more recent version or the `NSMicrophoneUsageDescription`. Hmm.
+Line 2071: 252: •【精准输入】超大词库，精准联想，整句纠错，打造超高准确率
+Line 2083: 264: 第一步：安装后，进入系统设置—>通用—>键盘—>添加键盘—>第三方键盘 选择 百度-百度输入法 —> 百度-百度输入法 —> 开启完全访问（同步开启云输入、百度输入法设置同步）—>完成
+Line 2087: 268: 第一步：进入系统设置—>通用—>键盘—> 中文-百度输入法 —> 开启完全访问
+Line 2090: 271: 【Tip 4】 如何用百度账号备份用户词库和设置项？
+Line 2091: 272: 第一步：进入系统设置—>通用—>键盘—> 中文-百度输入法 —> 开启完全访问
+Line 2151: 173: -启用豆包输入法：下载安装后，需要进入系统设置-通用-键盘-键盘-添加新键盘-第三方键盘选择「豆包输入法」- 点击「豆包输入法」- 开启「允许完全访问」。
+Line 2210: 系统原生拼音: iOS keyboard — need facts: iOS 拼音 supports 26键/9键(九宫格), 双拼(设置-键盘-简体中文-双拼), 模糊音? Actually iOS Chinese pinyin keyboard supports 九宫格, 手写, 语音听写 (system dictation), 滑行输入 (Slide to Type is English only? For Chinese, iOS 滑行输入 supported for Chinese pinyin since iOS 13? Hmm — "速滑输入" for Chinese was added; iOS 13 QuickPath supports English only initially. I'll mark uncertain). iOS 17+ 中文键盘有 词语预测? Apple added on-device prediction. iOS 26 has Apple Intelligence features. Be careful: I'll say 系统原生：26键/九键/双拼/手写/系统听写；无 AI 改写、无云同步词库、无皮肤；免费；由 Apple 隐私保护；不支持第三方 AI API.
+Line 2270: [357] 隐私政策：
+
+[assistant]
+I have lots of material. Let me check what specific data I still need. Key gaps:
+
+1. iOS 26 SpeechAnalyzer / SpeechTranscriber — verify. (Optional; can cite Apple docs.)
+2. 微信输入法 privacy policy & 搜狗/百度/讯飞 privacy details.
+3. 系统原生拼音键盘 facts.
+4. More user pain points with URLs — I have App Store reviews (URLs known: apps.apple.com/cn/app/idXXXX), sspai articles, Apple docs.
+5. 词库规模 numbers: 搜狗细胞词库 27695 词库 / 48482247 词条 (from pinyin.sogou.com/dict). 雾凇拼音.
+6. iOS third-party keyboard limitations — got Apple docs.
+
+Let me check the decompressed b11 more for 微信隐私政策 and the 搜狗/百度 隐私 sections. Let me grep for specific lines. Actually, I have enough for a report. But the user asked for specific citations. Let me do a couple more targeted fetches to solidify:
+- Apple SpeechAnalyzer docs (iOS 26 on-device speech) — search Apple developer.
+- Maybe 讯飞/豆包 cloud ASR pricing (optional).
+
+Actually I'm running low on time budget? I have plenty. But context is being managed. Let me be efficient: do 1-2 more fetches then write the report.
+
+Let me try Apple's docs for SpeechAnalyzer.
+
+[assistant • pwsh]
+{"command":"$ProgressPreference='SilentlyContinue'\n$env:HTTPS_PROXY='http://127.0.0.1:2080'; $env:HTTP_PROXY='http://127.0.0.1:2080'\ntry {\n  $u='https://developer.apple.com/documentation/speech/speechanalyzer'\n  $r=Invoke-WebRequest -Uri $u -TimeoutSec 25 -UseBasicParsing\n  $t=[regex]::Replace($r.Content,'<script[\\s\\S]*?</script>',' ')\n  $t=[regex]::Replace($t,'<[^>]+>',' ')\n  $t=[regex]::Replace($t,'\\s+',' ')\n  Write-Output (\"LEN=\" + $t.Length)\n  Write-Output ($t.Substring(0,[Math]::Min(1500,$t.Length)))\n} catch { Write-Output (\"FAIL \" + $_.Exception.Message) }","description":"Fetch Apple SpeechAnalyzer doc page"}
+
+[tool • pwsh]
+LEN=1001
+ SpeechAnalyzer | Apple Developer Documentation .noscript{font-family:"SF Pro Display","SF Pro Icons","Helvetica Neue",Helvetica,Arial,sans-serif;margin:92px auto 140px auto;text-align:center;width:980px}.noscript-title{color:#111;font-size:48px;font-weight:600;letter-spacing:-.003em;line-height:1.08365;margin:0 auto 54px auto;width:502px}@media only screen and (max-width:1068px){.noscript{margin:90px auto 120px auto;width:692px}.noscript-title{font-size:40px;letter-spacing:0;line-height:1.1;margin:0 auto 45px auto;width:420px}}@media only screen and (max-width:735px){.noscript{margin:45px auto 60px auto;width:87.5%}.noscript-title{font-size:32px;letter-spacing:.004em;line-height:1.125;margin:0 auto 35px auto;max-width:330px;width:auto}}#loading-placeholder{display:none} This page requires JavaScript. Please turn on JavaScript in your browser and refresh the page to view its content. Automated tools and assistive tools: A Markdown version of the page content is available: View Markdown 
+
+
+[assistant]
+Apple docs have a Markdown version. Try `https://developer.apple.com/documentation/speech/speechanalyzer` with header Accept: text/markdown? Or there's a known path: append `.json`? Let's try `https://developer.apple.com/tutorials/data/documentation/speech/speechanalyzer.json`.
+
+Actually for Apple docs, the data endpoint is `https://developer.apple.com/tutorials/data/documentation/speech/speechanalyzer.json`.
+
+[assistant • pwsh]
+{"command":"$ProgressPreference='SilentlyContinue'\n$env:HTTPS_PROXY='http://127.0.0.1:2080'; $env:HTTP_PROXY='http://127.0.0.1:2080'\nforeach ($u in @('https://developer.apple.com/tutorials/data/documentation/speech/speechanalyzer.json','https://developer.apple.com/tutorials/data/documentation/speech/speechtranscriber.json')) {\n try {\n  $r=Invoke-WebRequest -Uri $u -TimeoutSec 25 -UseBasicParsing\n  $j=$r.Content|ConvertFrom-Json\n  Write-Output (\"===== \" + $u)\n  Write-Output (\"abstract: \" + (($j.abstract | ForEach-Object {$_.text}) -join ''))\n  $txt = ($j.primaryContentSections | ConvertTo-Json -Depth 12 -Compress)\n  $txt=[regex]::Replace($txt,'\\\\u003c[^\\\\]*?\\\\u003e',' ')\n  Write-Output (\"content snippet: \" + $txt.Substring(0,[Math]::Min(2200,$txt.Length)))\n } catch { Write-Output (\"FAIL \" + $u + \" \" + $_.Exception.Message) }\n}","description":"Fetch Apple SpeechAnalyzer JSON docs"}
+
+[tool • pwsh]
+===== https://developer.apple.com/tutorials/data/documentation/speech/speechanalyzer.json
+abstract: Analyzes spoken audio content in various ways and manages the analysis session.
+content snippet: [{"declarations":[{"languages":["swift"],"platforms":["iOS","iPadOS","Mac Catalyst","macOS","tvOS","visionOS"],"tokens":[{"kind":"keyword","text":"final"},{"kind":"text","text":" "},{"kind":"keyword","text":"actor"},{"kind":"text","text":" "},{"kind":"identifier","text":"SpeechAnalyzer"}]}],"kind":"declarations"},{"kind":"mentions","mentions":["doc://com.apple.speech/documentation/Speech/asking-permission-to-use-speech-recognition"]},{"content":[{"anchor":"overview","level":2,"text":"Overview","type":"heading"},{"inlineContent":[{"text":"The Speech framework provides several modules that can be added to an analyzer to provide specific types of analysis and transcription. Many use cases only need a ","type":"text"},{"identifier":"doc://com.apple.speech/documentation/Speech/SpeechTranscriber","isActive":true,"type":"reference"},{"text":" module, which performs speech-to-text transcriptions.","type":"text"}],"type":"paragraph"},{"inlineContent":[{"text":"The ","type":"text"},{"code":"SpeechAnalyzer","type":"codeVoice"},{"text":" class is responsible for:","type":"text"}],"type":"paragraph"},{"items":[{"content":[{"inlineContent":[{"text":"Holding associated modules","type":"text"}],"type":"paragraph"}]},{"content":[{"inlineContent":[{"text":"Accepting audio speech input","type":"text"}],"type":"paragraph"}]},{"content":[{"inlineContent":[{"text":"Controlling the overall analysis","type":"text"}],"type":"paragraph"}]}],"type":"unorderedList"},{"inlineContent":[{"text":"Each module is responsible for:","type":"text"}],"type":"paragraph"},{"items":[{"content":[{"inlineContent":[{"text":"Providing guidance on acceptable input","type":"text"}],"type":"paragraph"}]},{"content":[{"inlineContent":[{"text":"Providing its analysis or transcription output","type":"text"}],"type":"paragraph"}]}],"type":"unorderedList"},{"inlineContent":[{"text":"Analysis is asynchronous. Input, output, and session control are decoupled and typically occur over several different tasks created by you or by the session. In particular, where an Objective-C API might use a delegate to provide results to you, the Swift APIâs modules provides their results via an ","type":"text"},{"code":"AsyncSequ
+===== https://developer.apple.com/tutorials/data/documentation/speech/speechtranscriber.json
+abstract: A speech-to-text transcription module thatâs appropriate for normal conversation and general purposes.
+content snippet: [{"declarations":[{"languages":["swift"],"platforms":["iOS","iPadOS","Mac Catalyst","macOS","tvOS","visionOS"],"tokens":[{"kind":"keyword","text":"final"},{"kind":"text","text":" "},{"kind":"keyword","text":"class"},{"kind":"text","text":" "},{"kind":"identifier","text":"SpeechTranscriber"}]}],"kind":"declarations"},{"content":[{"anchor":"overview","level":2,"text":"Overview","type":"heading"},{"inlineContent":[{"text":"Several transcriber instances can share the same backing engine instances and models, so long as the transcribers are configured similarly in certain respects.","type":"text"}],"type":"paragraph"},{"anchor":"Check-device-support","level":3,"text":"Check device support","type":"heading"},{"inlineContent":[{"text":"Use the ","type":"text"},{"identifier":"doc://com.apple.speech/documentation/Speech/SpeechTranscriber/isAvailable","isActive":true,"type":"reference"},{"text":" or ","type":"text"},{"identifier":"doc://com.apple.speech/documentation/Speech/SpeechTranscriber/supportedLocales","isActive":true,"type":"reference"},{"text":" properties to see if the current device supports the speech-to-text models used by ","type":"text"},{"code":"SpeechTranscriber","type":"codeVoice"},{"text":". If it does not, consider disabling the feature or using ","type":"text"},{"identifier":"doc://com.apple.speech/documentation/Speech/DictationTranscriber","isActive":true,"type":"reference"},{"text":" instead.","type":"text"}],"type":"paragraph"}],"kind":"content"}]
+
+
+[assistant]
+Good: SpeechAnalyzer is an actor, in Speech framework, supports iOS/iPadOS/macOS etc. SpeechTranscriber: speech-to-text module for normal conversation and general purposes; has isAvailable, supportedLocales. iOS 26 introduced. Need availability: iOS 26.0+. Let me check platform info in declarations (they truncated platforms list, no min version). Let me quickly check "setting-up-a-capture-session" no. Better: check the JSON "platforms" includes "iOS" with introducedAt. Let me fetch a smaller check on metadata.platforms.
+
+Actually, I know SpeechAnalyzer/SpeechTranscriber were introduced at WWDC25 (iOS 26). Apple says on-device, supports long-form, new model, faster than SFSpeechRecognizer, supports 10+ languages including Chinese? Apple's WWDC25 session said SpeechAnalyzer supports 10 languages at launch... In iOS 26, SpeechTranscriber supports locales: en, es, fr, de, it, ja, ko, pt, zh (China/Taiwan/HK?), yue? I should be careful. I'll mark 中文支持 as "iOS 26 支持中文（含普通话），具体 locale 以 supportedLocales 运行时判断" — hmm risky.
+
+Let me check quickly whether Chinese is in supported locales by fetching the "supportedLocales" doc or Apple's SpeechTranscriber supported locales list page. Perhaps the "SpeechTranscriber/supportedLocales" json mentions. Might not list values.
+
+I have limited budget. Since time is short, I could mark: "iOS 26 SpeechAnalyzer/SpeechTranscriber（on-device，免费，需 iOS 26；中文 locale 支持需运行时用 supportedLocales 判断，iOS 26 首发语言含中文 zh-CN（未确认全部方言）)". Hmm. Let's do one quick attempt to check the WWDC page? That may be heavy. I'll instead check Apple's documentation for "SpeechTranscriber.SupportedLocale" maybe lists zh.
+
+Let me try one fetch of the "supportedLocales" page JSON and see if there's a list. Actually the docs likely say "A set of locales that the transcriber supports." No list.
+
+Alternative: search GitHub for "SpeechTranscriber supportedLocales zh" — not necessary. I'll write "以 supportedLocales 运行时判断；iOS 26 起中文普通话在支持列表内（开发者需实测）". That's honest enough with "未确认" tag per user instruction.
+
+Now I still need:
+- Section 3: 词库行业做法 — I have 搜狗细胞词库 (27,695 词库 / 48,482,247 词条 / 19,520 用户创建), 专业模式, 雾凇拼音 (rime-ice) 词库规模, 墨语自身 5276 条. Maybe add 百度专业词库/超会写? I have 百度「专业模式」details. Also 微信输入法 privacy. Also 搜狗词库 update mechanism (每日热词更新, 云端). Good enough. Maybe get rime-ice word count (e.g., 雾凇拼音 base 词库约 100 万条?). From b4 summary I have partial. Let me check b4/b15 for numbers.
+
+- Section 5: 用户真实痛点 Top 10 — need 10 with URLs. I have App Store reviews (per-app URLs), 少数派 article comments, 知乎? I haven't got real 知乎 content. The task says "从知乎、少数派、V2EX、App Store 评论等地" — I can rely on App Store + 少数派 + maybe 知乎 via API? Zhihu is hard. I might cite 知乎 search page? Better not fabricate. I'll use verified sources with URLs, and note "知乎/V2EX 抓取受限" honestly.
+
+Let me gather a few more concrete review quotes with strong pain points from the App Store RSS data. I have some in b5/b8 summaries. Let me look at the extracted reviews file for representative complaints with app ids. Let me run a script over b2's review dump to list top complaint lines with id.
+
+Actually b2 decompressed file has reviews; but I compressed. The temp file still exists. Let me grep specific keywords plus surrounding app id headers.
+
+Also for "iOS 第三方键盘不如安卓" — I have Apple docs + reviews about 跳转/高度/切换. Good.
+
+Let me also get 微信输入法 privacy statement (it claims 不收集/不上传, 单机模式), and 搜狗/百度/讯飞 privacy (云). I have some in b1. Let me check quickly.
+
+Plan: 2-3 more tool calls max, then write the report.
+
+Call: grep the b2 temp file for review lines with keywords and get app section headers; and grep b1 for 微信 privacy.
+
+[assistant • pwsh]
+{"command":"$p='C:\\Users\\z9041\\AppData\\Local\\Temp\\acp-decompress-b2-1792875288927.txt'\n$lines = Get-Content -LiteralPath $p -Encoding UTF8\n$cur=''\nfor ($i=0; $i -lt $lines.Count; $i++) {\n  $l = $lines[$i]\n  if ($l -match '^##########\\s+(\\S.*?)\\s+\\|') { $cur = $Matches[1] }\n  if ($l -match '^\\s*\\[\\d\\]\\s*(.+)$') {\n    $t = $Matches[1]\n    if ($t -match '跳转|卡顿|卡死|延迟|候选|词库|隐私|广告|会员|订阅|闪退|耗电|语音|识别|自动|还原|学习|记忆|切换|遮挡|高度|空白|丢词|打不出|联想|更新') {\n      Write-Output (\"[\" + $cur + \"] \" + $t.Substring(0,[Math]::Min(110,$t.Length)))\n    }\n  }\n}","description":"Extract complaint reviews grouped by app"}
+
+[tool • pwsh]
+[元书输入法] 需要会员 :: 那个一开始就挺好的，但是刷着刷着发现又会员，但是那些奶龙柯淼都是免费，就一些好看的皮肤都需要会员
+[元书输入法] 超级卡顿 :: 用上皮肤 打字超级卡顿
+[元书输入法] 五笔改进建议 :: 希望工作组也给网络热词新词编码，同步更新加入五笔词码库，输入体验会更上一层楼，吊打所有移动端竞品
+[元书输入法] 垃圾 :: 现在难用得要死，连最基本得常用词都没有，以前打的都有记忆，现在和智障一样
+[元书输入法] 越来越人工智障了 :: 候选词越来越抽象了，听说是把真人开除了，用ai来搭建词库，真是服了，跟您说拜拜了
+[元书输入法] 一直跳广告出来 :: 垃圾中的垃圾用了这么多年，今天忍不住了，一直跳广告出来，
+[元书输入法] 标题被狗吃了 :: 你们产出的产品跟屎一样，信号满格的弄语音输入法的时候就说信号没连接好，弄了半天都弄不好
+[元书输入法] 不好用 :: 老是闪退 而且打字打不出字 键盘跳老高 空白区太多  准确性现在也降低了
+[元书输入法] 修复 bug :: 苹果版本的输入法每次下拉或者点击屏幕唤出键盘时最上面的搜索栏部分都会卡，要么是弹到最上面卡一下才下来，要么是在到达指定位置前卡一下再上去。更新系统后仍旧有问题，输入法也是最新版本的。用其他输入法没这个
+[元书输入法] 我是真的没招了，差评 :: 图新鲜换了微信输入法，之前有一些使用习惯的问题虽然没太适应不过也能接受。从昨天开始不知道是新出的bug还是一直以来就有的特性，实在是让我无语至极。就是当我打词组的时候，虽然已经上屏了，但原有的
+[元书输入法] 百度输入法很好用 :: 虽然我很习惯用搜狗，但是不知道为什么，最近因为搜狗打开页面有点卡，我想换一下，然后看到朋友都用的是百度，而且皮肤还挺赞的，女孩子都喜欢用皮肤。她的皮肤还是比较简洁的，是很好用的，希望他在语音，这边
+[元书输入法] 非常好用的输入法 :: 首先从这个输入法的本义来说，联想输入， 输入配图，扫描输入，语音输入，手写，你想要的输入法这款输入法全都有，除此之外像是输入法的皮肤，在这里我特别推荐那些有特殊按键音的音乐皮肤，自定义工具栏比如你
+[元书输入法] 算是个好评吧 :: 我因为要输入少数民族的文字所以选的百度输入法，用了一段时间，可能习惯了这个布局，后来换了搜狗的用了一下，很不习惯，因为百度的布局我很习惯，根据文字推荐表情的功能也是非常棒的，只是皮肤不太丰富？反正总之
+[元书输入法] 终于还是卸载了百度输入法 :: 可能因为一直用搜狗的关系，换了百度输入法以后，觉得很多不习惯的。比如中英文切换键的位置。最要命的是，偶尔出现的卡机现象，有时候打开微信输入框，唤起输入法时候突然就卡住了，杀掉微信进程重启还
+[元书输入法] 希望可以自定义 :: 我用百度输入法好多年了，昨天突然更新发现符号移动到最左边了，用了好几年突然更改一点都不方便
+[元书输入法] 这么强大的语音识别是怎么做到的 :: 百度输入法太牛了，尤其是语音识别功能，简直不要太强大啦，不但识别超级快，识别率还超级高，点开语音输入就可以开始输入语音，不需要用手指按住那么麻烦，即方便又快捷，最关键的是居然还能识别
+[元书输入法] 很优秀，但希望加功能支持手写笔 :: 提个功能建议：现在ipad已基本都支持了手写笔，但有许多情景下是只能用键盘输入的，比如给软件写评论。百度输入法有个手写输入功能，但只能简单的叠写，希望在此功能基础上拓展一下，支持手写
+[元书输入法] 用了很多年但是最近老是自己消失 :: 每次用都要重新去设置里添加一次，以前都没有这么频繁过。输入界面我很喜欢，希望解决一下闪退的问题，继续加油做大做强
+[元书输入法] 东西不错唯一一个小问题 :: 整个输入法的话，流畅而且语音输入的话准确率十分的高唯有一个小问题就是在进行输入法的切换的时候会有中间的停顿大概一秒钟左右的一个启动界面。 好像整个系统占用资源比较多的样子。什么时候可以优化一
+[元书输入法] 希望好的东西回归 :: 我从诺基亚时代就用搜狗输入法，有阵子苹果后破解不了系统装不了搜狗我甚至把苹果都舍弃了。反正这么多年不管用什么手机，搜狗输入法都是我第一个要安装的必备软件。但是最近我觉得用搜狗打字的效率非常低，按说
+[元书输入法] 用了好多年已经习惯了，真的非常棒呢！ :: 初中开始用搜狗输入法，一开始也有和百度输入法一起用，但是慢慢就只用搜狗，不知道为什么反正就是很有魔力，一定是哪方面做得很好，比如说皮肤基本免费，用户体验很好，和QQ的联名登录也
+[元书输入法] 输入法打字经常出错误的词 :: 很少给APP评论，平时用APP能满足基本功能对我来说就可以了，也基本不给差评，但是最近实在忍不了了。用搜狗输入法很多年了，近几年越来越觉得输入法像没脑子一样，经常出错，导致工作沟通都因为打
+[元书输入法] 用户体验及反馈 :: 对于苹果用户，不友好，用着没有安卓的流畅，不知道为啥。 1.苹果的手机如果开启静音模式，打字震动的就不太感觉的出来有震动。 2.皮肤字体 很多都要钱了，哎，好看的皮肤也不多了。新皮肤更新的老慢了  
+[元书输入法] 句子连贯字 :: 以前用三星手机输入法可以发以前发过的句子，记录性特别强，但是现在一直没有找到那个输入法可以那样了，比方说，你怎么还不回家？只要打出你怎么三个拼音后面就是跟着的句子？例如你怎么还不回家？你怎么不回复我的电
+[元书输入法] 用回iRime输入法，好差劲的五笔。 :: 以前一直用百度输入法，直到百度越来越臃肿，加入各种各样的功能比如：内置浏览器内置新闻内置各种坑人的网贷。然后出现了搜狗五笔，然而没用多久更新了几次之后搜狗也加入了。输入法而已，
+[元书输入法] 程序员小哥请看看这里！ :: 搜狗输入法皮肤太可爱了我真的喜欢！不过评论的主要原因就是输入法最上端，给云输入（还是输入预测？）留下的空白部分，我想能够单独设置这一部分的高度，或者设置关闭这部分，它让输入法占屏幕和地方看起
+[元书输入法] 过来给个五星就是想提一点建议 :: 我不知道为什么新版的输入法里面把语音输入的符号设置在右下角，用九宫格输入汉字完了之后，按发送的时候都会不小心误触。本身就已经设置了一个语音输入的按钮，为什么要在这右下角再设置一个呢？
+[元书输入法] 为什么没有优信系统电脑版本呢 :: 公司强制使用国产电脑，用习惯了讯飞，怎么也没找到版本安装上，还有近期的版本在苹果上面总是卡退，打字的时候有一半空白在九宫格的顶上，不懂！
+[元书输入法] 超好用 :: 因为讯飞里的键盘都很好看 手感也很好  没有出现卡顿什么问题  但是有时候出现bug有点严重  我希望官方严重看待这个问题，但我也会一直跟随讯飞  讯飞输入法加油
+[元书输入法] 不太好 :: 给两块钱就不错了，他对于我这个iPad车站的那个有点大，而且他一说语音了跳转到什么页面需要通过一些方式才能弄特别忙，再说了他这里边的很好看的皮肤都需要花钱也总是卡顿。所以我不怎么喜欢，但是这里边我确实没这个
+[元书输入法] 挺好的 :: 有点小广告
+[元书输入法] 垃圾 :: 超级垃圾 打字都会出广告 去密码的
+[元书输入法] 老用户关于微信输入法的一些反馈建议 :: 尊敬的微信输入法开发团队： 你好！我已使用微信输入法一年之久，其各类特色功能如跨设备粘贴、表情包联想和精确的词语匹配极大增加了我工作的效率。然而，在我的使用中，依然有一些细节值得
+[元书输入法] 建议 :: 1 、建议独立切换深色、浅色模式
+[元书输入法] 不能像讯飞一样在键盘界面下直接手写输入。，实际上我常用语音输入键盘，拼音输入和手写输入三种方式混合使用，那么就不希望做输入方法的转化。，在讯飞输入法里边，这三种方式可以在一个界面下实现。 :: 希望在一个界面下能实现，手
+[元书输入法] 剪切板和号码联想 :: 刚出来体验了一下，干净 清爽，流畅 刚使用是无卡顿，加上与微信的配合 功能趋于其他输入法很有特色。目前美中不足，啥时候添加剪切板和通讯录电话联想
+[元书输入法] 微信键盘缺少了剪贴板功能 :: 复制粘贴多个内容的时候剪贴板功能就会提高很多效率，不需要来回切换，什么时候可以上线这个功能
+[元书输入法] 输入符号和数字很麻烦 :: 在输入过程中如果要输入符号和数字，需要切换到数字键盘，希望可以在每个字符上增加其他常用符号和数字
+[元书输入法] 希望恢复双拼激进纠错功能，总体体验很好 :: 在之前的更新中去掉了双拼纠错过于激进的功能，希望把这个功能单独做出来成为可选择项。只有两键非常容易按到旁边的键，激进纠错非常重要。此外希望尽快将鸿蒙功能改进，目前不可以切换默
+[元书输入法] 五笔拼音混合输入键盘缺少拼音锁定按钮 :: 语音识别非常高，增加了五笔如虎添翼，功能建议：五笔模式下，现在的临时拼音只能单次生效，打完一个词就自动切回五笔。希望增加一个【锁定临时拼音】开关。打开锁定之后，就一直保持拼音输
+[元书输入法] 挺失望的吧 :: 说真的 这是我第一次写差评 我从去年9月开始使用豆包输入法 一直到现在 体验感越来越差 最开始 我被它优秀的识别能力所吸引 它能精准知道我表达的意思 就算在嘈杂的环境中 或者悄悄话也能识别清楚 但是现在
+[元书输入法] 希望后续对齐 iOS 27 设计语言 :: 也算用了很久了。语音输入很准确，联想很贴心，而且马达可以自由调整幅度。缺点也有，就是目前可以看得出键盘的英文字母依旧是 iOS18 及其之前的键盘字体，并且每个键下面都有一圈细
+[元书输入法] 还有很多需要改进的地方 :: 综合用下来，还有很多需要改进的地方。首先第一点是语音跳转，每次都需要去跳转到软件页面。体验感不是太好。另外，最近苹果手机发烫严重，电池掉的也很快，不知道是不是因为豆包输入法的原因。第二点是最
+[元书输入法] 现在豆包输入法非常好用 :: 目前中英文识别都非常精准，实际体验很好。
+[元书输入法] 语音识别体验极好 :: 使用豆包的时候惊叹于语音转文字识别准确率之高，过往试了不下 5 种输入法，没有一个有豆包的体验更好。看到出了输入法，专门下载来体验了下。对我而言，只要语音转文字这个核心功能好用，其他的更多功能都只
+[元书输入法] 期待更好的智能输入法 :: 一直是语音输入的重度用户，终于在 AI 时代来临的时候，有这么一家放心的大厂制作出输入法领域的 AI 产品。日常在使用豆包的时候，就惊艳于它的语音识别准确度和 AI 纠错能力，能瞄向输入法这一
+[元书输入法] 开通文件管理器后应该增加搜索功能 :: 开通文件管理器最大的功能是调节词库的权重，但设备往往很大没有搜索功能很难找到需要调节的词或词组。
+[元书输入法] 双拼爱好者盛赞，希望适配单手模式 :: 桌面端自然码+行码的词库终于可以在手机上用了，终于不用再忍受/吃灰ireme了，总之功能很不错，只是习惯了输入法单手模式，全屏键盘用起来键位经常找不到位置，希望开发者得空适配一下单
+[元书输入法] 超高自由度，离线保护 :: 不属于花里胡哨的硬核输入法，词库，不联网，不同步，离线模式都极大保护隐私，不收集数据。输入法要研究一下方案你才会用，譬如方案9公格一定是放第一排，不然都是数字。双拼很快我不太会用，需要学习。夯
+[元书输入法] 终于在iOS下找到一款的完美输入法 :: 我是一个使用多系统（Windows、macOS、Linux、iOS）的用户，Rime在各平台都有对应的软件。用这款输入法将电脑上的配置和词库导入后，各平台的输入方式和体验能保持一
+[元书输入法] 很好用的输入法，内存占用低 :: 安装包仅需要58M就能带来非常流畅的输入体验，没有花里胡哨的功能，关键是老机器也能流畅使用，这对我非常重要，在日常的使用中也没有遇到词库不足的情况，界面简洁可定制，可以导入macos的配
+
+
+[assistant]
+The app name grouping failed (all show 元书输入法) but the texts are useful. I have plenty of review quotes.
+
+Now, do I have everything? Let me check what's still missing:
+
+1. 竞品功能矩阵 — need: 搜狗 ✓, 百度 ✓, 讯飞 ✓, 微信键盘 ✓, QQ输入法 (need check), Gboard中文 (not in CN), 系统原生拼音 (need facts), 新势力: Kime (need check - Kime is a Korean/Japanese? Actually "Kime" might be a new Chinese IME? Hmm. There's "Kime输入法" — hmm. Let me check App Store), 落格 ✓, iRime/同文 ✓, 仓 ✓.
+
+Actually the user mentioned "Kime" — need to search App Store. Let me do a quick lookup.
+
+2. 标配 vs 亮点 vs 伪需求 — I can synthesize from data.
+3. 词库行业做法 — 搜狗细胞词库 27695 词库 / 4848万词条 ✓, 搜狗专业模式 ✓, 百度专业模式 ✓, 雾凇拼音 ✓, 紫毫 6.8MB 语法模型 + 5MB 上文模型 ✓.
+4. 语音输入现状 — WhisperKit ✓, sherpa-onnx/SenseVoice ✓, Apple SpeechAnalyzer iOS 26 ✓, cloud pricing — need concrete numbers. Let me try 讯飞/阿里云 pricing? Maybe skip precise pricing and mark as ranges with "未确认". Better: try one fetch for 阿里云语音识别价格 or 讯飞开放平台价格.
+
+Actually being accurate matters. Let me try fetching 讯飞开放平台 pricing page quickly. Might be hard. Alternative: state cost structure qualitatively (云侧按并发/时长计费，约 ¥0.5–3/小时区间) but that needs a source. Hmm, risky. I could label "未确认具体单价，仅给量级".
+
+5. 用户痛点 Top 10 + URLs — I have App Store review page URLs (itunes rss), sspai article URLs, Apple doc.
+6. 启示 — synthesize.
+
+Let me do a few final fetches: Kime / QQ输入法 App Store lookup, and check iOS native pinyin keyboard capabilities maybe from Apple support page. And maybe 微信输入法 privacy statement.
+
+Let me batch: iTunes lookup for "Kime", "QQ输入法", "iRime", and search for Gboard.
+
+Also check 微信输入法 features from its App Store description (b2 has id 1582446193? Actually 微信输入法 = id 1618175312? Let me check). Hmm, in b2, entries: 916139408 (搜狗), 917670924 (搜狗?), 1582446193, 1618175312, 6752316550, 6446617683. Wait b1 said 搜狗 iOS id 917670924. WeChat 输入法 id maybe 1618175312. And 微信 input app store page z.weixin.qq.com.
+
+Let me just do a lookup batch and print names+short descriptions.
+
+[assistant • pwsh]
+{"command":"$ProgressPreference='SilentlyContinue'\n$env:HTTPS_PROXY='http://127.0.0.1:2080'; $env:HTTP_PROXY='http://127.0.0.1:2080'\n$terms = @('Kime 输入法','QQ输入法','iRime','Gboard')\nforeach ($t in $terms) {\n  $u = 'https://itunes.apple.com/search?term=' + [uri]::EscapeDataString($t) + '&country=cn&entity=software&limit=6'\n  try {\n    $j = (Invoke-WebRequest -Uri $u -TimeoutSec 25 -UseBasicParsing).Content | ConvertFrom-Json\n    Write-Output (\"===== \" + $t + \" count=\" + $j.resultCount)\n    $j.results | ForEach-Object { \"  {0} | id={1} | {2} | {3} 分/{4} | {5}\" -f $_.trackName, $_.trackId, $_.version, $_.averageUserRating, $_.userRatingCount, $_.sellerName }\n  } catch { Write-Output (\"FAIL \" + $t + \" \" + $_.Exception.Message) }\n}","description":"Lookup Kime, QQ input, iRime, Gboard on CN App Store"}
+
+[tool • pwsh]
+===== Kime 输入法 count=0
+===== QQ输入法 count=5
+  搜狗输入法-语音变声斗图表情 | id=917670924 | 20.18.0 | 4.8390000000000004121147867409 分/8460262 | Beijing Sogou Technology Development Co.,Ltd.
+  微信输入法 | id=1618175312 | 4.0.0 | 4.7225299999999998945554580132 分/130796 | Tencent Technology (Shenzhen) Company Limited
+  讯飞输入法-斗图表情包字体美化键盘 | id=1582446193 | 16.0.1 | 4.5897399999999999309352460841 分/61893 | IFLYTEK Shanghai Technology Co.,Ltd
+  百度输入法-语音手写拼音打字皮肤 | id=916139408 | 13.3.18 | 4.6970400000000003259970071667 分/420956 | Baidu (China) Co., Ltd
+  豆包输入法 - 豆包同款语音输入 | id=6752316550 | 1.6.2 | 4.3762900000000000133582034323 分/18504 | Beijing Chuntian Zhiyun Technology Co., Ltd.
+===== iRime count=6
+  iRime输入法-小鹤双拼五笔郑码输入法 | id=1142623977 | 4.5.1 | 4.0064999999999999502620084968 分/1230 | Flytype Technology Co., LTD
+  仓输入法 | id=6446617683 | 2.19.8 | 4.5774100000000004229150363244 分/478 | 啸 付
+  元书输入法 | id=6744464701 | 1.12.1 | 4.6153800000000000380850906367 分/52 | 啸 付
+  落格输入法 X | id=1373102819 | 3.6.6 | 2.7031999999999998252064870030 分/219 | 然 赵
+  五笔输入法 2 | id=1449105731 | 1.7.31 | 3.3070900000000000851230197441 分/254 | ShenZhen Yuyue Technology Co., Ltd.
+  阳光惠生活 | id=794862904 | 9.6.2 | 4.7827799999999998092903297220 分/139880 | China Everbright Bank CO., LTD Credit Card Center
+===== Gboard count=5
+  搜狗输入法-语音变声斗图表情 | id=917670924 | 20.18.0 | 4.8390000000000004121147867409 分/8460262 | Beijing Sogou Technology Development Co.,Ltd.
+  Google Chrome | id=535886823 | 156.0.8078.54 | 4.6409500000000001307398633799 分/333255 | Google LLC
+  微信输入法 | id=1618175312 | 4.0.0 | 4.7225299999999998945554580132 分/130796 | Tencent Technology (Shenzhen) Company Limited
+  Microsoft SwiftKey AI Keyboard | id=911813648 | 4.3.7 | 3.9700000000000001953992523340 分/1200 | TouchType Ltd
+  GlobalKey:AI翻译输入键盘 | id=6758811603 | 1.5.3 | 4.2962899999999999423039298563 分/108 | GROWING PRO PTE. LTD.

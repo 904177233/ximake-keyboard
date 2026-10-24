@@ -13,7 +13,7 @@
 - **`secureTextEntry` 与 `UIKeyboardTypePhonePad`/`NamePhonePad` 输入框强制换回系统键盘**，系统临时替换，无法绕过。依据：ExtensibilityPG/CustomKeyboard
 - **不能在键盘上边缘之上绘制任何东西**（按键放大镜、内联自动更正气泡、候选浮层越界都算）；也不能选择文本、不能访问宿主的剪切/复制/粘贴菜单。依据：同上
 - **无法枚举已启用键盘、也无法指定切到某个键盘**，只能 `advanceToNextInputMode()`；`needsInputModeSwitchKey` 为 true 时必须提供「下一输入法」键，否则审核不过（4.4.1 明文要求）。
-- **拿不到麦克风。** 现行文档在无完全访问清单里明写 "No access to microphone and speaker"，且完全访问能力列表里**没有**麦克风这一项；2014 存档文档更直接："Custom keyboards... have no access to the device microphone, so dictation input is not possible."。`docs/08` 里「iOS 26 起可用麦克风」的推断**无任何官方文本支持**，不能作为产品前提。依据：configuring-open-access-for-a-custom-keyboard + CustomKeyboard.html
+- **麦克风：iOS 26 起大概率可用，但必须先真机验证。** 现行文档把 "No access to microphone and speaker" 放在 **`RequestsOpenAccess=false`** 的限制清单里；同一篇 open access 文档的开发者责任段又写 "don't store received **keystroke or voice data**..."（把语音与击键并列）。加上五家上架输入法的 App Store 描述都有键盘内语音手势（百度「长按空格即说即发」、讯飞「长按技能坞」、搜狗、微信、Gboard）与 `hkgood/OSGKeyboard`（minOS 26.0）扩展 Info.plist 的 `NSMicrophoneUsageDescription`，可判定 **iOS 26+ 大概率可做**。2014 存档文档 "have no access to the device microphone" 属 iOS 8 时代，已被打破。**前提**：开完全访问（我们 `RequestsOpenAccess` 已是 true）+ 补两个 Usage 字符串 + **30 分钟真机验证**。详见 `docs/08` §5.1。依据：configuring-open-access-for-a-custom-keyboard + CustomKeyboard.html + itunes.apple.com/lookup
 - **宿主 App 可一键禁用所有第三方键盘**（`application(_:shouldAllowExtensionPointIdentifier:)` 返回 false），银行/医疗类 App 普遍这么做——这类 App 里墨语根本唤不出来。
 - **必须无网络也能用。** 4.4.1 要求 "Remain functional without full network access and without requiring full access"；曾有人因「无网不能用」被以 25.5 拒。另：不得在键盘内放广告（2.5.18），不得内置 Apple emoji（5.2.5），不得把按键改成非输入行为（如长按 return 开相机）。
 - **不能常驻后台。** 扩展生命周期由系统管，宿主 App 退后台仅约 180 秒即被挂起——"让宿主 App 当代算后端"的方案不成立。
@@ -63,7 +63,7 @@
 3. **`HTTPTransport.swift` 的 `timeoutIntervalForResource = max(..., 120)`** 远超键盘扩展存活窗口，应压到 30s 量级并允许取消。
 4. **`PasteboardBridge.export()` 同时写 general pasteboard**，会污染用户剪贴板（用户复制的内容被冲掉），且读回时若回退到 general 会触发弹窗。建议只保留命名剪贴板 + magic 校验。
 5. **`onDismissKeyboard` 调 `advanceToNextInputMode()`**（`KeyboardViewController.swift` bindModel 处）语义错误——「收起键盘」应该是 `dismissKeyboard()`，现在等于强制换输入法，用户会以为键盘抽风。
-6. ~~**`docs/08` 的麦克风结论与 Apple 现行文档矛盾**~~ → **已闭环（2026-10-25）**：`docs/08` 初版把「iOS 26 起键盘扩展可用麦克风」写成结论，依据只是某开源项目的 Info.plist。复核 Apple 官方原文后已订正 —— 现行《Configuring open access for a custom keyboard》在**无完全访问**的能力清单里写 "No access to microphone and speaker"，而**开启完全访问后新增的能力只有网络访问 + 共享容器写权限**，麦克风不在其中；2014 年存档文档更是直接写 "have no access to the device microphone"。`docs/08` §5.1 已按「官方不支持、需真机实验且预期不可行」重写。
+6. ~~**`docs/08` 的麦克风结论与 Apple 现行文档矛盾**~~ → **已闭环（2026-10-25，两轮订正）**：`docs/08` 初版依据某个开源项目的 Info.plist 直接下定论（证据太薄）；第一次订正时依据「无完全访问」清单里的 "No access to microphone and speaker" 推翻成「平台根本不给」；第二轮补齐三条独立证据后改回「**iOS 26+ 大概率可做，需 30 分钟真机验证**」。三条证据：①五家上架输入法的 App Store 描述都有键盘内语音手势（百度「长按空格即说即发」、讯飞「长按技能坞」、搜狗、微信、Gboard）；②`hkgood/OSGKeyboard`（minOS 26.0）的**扩展** Info.plist 声明了 `NSMicrophoneUsageDescription` + `NSSpeechRecognitionUsageDescription`；③Apple open access 文档的开发者责任段写 "don't store received keystroke or **voice** data..."。那句话位于 **`RequestsOpenAccess=false`** 的限制清单里，不是全局禁令。详见 `docs/08` §5.1。**教训：单一来源（无论 plist 还是文档字符串）都不足以定论 —— 还要看它在哪一份清单里、以及现网产品实际怎么做的。**
 
 **还没用上的：**
 - `setMarkedText` 的**部分选区高亮**能力（现在只用来做 composing，没做内联补全预览）。
