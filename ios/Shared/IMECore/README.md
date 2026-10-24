@@ -14,9 +14,9 @@
 | `UserLearningStore.swift` | 选词计频、最近使用环形缓冲（200 条）、自造词，经 `SharedStore` 持久化 | 279 |
 | `PhraseSuggestion.swift` | 加载 `phrases.tsv`，实现"上屏后联想" | 188 |
 | `PhraseLibrary.swift` | 用户短语库 `PhraseItem`/`PhraseLibrary`（占位符展开）+ `ClipboardHistory` | 341 |
-| `ContextualSuggestion.swift` | 上下文联想（§9）：`ContextualSuggestion` 数据模型、`AISuggestionPolicy` 参数、L1 `LocalSuggestionIndex` | 453 |
+| `ContextualSuggestion.swift` | 上下文联想（§9）：`ContextualSuggestion` 数据模型、`AISuggestionPolicy` 参数、L1 `LocalSuggestionIndex` | 460 |
 | `AISuggestionPrompt.swift` | 上下文联想 L2：prompt 构造 `userMessage`/`systemPrompt` + 模型返回文本解析 `parse` | 258 |
-| `ContextualSeedTemplates.swift` | L1 的内置触发词模板（81 组规则、169 条候选短句） | 131 |
+| `ContextualSeedTemplates.swift` | L1 的内置触发词模板（81 组规则、169 条候选短句） | 130 |
 | `IMEKit.swift` | 门面：一次性组装上述组件 + 词库来源诊断（`dictionarySource` / `diagnosticsSummary`），供 UI 层使用 | 185 |
 
 依赖方向（单向，无环）：
