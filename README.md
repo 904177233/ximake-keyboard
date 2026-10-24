@@ -137,7 +137,7 @@
 | 步骤 | 做什么 | 大约耗时 |
 |---|---|---|
 | **1** | 把代码推到 GitHub 仓库（**Public / Private 都行**，用 GitHub Desktop 拖进去点 Publish 即可，不用敲命令） | 10 分钟（含注册） |
-| **2** | 打开仓库页 → **Actions** → 左侧 `Build Unsigned IPA` → 等绿勾（云端 macOS 自动编译，约 **1～3 分钟**）→ 底部 **Artifacts** 下载 `AIKeyboard-unsigned-ipa` → 解压出 `AIKeyboard-unsigned.ipa`（约 2.6 MB） | 1～3 分钟 |
+| **2** | 打开仓库页 → **Actions** → 左侧 `Build Unsigned IPA` → 等绿勾（云端 macOS 自动编译，约 **1～3 分钟**）→ 底部 **Artifacts** 下载 `AIKeyboard-unsigned-ipa` → 解压出 `AIKeyboard-unsigned.ipa`（约 3 MB） | 1～3 分钟 |
 | **3** | **【必做】验 IPA**：改成 `.zip` 解开，确认存在 `Payload\AIKeyboard.app\PlugIns\AIKeyboardExtension.appex`（没有这个，键盘永远装不上） | 1 分钟 |
 | **4** | Windows 装 **iloader**（[GitHub nab138/iloader](https://github.com/nab138/iloader) 下载 `iloader-windows-x64.exe`，静默装）→ 插手机 → 填 Apple ID / 密码 → 2FA 验证码 → **Import IPA** 选刚下的包 → **Sign & Install App** | 10 分钟 |
 | **5** | iPhone：设置 › 通用 › **VPN与设备管理** → 信任你的 Apple ID | 1 分钟 |
@@ -303,7 +303,7 @@ python scripts\qa\final_acceptance.py
 
 > ⚠️ **静态检查全绿 ≠ 能编译** —— 这个判断已被现实验证：六闸门全绿的情况下，真 `xcodebuild` 仍然报了 **14 个硬错误**（外加 1 个 pbxproj 词法错误让工程直接打不开）。逐条留档见 [`docs/06-QA报告.md`](docs/06-QA报告.md) §9.2b，那是本项目最有价值的一页。
 >
-> ✅ **当前状态**：CI 已在 `macos-14` 上真实跑通（run [40128059320](https://github.com/904177233/ximake-keyboard/actions/runs/40128059320)，18 步全绿，产出 2.89 MB 未签名 IPA，键盘扩展与词库都已正确打进 `PlugIns/`），并且**已经在真机上装成功、App 能打开**。真机踩到的两个坑（iOS 27 拒收 bundle 根 `Resources/` 目录、`applyHeight` 无限递归闪退）都已修复并留档。
+> ✅ **当前状态**：CI 已在 `macos-14` 上真实跑通（run [40131175295](https://github.com/904177233/ximake-keyboard/actions/runs/40131175295)，18 步全绿，产出 3.01 MB 未签名 IPA，键盘扩展与词库都已正确打进 `PlugIns/`），并且**已经在真机上装成功、App 能打开**。真机踩到的两个坑（iOS 27 拒收 bundle 根 `Resources/` 目录、`applyHeight` 无限递归闪退）都已修复并留档。
 
 ### 工程与构建
 
