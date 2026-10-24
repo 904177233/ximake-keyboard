@@ -303,7 +303,7 @@ python scripts\qa\final_acceptance.py
 
 > ⚠️ **静态检查全绿 ≠ 能编译** —— 这个判断已被现实验证：六闸门全绿的情况下，真 `xcodebuild` 仍然报了 **14 个硬错误**（外加 1 个 pbxproj 词法错误让工程直接打不开）。逐条留档见 [`docs/06-QA报告.md`](docs/06-QA报告.md) §9.2b，那是本项目最有价值的一页。
 >
-> ✅ **当前状态**：CI 已在 `macos-14` 上真实跑通（run [40124476293](https://github.com/904177233/ximake-keyboard/actions/runs/40124476293)，18 步全绿，产出 2.89 MB 未签名 IPA，键盘扩展与词库都已正确打进 `PlugIns/`），并且**已经在真机上装成功、App 能打开**。真机踩到的两个坑（iOS 27 拒收 bundle 根 `Resources/` 目录、`applyHeight` 无限递归闪退）都已修复并留档。
+> ✅ **当前状态**：CI 已在 `macos-14` 上真实跑通（run [40128059320](https://github.com/904177233/ximake-keyboard/actions/runs/40128059320)，18 步全绿，产出 2.89 MB 未签名 IPA，键盘扩展与词库都已正确打进 `PlugIns/`），并且**已经在真机上装成功、App 能打开**。真机踩到的两个坑（iOS 27 拒收 bundle 根 `Resources/` 目录、`applyHeight` 无限递归闪退）都已修复并留档。
 
 ### 工程与构建
 
