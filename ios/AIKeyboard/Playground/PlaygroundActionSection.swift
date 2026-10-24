@@ -109,7 +109,8 @@ extension PlaygroundView {
                 withAnimation(Theme.Motion.normalAnimation) {
                     engine.clear()
                 }
-            }
+            },
+            onSaveToAlbum: { await saveImageToAlbum(state) }
         )
         .animation(Theme.Motion.spring, value: state)
     }
@@ -255,5 +256,45 @@ extension PlaygroundView {
             ToastMessage(kind: .success, text: "已保存为短语", detail: "在键盘的短语面板里可以使用")
         )
         Haptics.success()
+    }
+
+    /// 把生图结果保存到系统相册。
+    ///
+    /// 权限只在用户点下「保存到相册」之后才申请（见 `PhotoLibrarySaver.save`），
+    /// 这里只负责取图、调用与结果提示。被拒绝时给出可执行的设置路径，
+    /// 而不是一句「保存失败」。
+    @MainActor
+    func saveImageToAlbum(_ state: AIResultCard.ResultState) async {
+        guard case .image(let result) = state else { return }
+        guard let imageData = result.imageData, let image = UIImage(data: imageData) else {
+            appState.showToast(
+                ToastMessage(
+                    kind: .warning,
+                    text: "这张图暂时无法保存",
+                    detail: "可以先用「复制图片」，再粘贴到聊天窗口里。"
+                )
+            )
+            return
+        }
+        do {
+            try await PhotoLibrarySaver.save(image)
+            Haptics.success()
+            appState.showToast(
+                ToastMessage(
+                    kind: .success,
+                    text: "已保存到相册",
+                    detail: "可以在「照片」App 里找到这张图。"
+                )
+            )
+        } catch {
+            appState.showToast(
+                ToastMessage(
+                    kind: .warning,
+                    text: PhotoLibrarySaver.message(for: error),
+                    detail: PhotoLibrarySaver.suggestion(for: error)
+                )
+            )
+            Haptics.warning()
+        }
     }
 }

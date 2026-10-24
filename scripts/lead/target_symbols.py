@@ -165,6 +165,9 @@ SYSTEM = set(
     AnyCancellable Combine SwiftUI NavigationLink NavigationStack ScrollViewReader
     TabView TimelineView ToolbarItem Slider Stepper SecureField
     GridItem HTTPURLResponse LocalizedError Namespace
+    CheckedContinuation CheckedThrowingContinuation
+    PHPhotoLibrary PHAssetChangeRequest PHAsset PHAssetCollection PHAuthorizationStatus
+    PHPhotoChangeRequest PHFetchResult PHImageManager Photos
     """.split()
 )
 

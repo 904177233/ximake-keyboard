@@ -3,9 +3,10 @@
 //  墨语 · 输入法内核（IMECore）
 //
 //  模块职责：把用户按键产生的拼音串转换为候选词序列——支持全拼、简拼、混拼、多音节
-//            动态规划切分、前缀预测、多词组合、英文/数字直通，并按"词频 + 用户习惯 +
+//            动态规划切分、前缀预测、多词组合、模糊音兜底、英文/数字直通，并按"词频 + 用户习惯 +
 //            最近使用 - 长度惩罚"综合排序（契约 §4.6）。
-//  依赖：Foundation、PinyinDictionary、PinyinSyllables、UserLearningStore、PhraseSuggestionIndex
+//  依赖：Foundation、PinyinDictionary、PinyinSyllables、UserLearningStore、PhraseSuggestionIndex、
+//        FuzzyPinyin（模糊音变体与命中收集）
 //  使用方：keyboard-ui 的 KeyboardViewModel、IMEKit
 //
 
@@ -37,6 +38,13 @@ public final class PinyinEngine {
     /// 简拼最多展开的首字母串长度（超长串不再按简拼处理，避免误命中）。
     private static let maxInitialsQueryLength = 6
 
+    /// 模糊音命中降权系数（精确命中 1.0，模糊命中 0.85）。
+    ///
+    /// 取值的依据：模糊命中本质上比精确命中"猜测成分"更多，但用户一旦开了模糊音，
+    /// 它就是刚需而不是噪声，所以不能压太狠（0.85 大约相当于"词频低一个数量级"
+    /// 或"少了 2 次选词学习"，仍能排进候选栏前几位，但永远排在原文精确命中之后）。
+    private static let fuzzyDiscount = 0.85
+
     // MARK: - 依赖
 
     /// 词库。
@@ -65,11 +73,24 @@ public final class PinyinEngine {
         self.learning = learning
     }
 
+    // MARK: - 模糊音设置
+
+    /// 当前生效的模糊音设置。
+    ///
+    /// 读写都直接落到进程内单例 `FuzzyPinyinSettings.shared`（单一真相源），因此
+    /// 键盘内设置页改开关后引擎下一次取候选立即生效，无需重启键盘，也不会出现
+    /// 「UI 显示已开、引擎还在用旧值」的两份状态。
+    public var fuzzyOptions: FuzzyPinyinOptions {
+        get { FuzzyPinyinSettings.shared.options }
+        set { FuzzyPinyinSettings.shared.options = newValue }
+    }
+
     // MARK: - 候选生成
 
     /// 生成候选词。
     ///
-    /// 处理顺序：自造词/学习词 → 全拼精确与前缀预测 → 简拼 → 多词组合切分 → 英文/数字直通，
+    /// 处理顺序：自造词/学习词 → 全拼精确与前缀预测 → 简拼 → 多词组合切分 →
+    /// 模糊音兜底（仅当精确候选不足时）→ 英文/数字直通，
     /// 最后统一打分排序并截断。末尾的 `1`–`9` 数字视为"选词序号"，不计入拼音匹配
     /// （UI 可通过 `selectionIndex(for:)` 取到该序号）。
     ///
@@ -93,6 +114,7 @@ public final class PinyinEngine {
             appendDictionaryCandidates(normalized: normalized, into: &pool)
             appendInitialsCandidates(normalized: normalized, into: &pool)
             appendComposedCandidates(normalized: normalized, into: &pool)
+            appendFuzzyCandidates(normalized: normalized, poolSize: pool.count, limit: limit, into: &pool)
         }
         let hasCandidates = !pool.isEmpty
         // 注意传 `query` 而不是 `trimmed`：末尾的数字是"选词序号"，不应把 `zhongguo2`
@@ -328,6 +350,47 @@ public final class PinyinEngine {
                     into: &pool
                 )
             }
+        }
+    }
+
+    // MARK: - 数据来源：模糊音兜底
+
+    /// 收集模糊音候选（`zongguo` → 中国，`senme` → 什么）。
+    ///
+    /// 性能约束（整次按键 <2ms）：①**只在精确候选不足时才展开**（`poolSize >= limit`
+    /// 说明候选栏已填满，再算纯属浪费，这条挡住绝大多数按键）；②变体由
+    /// `FuzzyPinyin.expand` 限流（最多 24 个、按改动音节数从少到多），每个变体最多取
+    /// 8 条精确词 + 8 个前缀键；③模糊命中统一乘 `fuzzyDiscount` 降权，永远排在精确命中之后。
+    ///
+    /// - Parameters:
+    ///   - normalized: 已归一化的输入串。
+    ///   - poolSize: 当前候选池条目数（用于判断是否还需要模糊展开）。
+    ///   - limit: 本次请求的候选上限。
+    ///   - pool: 候选池。
+    private func appendFuzzyCandidates(normalized: String,
+                                       poolSize: Int,
+                                       limit: Int,
+                                       into pool: inout [String: Scored]) {
+        let options = fuzzyOptions
+        guard options.isActive else { return }
+        guard normalized.count >= 2 else { return }
+        guard poolSize < limit else { return }
+        let matches = FuzzyPinyin.matches(for: normalized,
+                                          rules: options.activeRules,
+                                          dictionary: dictionary)
+        guard !matches.isEmpty else { return }
+        for match in matches {
+            let base = match.isExact
+                ? 2.0 * Self.fuzzyDiscount
+                : 1.0 * match.coverage * Self.fuzzyDiscount
+            insert(
+                text: match.text,
+                pinyin: match.pinyin,
+                frequency: match.frequency,
+                base: base,
+                kind: .word,
+                into: &pool
+            )
         }
     }
 

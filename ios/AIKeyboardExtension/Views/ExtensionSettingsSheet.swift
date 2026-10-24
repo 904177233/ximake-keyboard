@@ -40,6 +40,8 @@ struct ExtensionSettingsSheet: View {
                     divider
                     clipboardRow
                     divider
+                    fuzzyRow
+                    divider
                     syncRow
                     divider
                     dictionaryRow
@@ -128,7 +130,37 @@ struct ExtensionSettingsSheet: View {
         .padding(.horizontal, Theme.Spacing.xl)
     }
 
-    /// ⑤配置导入 / 导出。
+    /// ⑤模糊音（开关）：`zh/z`、`ch/c`、`sh/s`、`in/ing`、`l/n` 不分也能打出来。
+    ///
+    /// 默认开启（内核默认规则 5 条）；状态来自 `KeyboardViewModel.fuzzyPinyinEnabled`，
+    /// 切换后经 `IMEKit` → `PinyinEngine` 立即生效并持久化到 `moyu.ime.fuzzy.v1`。
+    private var fuzzyRow: some View {
+        HStack(spacing: Theme.Spacing.md) {
+            Text("〰️")
+                .font(Theme.fontBody)
+            VStack(alignment: .leading, spacing: 0) {
+                Text("模糊音")
+                    .font(Theme.fontBody)
+                    .foregroundColor(Theme.textPrimary)
+                Text("zh/z、ch/c、sh/s、in/ing、l/n 不分也能打出来")
+                    .font(Theme.fontCaption)
+                    .foregroundColor(Theme.textTertiary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            Toggle("", isOn: Binding(
+                get: { model.fuzzyPinyinEnabled },
+                set: { value in model.setFuzzyPinyinEnabled(value) }
+            ))
+            .labelsHidden()
+            .tint(Theme.accent)
+            .accessibilityLabel(Text("模糊音开关"))
+        }
+        .frame(height: KMLayout.settingsRowHeight)
+        .padding(.horizontal, Theme.Spacing.xl)
+    }
+
+    /// ⑥配置导入 / 导出。
     private var syncRow: some View {
         HStack(spacing: Theme.Spacing.md) {
             Text("⇅")
@@ -173,7 +205,7 @@ struct ExtensionSettingsSheet: View {
         .padding(.horizontal, Theme.Spacing.xl)
     }
 
-    /// ⑥词库来源（诊断行：排查"候选中没有中文"的第一现场证据）。
+    /// ⑦词库来源（诊断行：排查"候选中没有中文"的第一现场证据）。
     ///
     /// 取值来自 `IMEKit.diagnosticsSummary`（`model.dictionarySummary`）。
     /// 正常态用小字 `Theme.textSecondary`；命中「内置兜底词库」时改 `Theme.warning` 并前置 ⚠️。

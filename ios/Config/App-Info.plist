@@ -71,6 +71,9 @@
 	<key>NSPasteboardUsageDescription</key>
 	<string>用于在「墨语」App 与键盘之间同步 AI 服务配置（不含 API Key）。</string>
 
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>用于把 AI 生成的图片保存到你的相册。墨语只会在你点「保存到相册」时写入，不会读取你的照片。</string>
+
 	<key>UIStatusBarStyle</key>
 	<string>UIStatusBarStyleDefault</string>
 

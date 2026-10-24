@@ -10,24 +10,26 @@
 | `IMECandidate.swift` | 契约 §4.6 的公共数据结构：`IMECandidate`、`DictionaryEntry` | 96 |
 | `PinyinSyllables.swift` | 无声调音节表（421 个音节）+ 音节切分 DP（**自动生成，勿手工编辑**） | 170 |
 | `PinyinDictionary.swift` | 加载 `base_dict.tsv`，建全拼哈希索引与首字母简拼索引 | 576 |
-| `PinyinEngine.swift` | 输入串 → 候选：全拼/简拼/混拼/组合切分/前缀预测/英文直通 + 排序 | 531 |
+| `PinyinEngine.swift` | 输入串 → 候选：全拼/简拼/混拼/组合切分/前缀预测/模糊音兜底/英文直通 + 排序 | 594 |
+| `FuzzyPinyin.swift` | 模糊音（§3.8）：9 条规则、变体展开 `variants`/`expand`、词库命中 `matches`、设置单例 `FuzzyPinyinSettings` | 514 |
 | `UserLearningStore.swift` | 选词计频、最近使用环形缓冲（200 条）、自造词，经 `SharedStore` 持久化 | 279 |
 | `PhraseSuggestion.swift` | 加载 `phrases.tsv`，实现"上屏后联想" | 188 |
 | `PhraseLibrary.swift` | 用户短语库 `PhraseItem`/`PhraseLibrary`（占位符展开）+ `ClipboardHistory` | 341 |
 | `ContextualSuggestion.swift` | 上下文联想（§9）：`ContextualSuggestion` 数据模型、`AISuggestionPolicy` 参数、L1 `LocalSuggestionIndex` | 460 |
 | `AISuggestionPrompt.swift` | 上下文联想 L2：prompt 构造 `userMessage`/`systemPrompt` + 模型返回文本解析 `parse` | 258 |
 | `ContextualSeedTemplates.swift` | L1 的内置触发词模板（81 组规则、169 条候选短句） | 130 |
-| `IMEKit.swift` | 门面：一次性组装上述组件 + 词库来源诊断（`dictionarySource` / `diagnosticsSummary`），供 UI 层使用 | 185 |
+| `IMEKit.swift` | 门面：一次性组装上述组件 + 词库来源诊断（`dictionarySource` / `diagnosticsSummary`）+ 模糊音开关（`fuzzyPinyin` / `fuzzyDiagnosticsSummary`），供 UI 层使用 | 230 |
 
 依赖方向（单向，无环）：
 ```
 IMEKit
   ├─ PinyinDictionary ── PinyinSyllables
   ├─ UserLearningStore ── SharedStore（Storage 层，仅用 4 个读写方法）
-  ├─ PinyinEngine ── PinyinDictionary + UserLearningStore + PhraseSuggestion
+  ├─ PinyinEngine ── PinyinDictionary + UserLearningStore + PhraseSuggestion + FuzzyPinyin
   ├─ PhraseLibrary ── SharedStore
   ├─ ClipboardHistory ── SharedStore
-  └─ LocalSuggestionIndex ── SharedStore + ContextualSeedTemplates
+  ├─ LocalSuggestionIndex ── SharedStore + ContextualSeedTemplates
+  └─ FuzzyPinyinSettings ── SharedStore（模糊音开关，进程内单例）
 AISuggestionPrompt ── ContextualSuggestion（纯函数，无状态、无网络）
 ```
 
@@ -150,8 +152,9 @@ python tools/dict/gen_swift_syllables.py  # 音节表变更后重生成 PinyinSy
   ├─ 4. 词库前缀预测（zhongg → zhongguo…）
   ├─ 5. 简拼展开（zg → 中国/这个…）
   ├─ 6. 多词组合切分 DP（woxihuanni → 我喜欢你）
-  ├─ 7. 英文/数字直通（2333、hello）
-  └─ 8. 统一打分 + 稳定排序 + 截断
+  ├─ 7. 模糊音兜底（仅当精确候选不足时，×0.85 降权，见 §3.8）
+  ├─ 8. 英文/数字直通（2333、hello）
+  └─ 9. 统一打分 + 稳定排序 + 截断
 ```
 
 ### 3.2 多音节切分 DP
@@ -241,6 +244,74 @@ DP 的两层剪枝：`maxTileLength = 24`（单块拼音长度上限）、`prefi
 
 先查 `phrases.tsv`（`PhraseSuggestionIndex`，755 条，最长触发词优先做尾部匹配），
 不足时用 `UserLearningStore.recentPhrases` 补齐。返回 `kind = .learned`。
+
+### 3.8 模糊音（`FuzzyPinyin`）
+
+南方口音用户常把 `zh/z`、`ch/c`、`sh/s`、`in/ing`、`l/n` 混用，模糊音把这些对子
+折叠成等价类后再查词库。**默认开启，但只开前 5 条规则**（`FuzzyPinyinOptions.defaultRules`）。
+
+**9 条规则**（`FuzzyPinyinRule`，rawValue 即 `zh-z` 形式）：
+
+| 规则 | 折叠 | 默认 |
+| --- | --- | --- |
+| `zhZ` | `zh` / `z`（`zhong` ↔ `zong`） | ✅ |
+| `chC` | `ch` / `c`（`chi` ↔ `ci`） | ✅ |
+| `shS` | `sh` / `s`（`shi` ↔ `si`） | ✅ |
+| `inIng` | `in` / `ing`（`jin` ↔ `jing`） | ✅ |
+| `lN` | `l` / `n`（`lin` ↔ `nin`，单字母 `n` 不参与） | ✅ |
+| `enEng` | `en` / `eng`（`sen` ↔ `seng`） | ❌ |
+| `anAng` | `an` / `ang`（`ban` ↔ `bang`，`iang`/`uang` 让位给后两条） | ❌ |
+| `ianIang` | `ian` / `iang`（`xian` ↔ `xiang`） | ❌ |
+| `uanUang` | `uan` / `uang`（`zhuan` ↔ `zhuang`） | ❌ |
+
+**为什么默认开前 5 条、关后 4 条**：
+
+1. 前 5 条是全国最普遍的混淆（平翘舌 + 前后鼻音 + `l/n`，后者集中在湘赣/西南官话区），
+   错拼率远高于后 4 条。
+2. 后 4 条里 `en/eng`、`an/ang`、`ian/iang`、`uan/uang` 一旦开启，`xian`→`xiang`、
+   `zhuan`→`zhuang` 这类**真实存在的不同词**会互相串台（"先"和"香"、"专"和"装"），
+   误伤概率显著高于收益，留给用户按自己口音自选。
+3. 只开 5 条时，绝大多数输入串的变体数为 1（无模糊命中），按键开销可忽略；
+   全开 9 条最坏情况下变体数也只有 8 条（见下方限流）。
+4. 默认值可通过设置页「模糊音」开关一键关闭，关闭后引擎完全跳过模糊音分支（零开销）。
+
+**限流（防组合爆炸）**：
+
+- 单音节变体上限 `maximumVariantsPerSyllable = 4`（含自身）；
+- 整串最多改动 `maximumChangedSyllables = 4` 个音节；
+- 整串变体总数上限 `maximumExpandedVariants = 24`；
+- 每个变体最多取 `maximumMatchesPerVariant = 8` 条精确命中、`maximumPrefixKeysPerVariant = 8` 个前缀键。
+
+**接入点与排序**：`PinyinEngine.candidates(for:limit:)` 在「多词组合切分」之后、英文直通之前调用
+`appendFuzzyCandidates`。它有三道前置闸门（任一条不满足就直接返回）：
+
+```swift
+guard options.isActive            // 开关打开且至少选了一条规则
+guard normalized.count >= 2       // 单字母不跑模糊（没有混淆空间）
+guard poolSize < limit            // 精确候选已占满 → 模糊候选根本没机会进榜，直接跳过
+```
+
+命中后按 `base = isExact ? 2.0 × 0.85 : 1.0 × coverage × 0.85` 写池，
+即**模糊命中恒为同位置精确命中的 0.85 倍**（约等于词频低一个数量级，或少 2 次选词学习），
+因此**永远排在精确命中之后**，只在精确候选不足时补位。`0.85` 是 `PinyinEngine.fuzzyDiscount`。
+
+**性能实测**（`python tools/dict/_probe_fuzzy_perf.py`，Python 上界，Swift 应快 3–10 倍）：
+
+| 场景 | 关模糊 | 开模糊（默认 5 条） | 增量 |
+| --- | --- | --- | --- |
+| `nihao` | 0.012 ms | 0.076 ms | +0.065 ms |
+| `zhongguo` | 0.016 ms | 0.077 ms | +0.061 ms |
+| `zhuang` | 0.025 ms | 0.079 ms | +0.054 ms |
+| `zhongguorenmin` | 0.080 ms | 0.231 ms | +0.152 ms |
+
+`expand` 本身：`zhongguo` 0.071 ms / `womenyiqiquchifanba`（19 字母）0.449 ms，
+全 9 条规则下后者 0.471 ms、变体 8 条。**整体远低于 2 ms 红线**，且典型按键
+（`wo` 0.137 ms、`nihao` 0.073 ms）因为「候选池已满」闸门根本不会进入模糊分支。
+
+**持久化**：`FuzzyPinyinSettings`（进程内单例，`SharedStore` 绑定）把开关存成
+`v1|enabled=1|rules=ch-c,in-ing,l-n,sh-s,zh-z`（规则按 rawValue 排序，同配置字节相同），
+Key `moyu.ime.fuzzy.v1`。`IMEKit` 在 `init` 里 `configure(store:)` 完成绑定，
+之后 UI 改开关立即对下一次取候选生效。
 
 ## 4. 用户学习（`UserLearningStore`）
 
@@ -410,7 +481,7 @@ Windows 环境无法编译 Swift，因此用 `tools/dict/_simulate_engine.py` �
 > 依靠 `scripts/qa/static_check.py` 的静态扫描（当前 `P0=0 P1=0`）+ 逐文件人工复核。
 > 复刻脚本与 Swift 实现共享同一份 `base_dict.tsv` 与同一套常量，若两侧常量漂移会立刻 FAIL。
 
-### 6.9 一站式断言脚本（复制即跑，53 条 `assert`）
+### 6.9 一站式断言脚本（复制即跑，77 条 `assert`）
 
 在 macOS 上新建 `Tests/IMECoreTests/IMECoreSmokeTests.swift`，整段粘进去即可。
 `assert` 只在 Debug 生效；若要在 Release 也校验，把 `assert` 换成 `XCTAssertTrue` 即可。
@@ -525,10 +596,61 @@ final class IMECoreSmokeTests: XCTestCase {
         assert(kit.diagnosticsSummary.contains("5276"))
         assert(kit.candidates(for: "zg").first?.text == "中国")
     }
+
+    func test07_fuzzyPinyin() {
+        // 9 条规则、默认开前 5 条
+        assert(FuzzyPinyinRule.allCases.count == 9)
+        assert(FuzzyPinyinOptions.defaultRules.count == 5)
+        assert(FuzzyPinyinOptions.defaultRules.contains(.zhZ))
+        assert(FuzzyPinyinOptions.defaultRules.contains(.inIng))
+        assert(FuzzyPinyinOptions.defaultRules.contains(.enEng) == false)
+
+        // 单音节变体：含自身且自身在第 0 位
+        let zhong = FuzzyPinyin.variants(of: "zhong", rules: FuzzyPinyinOptions.defaultRules)
+        assert(zhong.first == "zhong")
+        assert(zhong.contains("zong"))
+        assert(FuzzyPinyin.variants(of: "zhong", rules: []).count == 1)
+        assert(FuzzyPinyin.variants(of: "ling", rules: [.enEng]).count == 1, "单字母 n 不应参与 l/n 折叠")
+
+        // 整串变体：按改动音节数从少到多，原文永远第 0 位
+        let expanded = FuzzyPinyin.expand("zhongguo", rules: FuzzyPinyinOptions.defaultRules)
+        assert(expanded.first == "zhongguo")
+        assert(expanded.contains("zongguo"))
+        assert(FuzzyPinyin.expand("zongguo", rules: FuzzyPinyinOptions.defaultRules).contains("zhongguo"))
+        assert(FuzzyPinyin.expand("", rules: FuzzyPinyinOptions.defaultRules).isEmpty)
+        assert(FuzzyPinyin.expand("zongg", rules: FuzzyPinyinOptions.defaultRules).contains("zhongg"))
+
+        // 限流：单音节 ≤4、整串 ≤24
+        assert(FuzzyPinyin.variants(of: "zhuang", rules: FuzzyPinyinOptions.allEnabled).count <= 4)
+        assert(FuzzyPinyin.expand("zhongguorenmin", rules: FuzzyPinyinOptions.allEnabled).count <= 24)
+
+        // 引擎：精确优先，模糊命中降权后补位
+        let exact = PinyinDictionary.bundled()
+        let learning = UserLearningStore(store: SharedStore.shared)
+        let engine = PinyinEngine(dictionary: exact, learning: learning)
+        engine.fuzzyOptions = FuzzyPinyinOptions(enabled: true, rules: [.zhZ])
+        assert(engine.candidates(for: "zhongguo").first?.text == "中国", "精确命中必须仍是首候选")
+        let fuzzy = engine.candidates(for: "zongguo")
+        assert(fuzzy.contains { $0.text == "中国" }, "zh/z 模糊应能打出「中国」")
+        assert(fuzzy.first?.score ?? .infinity <= engine.candidates(for: "zhongguo").first?.score ?? 0,
+               "模糊命中不应比精确命中分更高")
+        engine.fuzzyOptions = .off
+        assert(engine.candidates(for: "zongguo").contains { $0.text == "中国" } == false,
+               "关闭模糊音后不应再出「中国」")
+
+        // 设置持久化与门面
+        FuzzyPinyinSettings.shared.options = FuzzyPinyinOptions(enabled: false, rules: [])
+        assert(FuzzyPinyinSettings.shared.options.enabled == false)
+        FuzzyPinyinSettings.shared.reset()
+        assert(FuzzyPinyinSettings.shared.options.enabled == true, "reset 应恢复默认（开启）")
+        let kit = IMEKit(store: SharedStore.shared)
+        assert(kit.isFuzzyPinyinEnabled == true)
+        assert(kit.fuzzyDiagnosticsSummary.contains("已开启"))
+    }
 }
 ```
 
-**预期输出**（53 条断言全过时 XCTest 打印）：
+**预期输出**（77 条断言全过时 XCTest 打印）：
 
 ```
 Test Suite 'IMECoreSmokeTests' passed
@@ -538,7 +660,8 @@ Test Suite 'IMECoreSmokeTests' passed
   Test Case 'test04_learning'           passed  (0.006 s)
   Test Case 'test05_phraseAndClipboard' passed  (0.003 s)
   Test Case 'test06_facade'             passed  (0.003 s)
-Executed 6 tests, with 53 assertions, 0 failures, 0 unexpected
+  Test Case 'test07_fuzzyPinyin'        passed  (0.005 s)
+Executed 7 tests, with 77 assertions, 0 failures, 0 unexpected
 ```
 
 > 若 `test01` 在 `loadedPath != "<builtin>"` 处失败，说明 Xcode 没把 `Shared/dict` 以
@@ -557,7 +680,7 @@ Executed 6 tests, with 53 assertions, 0 failures, 0 unexpected
 | 强制解包仅 `@IBOutlet` / 已知非空 + `// SAFE:` | ✅ 无强制解包 |
 | `Shared/IMECore` 不 import UIKit/SwiftUI | ✅ 只 `import Foundation` |
 | public API 有 `///` 中文文档注释 | ✅ 全部 public 成员 |
-| 每文件 ≤600 行 | ✅ 最长 576 行 |
+| 每文件 ≤600 行 | ✅ 最长 594 行（`PinyinEngine.swift`） |
 | 注释中文、标识符英文 | ✅ |
 | 模块级注释（职责/依赖/使用方） | ✅ 每个文件头部三要素 |
 
@@ -566,8 +689,10 @@ Executed 6 tests, with 53 assertions, 0 failures, 0 unexpected
 1. **多音字**：按 pypinyin 默认读音生成（`银行`→`yinhang`、`长大`→`zhangda`），
    不做上下文消歧。若后续要提升准确率，可在 `PinyinDictionary` 增加"多音字候选展开"。
 2. **组合候选上限**：单块最大 24 字符、最多回溯 64 段，超长输入串会被截断处理。
-3. **未做模糊音**：`zh/z`、`ch/c`、`sh/s`、`in/ing`、`l/n` 等模糊音匹配未实现，
-   对南方口音用户命中率偏低，可作为后续迭代项（在归一化阶段做等价类折叠）。
+3. **模糊音已支持**：`zh/z`、`ch/c`、`sh/s`、`in/ing`、`l/n`、`en/eng`、`an/ang`、`ian/iang`、
+   `uan/uang` 共 9 条规则，可开关，**默认开前 5 条**（平翘舌 + 前后鼻音 + `l/n`）。
+   实现与限流见 §3.8；后 4 条默认关闭的原因是误伤概率高（`xian`/`xiang` 会串台），
+   交由用户按自己口音自选。
 4. **无纠错**：输入串打错一个字不会自动纠正（如 `nihap` → `你好`）。
 5. **词库加载耗时**为理论估算（Windows 无 Swift 环境），需在真机上用
    `dict.loadDurationMilliseconds` 实测确认；若超标，可把解析改为 `Data` + 手写字节扫描。

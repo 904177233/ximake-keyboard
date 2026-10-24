@@ -183,6 +183,9 @@ CAReplicatorLayer2
 NSAttributedStringKey NSMutableAttributedStringKey
 UIGraphicsImageRenderer UIGraphicsImageRendererFormat UIGraphicsBeginImageContext
 UIGraphicsImageRendererContext
+# ---- Photos 框架（相册写入；只在用户点「保存到相册」时用 .addOnly 权限，不读取相册）----
+PHPhotoLibrary PHAssetChangeRequest PHAsset PHAssetCollection PHAuthorizationStatus
+PHPhotoChangeRequest PHFetchResult PHImageManager Photos
 UIApplication2
 UIScreen2
 QRCoder2

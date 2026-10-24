@@ -2,10 +2,10 @@
 //  IMEKit.swift
 //  墨语 · 输入法内核（IMECore）
 //
-//  模块职责：把词库、学习、引擎、短语库、剪贴板历史、上下文联想组装成单一门面，供 UI 层一次性初始化，
-//            避免上层关心各子组件的加载顺序与依赖关系（契约 §4.6 的可选 facade）。
+//  模块职责：把词库、学习、引擎、短语库、剪贴板历史、上下文联想、模糊音设置组装成单一门面，
+//            供 UI 层一次性初始化，避免上层关心各子组件的加载顺序与依赖关系（契约 §4.6 的可选 facade）。
 //  依赖：Foundation、PinyinDictionary、PinyinEngine、UserLearningStore、PhraseLibrary、
-//        ClipboardHistory、LocalSuggestionIndex
+//        ClipboardHistory、LocalSuggestionIndex、FuzzyPinyin（设置与诊断）
 //  使用方：keyboard-ui 的 KeyboardViewModel、host-app-ui 的启动流程与诊断页
 //
 
@@ -60,6 +60,9 @@ public final class IMEKit {
         self.phrases = PhraseLibrary(store: store)
         self.clipboard = ClipboardHistory(store: store, enabled: clipboardEnabled)
         self.contextual = LocalSuggestionIndex(store: store)
+        // 模糊音设置：进程内单例，绑定同一个 SharedStore 并把持久化值读进内存。
+        // 引擎每次取候选时都从单例读，因此这里的绑定必须早于第一次 `candidates(for:)`。
+        FuzzyPinyinSettings.shared.configure(store: store)
     }
 
     // MARK: - 候选
@@ -181,5 +184,47 @@ public final class IMEKit {
     /// 一条上下文联想诊断摘要（诊断页可直接展示）。
     public var contextualDiagnosticsSummary: String {
         "上下文联想｜内置模板 \(contextual.seedRuleCount) 条｜已学习 \(contextual.learnedKeyCount) 个上下文"
+    }
+
+    // MARK: - 模糊音
+
+    /// 当前模糊音设置（读取进程内单例，与 `PinyinEngine` 看到的是同一份）。
+    public var fuzzyPinyin: FuzzyPinyinOptions {
+        get { engine.fuzzyOptions }
+        set { engine.fuzzyOptions = newValue }
+    }
+
+    /// 是否启用模糊音。
+    public var isFuzzyPinyinEnabled: Bool { fuzzyPinyin.isActive }
+
+    /// 更新模糊音设置（持久化到 `SharedStore` 的 `moyu.ime.fuzzy.v1`）。
+    ///
+    /// 立即生效：`PinyinEngine` 每次生成候选都会重新读取设置，无需重启键盘。
+    /// - Parameter options: 新的设置（开关 + 规则集合）。
+    public func setFuzzyPinyin(_ options: FuzzyPinyinOptions) {
+        engine.fuzzyOptions = options
+        FuzzyPinyinSettings.shared.options = options
+    }
+
+    /// 只切换模糊音开关，保留规则集合。
+    /// - Parameter enabled: 是否启用。
+    public func setFuzzyPinyinEnabled(_ enabled: Bool) {
+        var updated = engine.fuzzyOptions
+        updated.enabled = enabled
+        setFuzzyPinyin(updated)
+    }
+
+    /// 一条模糊音诊断摘要（设置页/诊断页可直接展示）。
+    ///
+    /// 关闭时明确写「已关闭」；开启时列出规则名，便于用户核对到底开了哪几条。
+    public var fuzzyDiagnosticsSummary: String {
+        let options = engine.fuzzyOptions
+        guard options.enabled else { return "模糊音：已关闭" }
+        guard !options.rules.isEmpty else { return "模糊音：已开启（未选规则，等同关闭）" }
+        let names = FuzzyPinyinRule.allCases
+            .filter { options.rules.contains($0) }
+            .map(\.displayName)
+            .joined(separator: "、")
+        return "模糊音：已开启（\(options.rules.count)/\(FuzzyPinyinRule.allCases.count) 条）｜\(names)"
     }
 }

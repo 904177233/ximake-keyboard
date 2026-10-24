@@ -30,6 +30,19 @@ MAX_TILE_LENGTH = 24
 PREFIX_KEY_LIMIT = 40
 MAX_INITIALS_QUERY_LENGTH = 6
 
+# ---- 模糊音常量（对应 `ios/Shared/IMECore/FuzzyPinyin.swift`）----
+
+# 声明顺序必须与 Swift `FuzzyPinyinRule.allCases` 完全一致，否则变体顺序会不同。
+FUZZY_RULES = ("zh-z", "ch-c", "sh-s", "in-ing", "en-eng", "l-n", "an-ang", "ian-iang", "uan-uang")
+FUZZY_DEFAULT_RULES = frozenset({"zh-z", "ch-c", "sh-s", "in-ing", "l-n"})
+FUZZY_ALL_RULES = frozenset(FUZZY_RULES)
+FUZZY_MAX_VARIANTS_PER_SYLLABLE = 4
+FUZZY_MAX_CHANGED_SYLLABLES = 4
+FUZZY_MAX_EXPANDED_VARIANTS = 24
+FUZZY_MAX_MATCHES_PER_VARIANT = 8
+FUZZY_MAX_PREFIX_KEYS_PER_VARIANT = 8
+FUZZY_DISCOUNT = 0.85
+
 
 def cjk(ch: str) -> bool:
     """是否为汉字。"""
@@ -157,6 +170,177 @@ class SimulatedDictionary:
 
     def frequency(self, text):
         return self.text_frequency.get(text, 0)
+
+
+class SimulatedFuzzy:
+    """对应 `ios/Shared/IMECore/FuzzyPinyin.swift` 的纯函数部分。"""
+
+    @staticmethod
+    def _append_digraph(digraph, single, base, raw):
+        if base.startswith(digraph):
+            raw.append(single + base[len(digraph):])
+        elif base.startswith(single):
+            raw.append(digraph + base[len(single):])
+
+    @staticmethod
+    def _append_final(long_final, short_final, base, excluding, raw):
+        if any(base.endswith(item) for item in excluding):
+            return
+        if base.endswith(long_final):
+            raw.append(base[: len(base) - (len(long_final) - len(short_final))])
+        elif base.endswith(short_final):
+            raw.append(base + long_final[len(short_final):])
+
+    @classmethod
+    def alternatives(cls, base, rules):
+        """枚举单音节候选（未校验、未去重）。"""
+        raw = []
+        for rule in FUZZY_RULES:
+            if rule not in rules:
+                continue
+            if rule == "zh-z":
+                cls._append_digraph("zh", "z", base, raw)
+            elif rule == "ch-c":
+                cls._append_digraph("ch", "c", base, raw)
+            elif rule == "sh-s":
+                cls._append_digraph("sh", "s", base, raw)
+            elif rule == "l-n":
+                if len(base) >= 2:
+                    if base.startswith("l"):
+                        raw.append("n" + base[1:])
+                    elif base.startswith("n"):
+                        raw.append("l" + base[1:])
+            elif rule == "in-ing":
+                cls._append_final("ing", "in", base, [], raw)
+            elif rule == "en-eng":
+                cls._append_final("eng", "en", base, [], raw)
+            elif rule == "an-ang":
+                cls._append_final("ang", "an", base, ["iang", "uang"], raw)
+            elif rule == "ian-iang":
+                cls._append_final("iang", "ian", base, [], raw)
+            elif rule == "uan-uang":
+                cls._append_final("uang", "uan", base, [], raw)
+        results = []
+        seen = {base}
+        for candidate in raw:
+            if candidate == base or candidate not in SYLLABLES or candidate in seen:
+                continue
+            seen.add(candidate)
+            results.append(candidate)
+        return results
+
+    @classmethod
+    def variants(cls, syllable, rules, limit=8):
+        """单音节变体（含自身且自身在第 0 位）。"""
+        if limit <= 0:
+            return []
+        base = syllable.lower()
+        if not base:
+            return []
+        results = [base]
+        if not rules:
+            return results
+        cap = min(limit, FUZZY_MAX_VARIANTS_PER_SYLLABLE)
+        seen = {base}
+        for candidate in cls.alternatives(base, rules):
+            if len(results) >= cap:
+                break
+            if candidate not in seen:
+                seen.add(candidate)
+                results.append(candidate)
+        return results
+
+    @staticmethod
+    def split(normalized):
+        """切音节 + 保留末尾不完整尾巴（对应 Swift `split(_:)`）。"""
+        full = segment_min(normalized) if normalized in SYLLABLES else None
+        if full is not None and "".join(full) == normalized:
+            return full, ""
+        cut = len(normalized) - 1
+        while cut >= 1:
+            head = normalized[:cut]
+            if head in SYLLABLES:
+                return [head], normalized[cut:]
+            segmented = segment_min(head)
+            if segmented is not None and "".join(segmented) == head:
+                return segmented, normalized[cut:]
+            cut -= 1
+        return [], normalized
+
+    @classmethod
+    def _enumerate(cls, options, index, remaining, tail, buffer, results, seen, limit):
+        if len(results) >= limit:
+            return
+        if index >= len(options):
+            text = buffer + tail
+            if text not in seen:
+                seen.add(text)
+                results.append(text)
+            return
+        choices = options[index]
+        if not choices:
+            return
+        cls._enumerate(options, index + 1, remaining, tail, buffer + choices[0], results, seen, limit)
+        if remaining <= 0:
+            return
+        for alternative in choices[1:]:
+            cls._enumerate(options, index + 1, remaining - 1, tail,
+                           buffer + alternative, results, seen, limit)
+            if len(results) >= limit:
+                return
+
+    @classmethod
+    def expand(cls, text, rules, limit=24):
+        """整串变体（含原文且原文在第 0 位，按改动音节数从少到多）。"""
+        if limit <= 0:
+            return []
+        base = text.lower()
+        if not base:
+            return []
+        cap = min(limit, FUZZY_MAX_EXPANDED_VARIANTS)
+        if not all(c.isascii() and c.isalpha() for c in base):
+            return [base]
+        if not rules:
+            return [base]
+        syllables, tail = cls.split(base)
+        if not syllables:
+            return [base]
+        options = [cls.variants(item, rules, FUZZY_MAX_VARIANTS_PER_SYLLABLE) for item in syllables]
+        results = []
+        seen = set()
+        budget = 0
+        max_budget = min(len(options), FUZZY_MAX_CHANGED_SYLLABLES)
+        while budget <= max_budget:
+            cls._enumerate(options, 0, budget, tail, "", results, seen, cap)
+            if len(results) >= cap:
+                break
+            budget += 1
+        return results
+
+    @classmethod
+    def matches(cls, normalized, rules, dictionary):
+        """模糊音在词库里的命中（精确 + 前缀，只保留纯汉字词条）。"""
+        variants = cls.expand(normalized, rules, FUZZY_MAX_EXPANDED_VARIANTS)
+        if len(variants) <= 1:
+            return []
+        results = []
+        seen = set()
+        for variant in variants[1:]:
+            for word, frequency, flags in dictionary.exact_entries(variant, FUZZY_MAX_MATCHES_PER_VARIANT):
+                if not is_pure_cjk(word) or word in seen:
+                    continue
+                seen.add(word)
+                results.append((word, variant, frequency, True, 1.0))
+            for key in dictionary.pinyin_keys_prefix(variant, FUZZY_MAX_PREFIX_KEYS_PER_VARIANT):
+                if key == variant:
+                    continue
+                coverage = len(variant) / max(len(key), 1)
+                for word, frequency, flags in dictionary.exact_entries(key, 2):
+                    if not is_pure_cjk(word) or word in seen:
+                        continue
+                    seen.add(word)
+                    results.append((word, key, frequency, False, coverage))
+        return results
 
 
 class SimulatedEngine:
@@ -325,7 +509,19 @@ class SimulatedEngine:
             return
         self._insert(pool, text, query or text.lower(), 0, 3.0 if has_digits else 2.2, "english")
 
-    def candidates(self, raw, limit=30):
+    def _append_fuzzy(self, pool, query, pool_size, limit, rules):
+        """对应 Swift `appendFuzzyCandidates`：精确候选不足时才用模糊变体，整体 ×0.85 降权。"""
+        if not rules:
+            return
+        if len(query) < 2:
+            return
+        if pool_size >= limit:
+            return
+        for word, pinyin, frequency, is_exact, coverage in SimulatedFuzzy.matches(query, rules, self.dict):
+            base = 2.0 * FUZZY_DISCOUNT if is_exact else 1.0 * coverage * FUZZY_DISCOUNT
+            self._insert(pool, word, pinyin, frequency, base, self.kind(word, "core"))
+
+    def candidates(self, raw, limit=30, fuzzy_rules=FUZZY_DEFAULT_RULES):
         if limit <= 0:
             return []
         stripped = raw.strip()
@@ -338,6 +534,7 @@ class SimulatedEngine:
             self._append_dictionary(pool, query)
             self._append_initials(pool, query)
             self._append_composed(pool, query)
+            self._append_fuzzy(pool, query, len(pool), limit, fuzzy_rules)
         # 与 Swift 一致：英文直通传入的是"去掉选词数字后"的串
         self._append_english(pool, selection_stripped, query, bool(pool))
 
@@ -474,6 +671,62 @@ def main():
     bad_punct = [row[1] for row in rows if "punct" in row[3] and is_pure_cjk(row[1])]
     run("纯汉字词条无 punct 标记", bad_punct, [])
     run("总条数在 4000-7000", 4000 <= len(rows) <= 7000, True)
+
+    print("-" * 78)
+    print("[6] 模糊音（对应 ios/Shared/IMECore/FuzzyPinyin.swift）")
+    run("规则数 == 9", len(FUZZY_RULES), 9)
+    run("默认规则 == 前 5 条", sorted(FUZZY_DEFAULT_RULES),
+        sorted(["zh-z", "ch-c", "sh-s", "in-ing", "l-n"]))
+    run("variants(zhong, default)[0] 是自身", SimulatedFuzzy.variants("zhong", FUZZY_DEFAULT_RULES)[0], "zhong")
+    run("variants(zhong, default) 含 zong", "zong" in SimulatedFuzzy.variants("zhong", FUZZY_DEFAULT_RULES), True)
+    run("variants(zhong, 空规则) 只有自身", SimulatedFuzzy.variants("zhong", frozenset()), ["zhong"])
+    run("variants(si, default) 含 shi", "shi" in SimulatedFuzzy.variants("si", FUZZY_DEFAULT_RULES), True)
+    run("variants(lin, default) 含 nin", "nin" in SimulatedFuzzy.variants("lin", FUZZY_DEFAULT_RULES), True)
+    run("variants(lin, 仅 zh-z) 不含 nin", "nin" in SimulatedFuzzy.variants("lin", frozenset({"zh-z"})), False)
+    run("variants 单条上限 <= 4", len(SimulatedFuzzy.variants("zhuang", FUZZY_ALL_RULES, 8)) <= 4, True)
+    run("variants 全是合法音节",
+        all(item in SYLLABLES for item in SimulatedFuzzy.variants("zhuang", FUZZY_ALL_RULES)), True)
+    run("expand(zhongguo)[0] 是原文", SimulatedFuzzy.expand("zhongguo", FUZZY_DEFAULT_RULES)[0], "zhongguo")
+    run("expand(zhongguo) 含 zongguo", "zongguo" in SimulatedFuzzy.expand("zhongguo", FUZZY_DEFAULT_RULES), True)
+    run("expand(zongguo) 含 zhongguo", "zhongguo" in SimulatedFuzzy.expand("zongguo", FUZZY_DEFAULT_RULES), True)
+    run("expand 空串为空", SimulatedFuzzy.expand("", FUZZY_DEFAULT_RULES), [])
+    run("expand 上限生效",
+        len(SimulatedFuzzy.expand("zhongguorenmin", FUZZY_ALL_RULES, 5)) <= 5, True)
+    run("expand(zongg) 含 zhongg（尾音节保留）",
+        "zhongg" in SimulatedFuzzy.expand("zongg", FUZZY_DEFAULT_RULES), True)
+    run("expand 按改动数排序（0 改在前 1 改在后）",
+        SimulatedFuzzy.expand("zongguo", FUZZY_DEFAULT_RULES)[0], "zongguo")
+    fuzzy_rules = frozenset({"zh-z"})
+    run('candidates("zongguo") 精确无中文，模糊出 中国',
+        any(c["text"] == "中国" for c in engine.candidates("zongguo", fuzzy_rules=fuzzy_rules)), True)
+    exact = engine.candidates("zhongguo", fuzzy_rules=fuzzy_rules)
+    run('candidates("zhongguo")[0] 仍是 中国（精确优先）', exact[0]["text"], "中国")
+    run('candidates("zhongguo") 无重复',
+        len([c["text"] for c in exact]) == len({c["text"] for c in exact}), True)
+    no_fuzzy = engine.candidates("zongguo", fuzzy_rules=frozenset())
+    run('candidates("zongguo") 关模糊后无 中国',
+        any(c["text"] == "中国" for c in no_fuzzy), False)
+    run("模糊折扣 = 0.85 且严格小于精确", (FUZZY_DISCOUNT == 0.85 and FUZZY_DISCOUNT < 1.0), True)
+    # 用最小合成词库验证两条硬约束：①候选池已满时模糊不再跑（性能闸门）②模糊命中排在精确之后。
+    syn_rows = [
+        ("zhongguo", "中国", 1000, "core"),
+        ("zhongguo", "种国", 900, "core"),
+        ("zhongguo", "仲国", 800, "core"),
+        ("zongguo", "宗国", 700, "core"),
+    ]
+    syn_engine = SimulatedEngine(SimulatedDictionary(syn_rows))
+    syn_rules = frozenset({"zh-z"})
+    run("候选池已满时模糊候选不挤入",
+        [c["text"] for c in syn_engine.candidates("zhongguo", limit=3, fuzzy_rules=syn_rules)],
+        ["中国", "种国", "仲国"])
+    run("有空间时模糊候选追加且排在精确之后",
+        [c["text"] for c in syn_engine.candidates("zhongguo", limit=10, fuzzy_rules=syn_rules)],
+        ["中国", "种国", "仲国", "宗国"])
+    run("关闭模糊时合成词库无 宗国",
+        [c["text"] for c in syn_engine.candidates("zhongguo", limit=10, fuzzy_rules=frozenset())],
+        ["中国", "种国", "仲国"])
+    run('candidates("nihaoo") 仍返回候选（模糊不污染）',
+        len(engine.candidates("nihaoo", fuzzy_rules=fuzzy_rules)) > 0, True)
 
     print("=" * 78)
     print(f"结果：{passed} / {total} 通过")

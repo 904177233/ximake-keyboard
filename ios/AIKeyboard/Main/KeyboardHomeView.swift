@@ -292,12 +292,17 @@ struct KeyboardHomeView: View {
 
                 RowDivider()
 
-                SettingsRow(
-                    icon: IconSpec(symbol: "text.badge.plus", tint: Theme.success),
-                    title: "快捷短语",
-                    subtitle: "输入触发词即可展开成整段文字",
-                    accessory: .value("\(appState.phraseCount) 条")
-                )
+                NavigationLink {
+                    PhraseLibraryView()
+                } label: {
+                    SettingsRow(
+                        icon: IconSpec(symbol: "text.badge.plus", tint: Theme.success),
+                        title: "快捷短语",
+                        subtitle: "输入触发词即可展开成整段文字",
+                        accessory: .value("\(appState.phraseCount) 条")
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
 
                 RowDivider()
 

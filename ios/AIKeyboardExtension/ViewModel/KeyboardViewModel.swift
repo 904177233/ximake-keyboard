@@ -162,6 +162,12 @@ public final class KeyboardViewModel: ObservableObject {
     /// 词库诊断摘要（设置页展示）。
     @Published public internal(set) var dictionarySummary: String = ""
 
+    /// 模糊音是否开启（设置页「模糊音」开关；持久化在 `moyu.ime.fuzzy.v1`）。
+    ///
+    /// 单一真相源是 IMECore 的 `FuzzyPinyinSettings.shared`，本属性只是给 SwiftUI 用的镜像：
+    /// `activate()` 时从内核读回来，开关变化时写回内核并刷新这个 `@Published`。
+    @Published public internal(set) var fuzzyPinyinEnabled: Bool = true
+
     /// 一次性提示文案（Toast）。
     @Published public internal(set) var toastMessage: String?
 
@@ -288,11 +294,23 @@ public final class KeyboardViewModel: ObservableObject {
         dictionarySummary = engine.diagnosticsSummary
         phrases = engine.phrases
         clipboardItems = snapshot.enableClipboardHistory ? engine.clipboardItems : []
+        // 模糊音是内核级设置（`moyu.ime.fuzzy.v1`），这里把持久化值同步到 UI 镜像。
+        fuzzyPinyinEnabled = FuzzyPinyinSettings.shared.options.enabled
         hasFullAccess = KMFullAccessProbe.likelyAvailable()
         refreshAvailability()
         reloadContextPreview()
         recordActiveHeartbeat()
         isReady = true
+    }
+
+    /// 切换模糊音开关（设置页 Toggle 调用）。
+    ///
+    /// 写回内核单例并立即持久化，下一次按键生效；`zh/z`、`ch/c`、`sh/s`、`in/ing`、`l/n`
+    /// 这 5 条默认规则保持不变，只改开关。
+    /// - Parameter enabled: 是否启用模糊音。
+    public func setFuzzyPinyinEnabled(_ enabled: Bool) {
+        _ = FuzzyPinyinSettings.shared.setEnabled(enabled)
+        fuzzyPinyinEnabled = FuzzyPinyinSettings.shared.options.enabled
     }
 
     /// 键盘即将消失时调用：取消进行中的 AI 请求并释放缩略图，控制扩展内存峰值。
