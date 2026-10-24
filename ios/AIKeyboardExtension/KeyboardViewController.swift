@@ -11,6 +11,7 @@
 //          因此统一走「高度约束 + layoutIfNeeded」的兼容路径，见 `applyHeight(animated:)`。
 //
 
+import Combine
 import SwiftUI
 import UIKit
 
@@ -38,7 +39,8 @@ final class KeyboardViewController: UIInputViewController {
     /// SwiftUI 宿主控制器（懒加载，全生命周期复用）。
     private var hostingController: UIHostingController<KeyboardRootView>?
 
-    /// `inputView` 的高度约束（唯一的高度来源）。
+    /// `view` 的高度约束（唯一的高度来源）。`UIInputViewController` 以 `view` 作为输入视图，
+    /// 因此在 `view` 上加高度约束即等于控制键盘高度。
     private var heightConstraint: NSLayoutConstraint?
 
     /// 正在运行的高度动画（快速连点时先停掉上一个，避免高度抖动）。
@@ -58,11 +60,9 @@ final class KeyboardViewController: UIInputViewController {
 
     // MARK: - 输入视图
 
-    /// 扩展的输入视图（SwiftUI 根视图）。
-    override var inputView: UIView? {
-        loadViewIfNeeded()
-        return hostingController?.view
-    }
+    // 说明：不为 `inputView` 提供覆写。`UIInputViewController` 以自身的 `view` 作为键盘输入视图
+    //（`inputView` 类型为 `UIInputView?`），SwiftUI 宿主已作为子视图铺满 `view`，
+    // 再覆写 `inputView` 会造成同一份视图被系统重复挂载。
 
     // MARK: - 生命周期
 
@@ -114,7 +114,7 @@ final class KeyboardViewController: UIInputViewController {
 
     /// 宿主输入框内容变化（切换输入框 / 外部插入）时刷新代理。
     /// - Parameter textInput: 触发变化的输入对象。
-    override func textDidChange(_ textInput: UIKeyInput?) {
+    override func textDidChange(_ textInput: UITextInput?) {
         super.textDidChange(textInput)
         model.proxy = textDocumentProxy
         model.reloadContextPreview()
@@ -159,7 +159,7 @@ final class KeyboardViewController: UIInputViewController {
         hostingController = controller
     }
 
-    /// 安装高度约束（挂在 `inputView` 上，保证成为输入视图时也生效）。
+    /// 安装高度约束（挂在 `view` 上，保证成为输入视图时也生效）。
     private func setupHeightConstraint() {
         guard heightConstraint == nil else { return }
         let target = view.heightAnchor.constraint(equalToConstant: currentTargetHeight)
@@ -270,7 +270,9 @@ final class KeyboardViewController: UIInputViewController {
         if responds(to: selector) {
             perform(selector)
         }
-        inputView?.setNeedsLayout()
+        // 通知系统重新测量：`view` 就是本控制器的输入视图（`UIInputViewController` 以 `view` 作为 inputView）。
+        view.setNeedsLayout()
+        view.layoutIfNeeded()
     }
 
     // MARK: - 外观

@@ -160,7 +160,7 @@ SYSTEM = set(
     NSURLErrorDomain NSURLErrorCannotConnectToHost NSURLErrorCannotFindHost
     NSURLErrorDNSLookupFailed NSURLErrorNetworkConnectionLost NSURLErrorSecureConnectionFailed
     SecItemAdd SecItemCopyMatching SecItemDelete SecItemUpdate
-    UIGraphicsImageRenderer UIGraphicsImageRendererFormat UIKeyInput UIKeyboardAppearance
+    UIGraphicsImageRenderer UIGraphicsImageRendererFormat UIKeyInput UITextInput UIKeyboardAppearance
     UINotificationFeedbackGenerator UITextDocumentProxy UInt8 UInt32 UInt64
     AnyCancellable Combine SwiftUI NavigationLink NavigationStack ScrollViewReader
     TabView TimelineView ToolbarItem Slider Stepper SecureField

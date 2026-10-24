@@ -183,10 +183,14 @@ public final class KeyboardViewModel: ObservableObject {
     // MARK: - 初始化
 
     /// 创建键盘状态机。
+    ///
+    /// 可见性说明：`KMInputEngine` 是扩展内部类型，按 Swift「默认参数值不得引用
+    /// 比声明更严格的符号」规则，本初始化器不能声明为 `public`，故保持 `internal`。
+    /// `KeyboardViewModel` 只在键盘扩展模块内使用（对 `Views/` 同模块可见）。
     /// - Parameters:
     ///   - engine: 输入法内核，默认使用共享单例。
     ///   - configStore: 配置存储，默认使用 `ConfigStore()`（内部走 `SharedStore`）。
-    public init(engine: KMInputEngine = .shared, configStore: ConfigStore = ConfigStore()) {
+    init(engine: KMInputEngine = .shared, configStore: ConfigStore = ConfigStore()) {
         self.engine = engine
         self.configStore = configStore
         let loaded = configStore.load()

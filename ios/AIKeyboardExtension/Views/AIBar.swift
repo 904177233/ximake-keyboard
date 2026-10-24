@@ -177,7 +177,7 @@ struct AIBar: View {
         }) {
             ZStack {
                 Circle()
-                    .fill(BusyOrEnabledBackground(isBusy: isBusy, availability: availability))
+                    .fill(BusyOrEnabledColor(isBusy: isBusy, availability: availability).color)
                 Circle()
                     .strokeBorder(Theme.chipBorder, lineWidth: Theme.MaterialToken.strokeWidth)
                 Text("✨")
@@ -230,8 +230,11 @@ struct KMAIBarDisabledReason: Equatable {
     let kind: Kind
 }
 
-/// 圆钮背景（生成中高亮，禁用态降低对比）。
-private struct BusyOrEnabledBackground: View {
+/// 圆钮背景色的推导。
+///
+/// 说明：`.fill(_:)`、`.background(_:)` 等要求传入 `ShapeStyle`，而 `Color` 本身即
+/// 遵循 `ShapeStyle`，故这里直接返回 `Color`（早期实现返回 `View` 导致找不到重载）。
+private struct BusyOrEnabledColor {
 
     /// 是否生成中。
     let isBusy: Bool
@@ -239,13 +242,14 @@ private struct BusyOrEnabledBackground: View {
     /// 可用性。
     let availability: KeyboardViewModel.AIAvailability
 
-    var body: some View {
+    /// 推导出的填充色。
+    var color: Color {
         if isBusy {
-            Theme.accentSoft
-        } else if availability.canStartRequest {
-            Theme.chipBackground
-        } else {
-            Theme.chipBackground.opacity(0.6)
+            return Theme.accentSoft
         }
+        if availability.canStartRequest {
+            return Theme.chipBackground
+        }
+        return Theme.chipBackground.opacity(0.6)
     }
 }

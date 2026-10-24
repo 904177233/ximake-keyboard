@@ -90,23 +90,17 @@ struct KMGlassSurface<Content: View>: View {
             GeometryReader { proxy in
                 LinearGradient(
                     colors: [
-                        Color.white.opacity(Self.highlightOpacity),
+                        Color.white.opacity(KMGlassMetrics.highlightOpacity),
                         Color.white.opacity(0)
                     ],
                     startPoint: .top,
                     endPoint: .center
                 )
-                .frame(height: proxy.size.height * Self.highlightHeightRatio)
+                .frame(height: proxy.size.height * KMGlassMetrics.highlightHeightRatio)
             }
             .allowsHitTesting(false)
         }
     }
-
-    /// 顶部高光高度占容器比例（tokens: material.highlight.heightRatio）。
-    private static let highlightHeightRatio: CGFloat = 0.45
-
-    /// 顶部高光不透明度。
-    private static let highlightOpacity: Double = 0.25
 
     /// 0.5pt 描边。
     private var borderLayer: some View {
@@ -114,4 +108,18 @@ struct KMGlassSurface<Content: View>: View {
             .strokeBorder(Theme.separator, lineWidth: Theme.MaterialToken.strokeWidth)
             .allowsHitTesting(false)
     }
+}
+
+/// 玻璃高光的几何常量。
+///
+/// 说明：Swift 不允许泛型类型内声明 `static stored property`
+///（`static stored properties not supported in generic types`），
+/// 而 `KMGlassSurface` 是泛型，故把这两个常量移到泛型外部的独立类型里。
+private enum KMGlassMetrics {
+
+    /// 顶部高光高度占容器比例（tokens: material.highlight.heightRatio）。
+    static let highlightHeightRatio: CGFloat = 0.45
+
+    /// 顶部高光不透明度。
+    static let highlightOpacity: Double = 0.25
 }
