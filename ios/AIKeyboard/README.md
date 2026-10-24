@@ -27,7 +27,7 @@
 | 11 | 安装与续签指南 | `Guide/InstallGuideView.swift` | 设置 › 安装与续签；键盘主页；引导第 5 步；关于页 |
 | 12 | 诊断 | `Guide/DiagnosticsView.swift`（+ `DiagnosticsChecklist` / `DiagnosticsFormat`） | 设置 › 诊断；键盘主页；关于页 |
 | 13 | 关于 | `Settings/AboutView.swift` | 设置 › 关于 |
-| 14 | 外观与语音偏好 | `Settings/AppearanceView.swift` | 设置 › 语气与外观；键盘主页 |
+| 14 | 语气与外观偏好 | `Settings/AppearanceView.swift` | 设置 › 语气与外观；键盘主页 |
 | 15 | 隐私说明 | `Settings/PrivacyView.swift` | 设置 › 隐私说明 |
 
 > 编号 13–15 是设置二级页，设计规范里归入「结构页」，不算独立一级页面。
