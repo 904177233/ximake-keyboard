@@ -1,0 +1,85 @@
+# ---------------------------------------------------------------------------
+# 墨语（Moyu）iOS 输入法 · 仓库根 .gitignore
+# 说明：本仓库是纯源码仓，不含任何构建产物；Xcode 相关产物一律本地生成。
+# ---------------------------------------------------------------------------
+
+# ---- macOS / Windows 系统垃圾 ----
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# ---- Xcode 构建产物 ----
+build/
+DerivedData/
+*.xcarchive
+*.ipa
+*.dSYM
+*.dSYM.zip
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa.tmp/
+
+# ---- Xcode 用户级配置（每个人机器不同，绝不入库）----
+xcuserdata/
+*.xcuserdatad/
+project.xcworkspace/xcuserdata/
+project.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+*.xcodeproj/xcuserdata/
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/xcshareddata/
+
+# ---- Swift Package Manager ----
+.build/
+.swiftpm/
+Package.resolved
+*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+
+# ---- Python（scripts/ 下的工具脚本）----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# ---- 词库构建缓存（4.9MB 的 jieba 原始词表，可随时用 tools/dict/_fetch_src.py 重新下载）----
+# 注意：ios/Shared/Resources/dict/*.tsv 是**产物**，必须入库（App 直接打包它们）；
+# 只有 tools/dict/.cache/ 里的原始语料不入库。
+tools/dict/.cache/
+.cache/
+
+# ---- 本地临时文件 / 一次性验证产物 ----
+_enc_check.txt
+_tmp/
+tmp/
+*.log
+*.bak
+*.orig
+*.rej
+*.swp
+*~
+.idea/
+.vscode/
+
+# ---- 密钥与凭证（本项目不需要，但防止误提交）----
+*.p12
+*.mobileprovision
+*.cer
+*.certSigningRequest
+AuthKey_*.p8
+secrets/

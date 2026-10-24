@@ -1,0 +1,1252 @@
+﻿<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>墨语 Moyu · 高保真视觉稿 v1.0</title>
+<style>
+/* ============================================================
+   墨语视觉稿 · 单文件 / 零外部依赖
+   - 画布：390 × 844 pt（iPhone 12/13/14 逻辑分辨率）
+   - 数据来源：design/tokens.json
+   - 字体：系统栈，无网络字体；图标一律用 Unicode 几何符号/emoji 占位
+     （生产实现用 SF Symbols，见 design/组件库.md 的映射表）
+   - 静态：全站 animation:none，不依赖任何过渡初始态
+   ============================================================ */
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased}
+
+html,body{
+  background:#E9E9EF;
+  font-family:-apple-system,"SF Pro Text","PingFang SC","Helvetica Neue",sans-serif;
+  color:#000;
+}
+body{width:max-content;padding:0}
+
+/* —— 全局禁用动画 —— */
+*,*::before,*::after{animation:none!important;transition:none!important}
+
+/* ================= 舞台 ================= */
+.board{
+  display:flex;
+  gap:28px;
+  padding:10px 24px;
+  align-items:flex-start;
+  width:max-content;
+}
+.stage{width:390px;flex:0 0 390px}
+.stage-label{
+  height:18px;
+  line-height:18px;
+  margin-bottom:8px;
+  font-size:12px;
+  color:#5B5B66;
+  letter-spacing:.2px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  white-space:nowrap;
+}
+.stage-label b{
+  display:inline-block;
+  background:#1C1C1E;
+  color:#fff;
+  font-size:10px;
+  font-weight:700;
+  border-radius:5px;
+  padding:1px 5px;
+  letter-spacing:.5px;
+}
+.stage-label span{color:#8E8E99;font-size:11px}
+
+/* ================= 手机 ================= */
+.phone{
+  position:relative;
+  width:390px;
+  height:844px;
+  border-radius:44px;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+  background:var(--grouped);
+  box-shadow:0 0 0 1px rgba(0,0,0,.10), 0 20px 44px -12px rgba(18,22,40,.28);
+}
+
+/* —— 浅色令牌 —— */
+.phone.light{
+  --grouped:#F2F2F7;
+  --surface:#FFFFFF;
+  --surface-elev:#F2F2F7;
+  --keyboard:#D1D3D9;
+  --key:#FFFFFF;
+  --key-fn:#ADB3BC;
+  --key-pressed:#E5E5E5;
+  --text-1:#000000;
+  --text-2:rgba(60,60,67,.60);
+  --text-3:rgba(60,60,67,.32);
+  --accent:#0A84FF;
+  --accent-soft:rgba(10,132,255,.10);
+  --accent-press:#0060DF;
+  --separator:rgba(60,60,67,.24);
+  --sep-soft:rgba(60,60,67,.12);
+  --success:#34C759;
+  --warning:#FF9F0A;
+  --danger:#FF3B30;
+  --cand-bar:#FFFFFF;
+  --cand-sel:rgba(10,132,255,.10);
+  --chip-bg:rgba(255,255,255,.86);
+  --chip-text:#1C1C1E;
+  --glass:rgba(255,255,255,.74);
+  --glass-line:rgba(0,0,0,.06);
+  --key-shadow:rgba(0,0,0,.16);
+  --key-top:rgba(255,255,255,.62);
+  --chat-bg:#F2F2F7;
+  --bubble-in:#E9E9EB;
+  --bubble-out:#0A84FF;
+  --bubble-out-text:#FFFFFF;
+  --nav-bg:rgba(249,249,249,.94);
+}
+
+/* —— 深色令牌 —— */
+.phone.dark{
+  --grouped:#000000;
+  --surface:#1C1C1E;
+  --surface-elev:#2C2C2E;
+  --keyboard:#2C2C2E;
+  --key:#636366;
+  --key-fn:#48484A;
+  --key-pressed:#7A7A7E;
+  --text-1:#FFFFFF;
+  --text-2:rgba(235,235,245,.60);
+  --text-3:rgba(235,235,245,.32);
+  --accent:#0A84FF;
+  --accent-soft:rgba(10,132,255,.20);
+  --accent-press:#409CFF;
+  --separator:rgba(84,84,88,.60);
+  --sep-soft:rgba(84,84,88,.36);
+  --success:#30D158;
+  --warning:#FFD60A;
+  --danger:#FF453A;
+  --cand-bar:#3A3A3C;
+  --cand-sel:rgba(10,132,255,.28);
+  --chip-bg:rgba(255,255,255,.12);
+  --chip-text:#FFFFFF;
+  --glass:rgba(44,44,46,.76);
+  --glass-line:rgba(255,255,255,.08);
+  --key-shadow:rgba(0,0,0,.40);
+  --key-top:rgba(255,255,255,.14);
+  --chat-bg:#000000;
+  --bubble-in:#26262A;
+  --bubble-out:#0A84FF;
+  --bubble-out-text:#FFFFFF;
+  --nav-bg:rgba(28,28,30,.92);
+}
+
+/* ================= 状态栏 ================= */
+.statusbar{
+  height:47px;flex:0 0 47px;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 24px 0 28px;
+  font-size:15px;font-weight:600;
+  color:var(--text-1);
+  background:var(--nav-bg);
+}
+.sb-time{letter-spacing:.2px}
+.sb-right{display:flex;align-items:center;gap:6px}
+.sb-signal{display:flex;align-items:flex-end;gap:2px;height:10px}
+.sb-signal i{display:block;width:3px;border-radius:1px;background:var(--text-1)}
+.sb-signal i:nth-child(1){height:4px}
+.sb-signal i:nth-child(2){height:6px}
+.sb-signal i:nth-child(3){height:8px}
+.sb-signal i:nth-child(4){height:10px}
+.sb-5g{font-size:11px;font-weight:700;letter-spacing:.3px}
+.sb-battery{width:24px;height:11px;border:1.2px solid var(--text-1);border-radius:3px;padding:1.4px;opacity:.9}
+.sb-battery i{display:block;height:100%;width:78%;background:var(--text-1);border-radius:1px}
+
+/* ================= 导航栏 ================= */
+.navbar{
+  height:44px;flex:0 0 44px;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 14px;
+  background:var(--nav-bg);
+  border-bottom:.5px solid var(--sep-soft);
+  color:var(--text-1);
+}
+.nav-back{font-size:17px;color:var(--accent);display:flex;align-items:center;gap:2px}
+.nav-back i{font-style:normal;font-size:22px;line-height:1;margin-top:-2px}
+.nav-title{font-size:17px;font-weight:600;letter-spacing:.2px}
+.nav-right{font-size:20px;color:var(--accent);letter-spacing:2px;line-height:1}
+
+/* 大标题 */
+.large-title{
+  padding:6px 16px 6px;
+  font-size:34px;font-weight:700;letter-spacing:.36px;
+  color:var(--text-1);
+  background:var(--grouped);
+}
+
+/* ================= 主 App 内容 ================= */
+.app-body{flex:1;overflow:hidden;background:var(--grouped);padding:0 16px}
+.group{margin-top:18px}
+.group:first-child{margin-top:12px}
+.group-head{
+  font-size:13px;font-weight:400;color:var(--text-2);
+  text-transform:none;padding:0 4px 7px;letter-spacing:.1px;
+}
+.card{background:var(--surface);border-radius:16px;overflow:hidden}
+.card.tight{border-radius:16px}
+.row{
+  display:flex;align-items:center;gap:12px;
+  min-height:44px;padding:9px 14px;
+  border-bottom:.5px solid var(--sep-soft);
+}
+.row:last-child{border-bottom:none}
+.row .ico{
+  width:28px;height:28px;border-radius:7px;flex:0 0 28px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:15px;color:#fff;background:var(--accent);
+}
+.row .ico.gray{background:#8E8E93}
+.row .ico.green{background:var(--success)}
+.row .ico.orange{background:var(--warning)}
+.row .ico.red{background:var(--danger)}
+.row .ico.purple{background:#5E5CE6}
+.row .ttl{font-size:17px;color:var(--text-1);letter-spacing:-.2px}
+.row .val{margin-left:auto;font-size:17px;color:var(--text-2)}
+.row .chev{margin-left:6px;font-size:17px;color:var(--text-3);line-height:1}
+.row .sub{font-size:13px;color:var(--text-2);margin-top:2px;letter-spacing:.1px}
+.row .stack{display:flex;flex-direction:column;min-width:0}
+.row .stack .ttl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* 开关 */
+.switch{
+  width:51px;height:31px;border-radius:16px;flex:0 0 51px;position:relative;
+  background:var(--sep-soft);
+}
+.switch.on{background:var(--success)}
+.switch i{
+  position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;
+  background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.22);
+}
+.switch.on i{left:22px}
+
+/* 分段控件 */
+.segmented{
+  display:flex;background:var(--sep-soft);border-radius:9px;padding:2px;gap:2px;
+  flex:0 0 auto;
+}
+.segmented span{
+  font-size:13px;font-weight:500;color:var(--text-1);
+  padding:3px 12px;border-radius:7px;white-space:nowrap;
+}
+.segmented span.sel{background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+
+/* 提示条 */
+.banner{
+  display:flex;gap:9px;align-items:flex-start;
+  padding:11px 13px;border-radius:12px;
+  font-size:13px;line-height:1.5;color:var(--text-1);
+  background:var(--accent-soft);
+}
+.banner .bi{font-size:13px;line-height:1.45;flex:0 0 auto}
+.banner.warn{background:rgba(255,159,10,.14)}
+.banner.err{background:rgba(255,59,48,.12)}
+.banner .btext{min-width:0}
+
+/* ================= 宿主聊天区 ================= */
+.host{flex:1;display:flex;flex-direction:column;min-height:0;background:var(--chat-bg)}
+.chat{flex:1;overflow:hidden;padding:14px 14px 6px;display:flex;flex-direction:column;gap:9px}
+.chat-day{text-align:center;font-size:11px;color:var(--text-3);padding:2px 0 4px}
+.bubble-row{display:flex;gap:7px;align-items:flex-end;max-width:100%}
+.bubble-row.out{flex-direction:row-reverse}
+.avatar{
+  width:28px;height:28px;border-radius:50%;flex:0 0 28px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:600;color:#fff;
+}
+.avatar.a{background:linear-gradient(180deg,#8E9BB3,#6D7A93)}
+.avatar.b{background:linear-gradient(180deg,#7FB2F0,#4A8FE0)}
+.bubble{
+  max-width:230px;padding:8px 11px;border-radius:17px;
+  font-size:15px;line-height:1.4;letter-spacing:.1px;
+  background:var(--bubble-in);color:var(--text-1);
+  border-bottom-left-radius:5px;
+}
+.bubble-row.out .bubble{
+  background:var(--bubble-out);color:var(--bubble-out-text);
+  border-bottom-left-radius:17px;border-bottom-right-radius:5px;
+}
+
+/* 宿主输入条 */
+.composer{
+  flex:0 0 auto;display:flex;align-items:center;gap:8px;
+  padding:7px 10px;background:var(--surface);border-top:.5px solid var(--sep-soft);
+}
+.composer .round{
+  width:30px;height:30px;border-radius:50%;background:var(--surface-elev);
+  display:flex;align-items:center;justify-content:center;
+  font-size:15px;color:var(--text-2);flex:0 0 30px;
+}
+.composer .field{
+  flex:1;height:34px;border-radius:8px;background:var(--surface-elev);
+  display:flex;align-items:center;padding:0 9px;font-size:15px;color:var(--text-1);
+  gap:1px;overflow:hidden;
+}
+.marked{text-decoration:underline;text-decoration-thickness:1.5px;text-underline-offset:2.5px;color:var(--text-1)}
+.caret{
+  display:inline-block;width:2px;height:17px;background:var(--accent);
+  margin:0 1px;vertical-align:-3px;
+}
+
+/* ================= 键盘 ================= */
+.keyboard{
+  position:relative;flex:0 0 auto;
+  background:var(--keyboard);
+  display:flex;flex-direction:column;
+  overflow:hidden;
+}
+.keyboard.h258{height:258px}
+.keyboard.h426{height:426px}
+.keyboard.h438{height:438px}
+
+/* 候选栏 44 */
+.candbar{
+  height:44px;flex:0 0 44px;
+  background:var(--cand-bar);
+  display:flex;align-items:center;
+  padding:0 12px;gap:20px;
+  position:relative;
+  overflow:hidden;
+  border-bottom:.5px solid var(--sep-soft);
+}
+.cand{font-size:17px;color:var(--text-1);white-space:nowrap;letter-spacing:.2px;display:flex;align-items:center;gap:3px}
+.cand.first{font-weight:600;color:var(--accent)}
+.cand .idx{font-size:10px;font-weight:400;color:var(--text-3);align-self:flex-start;margin-top:-1px}
+.cand.empty-hint{font-size:12px;color:var(--text-3);font-weight:400}
+.cand-right{margin-left:auto;display:flex;align-items:center;gap:12px;flex:0 0 auto}
+.pagedots{display:flex;gap:5px;align-items:center}
+.pagedots i{display:block;width:6px;height:6px;border-radius:50%;background:var(--text-3)}
+.pagedots i.on{background:var(--text-2);width:14px;border-radius:3px}
+.cand-chev{font-size:13px;color:var(--text-3)}
+
+/* AI 工具条 40 */
+.aibar{
+  height:40px;flex:0 0 40px;
+  background:var(--glass);
+  display:flex;align-items:center;
+  position:relative;
+  border-bottom:.5px solid var(--glass-line);
+  overflow:hidden;
+}
+.aibar-scroll{
+  display:flex;align-items:center;gap:8px;
+  padding:0 8px;height:100%;
+  overflow:hidden;
+}
+.chip{
+  height:30px;flex:0 0 auto;
+  display:flex;align-items:center;gap:5px;
+  padding:0 12px;border-radius:15px;
+  background:var(--chip-bg);
+  color:var(--chip-text);
+  font-size:13px;font-weight:500;letter-spacing:.1px;
+  box-shadow:0 1px 3px rgba(0,0,0,.08), inset 0 .5px 0 var(--key-top);
+  white-space:nowrap;
+}
+.chip .ci{font-size:12px;line-height:1}
+.chip.sel{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(10,132,255,.32)}
+.chip.sel .ci{filter:none}
+.aibar-fade-l,.aibar-fade-r{position:absolute;top:0;bottom:0;width:24px;pointer-events:none;z-index:3}
+.aibar-fade-l{left:0;background:linear-gradient(90deg,var(--glass) 20%,rgba(255,255,255,0) 100%)}
+.aibar-fade-r{right:0;background:linear-gradient(270deg,var(--glass) 20%,rgba(255,255,255,0) 100%)}
+
+/* 键区 */
+.keys{
+  flex:1;display:flex;flex-direction:column;
+  padding:0 3px 0;
+  justify-content:space-between;
+}
+.krow{
+  display:flex;align-items:center;justify-content:center;
+  gap:6px;height:39px;flex:0 0 39px;
+}
+.krow.top{}
+.key{
+  height:39px;border-radius:8px;
+  background:var(--key);
+  display:flex;align-items:center;justify-content:center;
+  font-size:22px;line-height:1;color:var(--text-1);
+  box-shadow:0 1px 0 var(--key-shadow);
+  position:relative;
+  width:33px;flex:0 0 33px;
+}
+.key::before{
+  content:"";position:absolute;inset:0;border-radius:8px;
+  background:linear-gradient(180deg,var(--key-top),rgba(255,255,255,0) 46%);
+  pointer-events:none;
+}
+.key.fn{width:42px;flex:0 0 42px;background:var(--key-fn);font-size:17px}
+.key.wide{width:88px;flex:0 0 88px;font-size:16px;font-weight:500}
+.key.space{width:194px;flex:0 0 194px;font-size:13px;color:var(--text-2);font-weight:400}
+.key.accent{background:var(--accent);color:#fff;box-shadow:0 1px 0 rgba(0,0,0,.2)}
+.key.accent::before{background:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,0) 50%)}
+.key .sub2{position:absolute;top:2px;right:4px;font-size:9px;color:var(--text-3)}
+.key.dim{opacity:.55}
+.key .dot{position:absolute;width:4px;height:4px;border-radius:50%;background:var(--accent);left:50%;bottom:3px;margin-left:-2px}
+
+/* 底部留白（Home Indicator 区） */
+.homebar{
+  height:34px;flex:0 0 34px;background:var(--keyboard);
+  display:flex;align-items:center;justify-content:center;
+}
+.homebar i{display:block;width:134px;height:5px;border-radius:3px;background:var(--text-1);opacity:.55}
+
+/* ================= AI 面板 ================= */
+.aipanel{
+  flex:1;background:var(--surface);
+  border-radius:16px 16px 0 0;
+  margin:0 0 0;
+  padding:12px 12px 0;
+  display:flex;flex-direction:column;
+  border-top:.5px solid var(--sep-soft);
+}
+.ctx-preview{
+  height:44px;flex:0 0 44px;border-radius:11px;background:var(--surface-elev);
+  display:flex;align-items:center;gap:8px;padding:0 11px;overflow:hidden;
+}
+.ctx-preview .lab{font-size:11px;color:var(--text-3);flex:0 0 auto}
+.ctx-preview .txt{font-size:13px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ai-input{
+  height:48px;flex:0 0 48px;margin-top:10px;border-radius:24px;
+  background:var(--surface-elev);
+  display:flex;align-items:center;padding:0 6px 0 15px;gap:6px;
+  border:.5px solid var(--sep-soft);
+}
+.ai-input .ph{font-size:15px;color:var(--text-3);flex:1}
+.ai-send{
+  width:36px;height:36px;border-radius:50%;background:var(--accent);
+  display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;flex:0 0 36px;
+}
+.tone-wrap{margin-top:10px}
+.tone-lab{font-size:11px;color:var(--text-3);margin:0 0 8px 4px;letter-spacing:.4px}
+.tone-row{display:flex;gap:8px;height:32px;align-items:center;overflow:hidden}
+.tone{
+  height:32px;border-radius:16px;padding:0 14px;
+  display:flex;align-items:center;font-size:13px;font-weight:500;
+  background:var(--surface-elev);color:var(--text-1);white-space:nowrap;
+  border:.5px solid var(--sep-soft);
+}
+.tone.sel{background:var(--accent);color:#fff;border-color:transparent}
+.quick-wrap{margin-top:12px;height:40px;display:flex;align-items:center;gap:8px;overflow:hidden}
+.quick{
+  height:30px;border-radius:15px;padding:0 12px;display:flex;align-items:center;
+  font-size:12px;color:var(--text-2);background:var(--surface-elev);
+  border:.5px dashed var(--sep-soft);white-space:nowrap;
+}
+.gen-btn{
+  margin-top:12px;height:48px;flex:0 0 48px;border-radius:14px;
+  background:var(--accent);color:#fff;
+  display:flex;align-items:center;justify-content:center;gap:7px;
+  font-size:17px;font-weight:600;letter-spacing:.5px;
+  box-shadow:0 6px 16px -6px rgba(10,132,255,.7);
+}
+.gen-btn.dis{background:var(--surface-elev);color:var(--text-3);box-shadow:none}
+.panel-foot{
+  height:34px;flex:0 0 34px;display:flex;align-items:center;justify-content:center;
+  font-size:11px;color:var(--text-3);letter-spacing:.1px;
+}
+
+/* ================= AI 结果卡 ================= */
+.result-wrap{flex:1;padding:8px;display:flex;flex-direction:column}
+.rcard{
+  flex:1;background:var(--surface);border-radius:16px;
+  display:flex;flex-direction:column;overflow:hidden;
+  box-shadow:0 10px 28px -14px rgba(0,0,0,.35);
+}
+.rcard-head{
+  height:32px;flex:0 0 32px;display:flex;align-items:center;gap:7px;
+  padding:0 12px;border-bottom:.5px solid var(--sep-soft);
+}
+.rcard-head .h-ic{font-size:12px}
+.rcard-head .h-ttl{font-size:12px;font-weight:600;color:var(--text-1)}
+.rcard-head .h-meta{font-size:11px;color:var(--text-3);margin-left:auto;letter-spacing:.1px}
+.rcard-head .h-x{font-size:14px;color:var(--text-3);margin-left:8px;line-height:1}
+.rcard-body{
+  flex:1;padding:12px 13px;overflow:hidden;
+  font-size:16px;line-height:1.62;color:var(--text-1);letter-spacing:.1px;
+}
+.rcard-body p+p{margin-top:8px}
+.cur{
+  display:inline-block;width:2px;height:16px;background:var(--accent);
+  vertical-align:-3px;margin-left:2px;opacity:.85;
+}
+.rcard-acts{
+  height:44px;flex:0 0 44px;display:flex;align-items:center;gap:8px;
+  padding:0 10px;border-top:.5px solid var(--sep-soft);
+}
+.abtn{
+  height:32px;border-radius:16px;padding:0 14px;
+  display:flex;align-items:center;font-size:13px;font-weight:500;white-space:nowrap;
+  background:var(--surface-elev);color:var(--text-1);
+}
+.abtn.pri{background:var(--accent);color:#fff;box-shadow:0 3px 10px -3px rgba(10,132,255,.6)}
+.abtn.ghost{background:transparent;color:var(--accent);padding:0 8px}
+.rcard-acts .sp{flex:1}
+.icon-btn{
+  width:32px;height:32px;border-radius:50%;background:var(--surface-elev);
+  display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--text-2);
+  flex:0 0 32px;
+}
+.rcard-foot{
+  height:24px;flex:0 0 24px;display:flex;align-items:center;justify-content:center;
+  font-size:11px;color:var(--text-3);gap:5px;background:var(--surface);
+  border-top:.5px solid var(--sep-soft);
+}
+
+/* 流式状态点 */
+.stream-dots{display:inline-flex;gap:3px;align-items:center;margin-left:5px}
+.stream-dots i{width:4px;height:4px;border-radius:50%;background:var(--accent);opacity:.6}
+.stream-dots i:nth-child(2){opacity:.4}
+.stream-dots i:nth-child(3){opacity:.25}
+
+/* ================= Provider 列表 ================= */
+.prow{display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:.5px solid var(--sep-soft)}
+.prow:last-child{border-bottom:none}
+.pavatar{
+  width:36px;height:36px;border-radius:10px;flex:0 0 36px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:17px;font-weight:600;color:var(--accent);background:var(--accent-soft);
+}
+.pavatar.g{color:#34C759;background:rgba(52,199,89,.14)}
+.pavatar.p{color:#BF5AF2;background:rgba(191,90,242,.14)}
+.pavatar.o{color:#FF9F0A;background:rgba(255,159,10,.14)}
+.pmeta{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.pname{font-size:17px;color:var(--text-1);display:flex;align-items:center;gap:6px;letter-spacing:-.2px}
+.pname .def{font-size:11px;font-weight:600;color:var(--accent);background:var(--accent-soft);border-radius:6px;padding:1px 6px;letter-spacing:.2px}
+.psub{font-size:13px;color:var(--text-2);display:flex;align-items:center;gap:5px}
+.pstat{width:6px;height:6px;border-radius:50%;display:inline-block}
+.pstat.ok{background:var(--success)}
+.pstat.idle{background:var(--text-3)}
+.pstat.bad{background:var(--danger)}
+.addbtn{
+  margin:18px 0 0;height:50px;border-radius:14px;
+  background:var(--surface);color:var(--accent);
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  font-size:17px;font-weight:500;
+  box-shadow:0 1px 2px rgba(0,0,0,.06);
+}
+
+/* ================= 试验场 ================= */
+.pg-input{
+  background:var(--surface);border-radius:16px;padding:12px 13px 9px;margin-top:12px;
+}
+.pg-ta{font-size:16px;line-height:1.55;color:var(--text-1);min-height:84px}
+.pg-ta .ph{color:var(--text-3)}
+.pg-tool{display:flex;align-items:center;gap:10px;padding-top:8px;border-top:.5px solid var(--sep-soft);margin-top:8px}
+.pg-count{font-size:12px;color:var(--text-3)}
+.pg-clear{font-size:13px;color:var(--accent);margin-left:auto}
+.feat-row{display:flex;gap:6px;margin-top:14px;overflow-x:auto;overflow-y:hidden;padding-bottom:2px}
+.feat{
+  height:34px;border-radius:17px;padding:0 10px;display:flex;align-items:center;gap:4px;
+  font-size:12.5px;font-weight:500;flex:0 0 auto;background:var(--surface);color:var(--text-1);
+  border:.5px solid var(--sep-soft);white-space:nowrap;
+}
+.feat.sel{background:var(--accent);color:#fff;border-color:transparent}
+.param-row{display:flex;gap:8px;margin-top:12px}
+.param{
+  flex:1;height:40px;border-radius:11px;background:var(--surface);
+  display:flex;align-items:center;padding:0 12px;font-size:14px;color:var(--text-1);gap:6px;
+}
+.param .pl{font-size:11px;color:var(--text-3)}
+.param .pv{margin-left:auto;color:var(--text-2);font-size:13px}
+.gen-main{
+  margin-top:14px;height:50px;border-radius:14px;background:var(--accent);color:#fff;
+  display:flex;align-items:center;justify-content:center;gap:7px;
+  font-size:17px;font-weight:600;letter-spacing:.5px;
+  box-shadow:0 8px 20px -8px rgba(10,132,255,.8);
+}
+.imgcard{
+  margin-top:16px;background:var(--surface);border-radius:16px;padding:13px;
+  display:flex;gap:14px;
+}
+.ring{width:60px;height:60px;flex:0 0 60px;position:relative}
+.ring svg{display:block;width:60px;height:60px}
+.ring .rtxt{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:600;color:var(--accent);letter-spacing:-.2px;
+}
+.imgmeta{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.imgmeta .t1{font-size:15px;font-weight:600;color:var(--text-1)}
+.imgmeta .t2{font-size:13px;color:var(--text-2)}
+.imgmeta .t3{font-size:11px;color:var(--text-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.imgmeta .t4{font-size:11px;color:var(--text-3)}
+.cancelbtn{
+  margin-top:6px;align-self:flex-start;height:26px;border-radius:13px;padding:0 12px;
+  display:flex;align-items:center;font-size:12px;font-weight:500;
+  background:var(--surface-elev);color:var(--danger);
+}
+
+/* 键盘禁用态遮罩 */
+.aibar.disabled{justify-content:center}
+.aibar .disabled-hint{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  gap:6px;font-size:12.5px;color:var(--text-2);
+  background:var(--glass);z-index:5;
+}
+.aibar .disabled-hint b{font-weight:600;color:var(--accent)}
+
+/* 小工具 */
+.mt8{margin-top:8px}
+.mt12{margin-top:12px}
+.hint-line{font-size:11px;color:var(--text-3);text-align:center;padding:10px 16px 14px;line-height:1.5}
+.sig-line{
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  font-size:11px;color:var(--text-3);padding:8px 16px 12px;
+}
+</style>
+</head>
+<body>
+<div class="board">
+
+  <!-- ============================================================
+       01 键盘 · 打字态（浅色，258pt）
+       ============================================================ -->
+  <section class="stage">
+    <div class="stage-label"><b>01</b>键盘 · 打字态<span>浅色 / 258pt / 26 键</span></div>
+    <div class="phone light">
+      <div class="host">
+        <div class="statusbar">
+          <div class="sb-time">9:41</div>
+          <div class="sb-right">
+            <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+            <span class="sb-5g">5G</span>
+            <span class="sb-battery"><i></i></span>
+          </div>
+        </div>
+        <div class="navbar">
+          <div class="nav-back"><i>›</i> 消息</div>
+          <div class="nav-title">林小满</div>
+          <div class="nav-right">⋯</div>
+        </div>
+        <div class="chat">
+          <div class="chat-day">今天 09:38</div>
+          <div class="bubble-row">
+            <div class="avatar a">满</div>
+            <div class="bubble">周末那家新开的川菜馆，去不去？</div>
+          </div>
+          <div class="bubble-row out">
+            <div class="avatar b">我</div>
+            <div class="bubble">去啊，我正想说要约你</div>
+          </div>
+          <div class="bubble-row">
+            <div class="avatar a">满</div>
+            <div class="bubble">那周六晚上七点？我先订位</div>
+          </div>
+          <div class="bubble-row out">
+            <div class="avatar b">我</div>
+            <div class="bubble">好，到时候我提前过去接你</div>
+          </div>
+        </div>
+        <div class="composer">
+          <div class="round">⊕</div>
+          <div class="field"><span class="marked">wo</span><span class="caret"></span></div>
+          <div class="round">😊</div>
+        </div>
+      </div>
+
+      <!-- 键盘 258 -->
+      <div class="keyboard h258">
+        <!-- 候选栏 44 -->
+        <div class="candbar">
+          <div class="cand first">我</div>
+          <div class="cand">万</div>
+          <div class="cand">问</div>
+          <div class="cand">晚</div>
+          <div class="cand">玩</div>
+          <div class="cand">网</div>
+          <div class="cand-right">
+            <div class="pagedots"><i class="on"></i><i></i><i></i></div>
+            <div class="cand-chev">⌄</div>
+          </div>
+        </div>
+
+        <!-- AI 工具条 40 -->
+        <div class="aibar">
+          <div class="aibar-scroll">
+            <div class="chip"><span class="ci">✨</span>润色</div>
+            <div class="chip"><span class="ci">💬</span>扩写</div>
+            <div class="chip"><span class="ci">🌐</span>翻译</div>
+            <div class="chip"><span class="ci">🧠</span>回复</div>
+            <div class="chip"><span class="ci">🎨</span>生图</div>
+            <div class="chip"><span class="ci">⚙️</span>设置</div>
+          </div>
+          <div class="aibar-fade-l"></div>
+          <div class="aibar-fade-r"></div>
+        </div>
+
+        <!-- 键区 174 -->
+        <div class="keys">
+          <div class="krow top">
+            <div class="key">q</div><div class="key">w</div><div class="key">e</div><div class="key">r</div>
+            <div class="key">t</div><div class="key">y</div><div class="key">u</div><div class="key">i</div>
+            <div class="key">o</div><div class="key">p</div>
+          </div>
+          <div class="krow">
+            <div class="key">a</div><div class="key">s</div><div class="key">d</div><div class="key">f</div>
+            <div class="key">g</div><div class="key">h</div><div class="key">j</div><div class="key">k</div>
+            <div class="key">l</div>
+          </div>
+          <div class="krow">
+            <div class="key fn">⇧</div>
+            <div class="key">z</div><div class="key">x</div><div class="key">c</div><div class="key">v</div>
+            <div class="key">b</div><div class="key">n</div><div class="key">m</div>
+            <div class="key fn">⌫</div>
+          </div>
+          <div class="krow">
+            <div class="key fn">🌐</div>
+            <div class="key space">空格</div>
+            <div class="key fn">😊</div>
+            <div class="key wide accent">换行</div>
+          </div>
+        </div>
+      </div>
+      <div class="homebar"><i></i></div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       02 键盘 · AI 面板态（426pt = 258 + 168）
+       ============================================================ -->
+  <section class="stage">
+    <div class="stage-label"><b>02</b>键盘 · AI 面板<span>浅色 / 426pt / 点 ✨ 后加高</span></div>
+    <div class="phone light">
+      <div class="host">
+        <div class="statusbar">
+          <div class="sb-time">9:41</div>
+          <div class="sb-right">
+            <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+            <span class="sb-5g">5G</span>
+            <span class="sb-battery"><i></i></span>
+          </div>
+        </div>
+        <div class="navbar">
+          <div class="nav-back"><i>›</i> 消息</div>
+          <div class="nav-title">林小满</div>
+          <div class="nav-right">⋯</div>
+        </div>
+        <div class="chat">
+          <div class="chat-day">今天 09:38</div>
+          <div class="bubble-row">
+            <div class="avatar a">满</div>
+            <div class="bubble">周末那家新开的川菜馆，去不去？</div>
+          </div>
+          <div class="bubble-row out">
+            <div class="avatar b">我</div>
+            <div class="bubble">去啊，我正想说要约你</div>
+          </div>
+          <div class="bubble-row">
+            <div class="avatar a">满</div>
+            <div class="bubble">那周六晚上七点？我先订位</div>
+          </div>
+        </div>
+        <div class="composer">
+          <div class="round">⊕</div>
+          <div class="field"><span>好，到时候我提前过去接你</span><span class="caret"></span></div>
+          <div class="round">😊</div>
+        </div>
+      </div>
+
+      <div class="keyboard h426">
+        <div class="candbar">
+          <div class="cand empty-hint">墨语 · 会 AI 的输入法</div>
+          <div class="cand-right"><div class="cand-chev">⌄</div></div>
+        </div>
+        <div class="aibar">
+          <div class="aibar-scroll">
+            <div class="chip sel"><span class="ci">✨</span>润色</div>
+            <div class="chip"><span class="ci">💬</span>扩写</div>
+            <div class="chip"><span class="ci">🌐</span>翻译</div>
+            <div class="chip"><span class="ci">🧠</span>回复</div>
+            <div class="chip"><span class="ci">🎨</span>生图</div>
+            <div class="chip"><span class="ci">⚙️</span>设置</div>
+          </div>
+          <div class="aibar-fade-l"></div>
+          <div class="aibar-fade-r"></div>
+        </div>
+
+        <div class="aipanel">
+          <div class="ctx-preview">
+            <span class="lab">上下文</span>
+            <span class="txt">好，到时候我提前过去接你</span>
+          </div>
+          <div class="ai-input">
+            <span class="ph">输入要求，可留空…</span>
+            <div class="ai-send">↑</div>
+          </div>
+          <div class="tone-wrap">
+            <div class="tone-lab">语气</div>
+            <div class="tone-row">
+              <div class="tone sel">自然</div>
+              <div class="tone">简洁</div>
+              <div class="tone">礼貌</div>
+              <div class="tone">正式</div>
+              <div class="tone">热情</div>
+            </div>
+          </div>
+          <div class="quick-wrap">
+            <div class="quick">更自然一点</div>
+            <div class="quick">别太客套</div>
+            <div class="quick">加一个表情</div>
+          </div>
+          <div class="gen-btn"><span>✨</span>生成</div>
+          <div class="panel-foot">自动读取输入框中的文字作为上下文</div>
+        </div>
+      </div>
+      <div class="homebar"><i></i></div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       03 键盘 · AI 结果卡片态（438pt，流式中）
+       ============================================================ -->
+  <section class="stage">
+    <div class="stage-label"><b>03</b>AI 结果卡片<span>流式生成中 / 438pt</span></div>
+    <div class="phone light">
+      <div class="host">
+        <div class="statusbar">
+          <div class="sb-time">9:41</div>
+          <div class="sb-right">
+            <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+            <span class="sb-5g">5G</span>
+            <span class="sb-battery"><i></i></span>
+          </div>
+        </div>
+        <div class="navbar">
+          <div class="nav-back"><i>›</i> 消息</div>
+          <div class="nav-title">林小满</div>
+          <div class="nav-right">⋯</div>
+        </div>
+        <div class="chat">
+          <div class="chat-day">今天 09:38</div>
+          <div class="bubble-row">
+            <div class="avatar a">满</div>
+            <div class="bubble">周末那家新开的川菜馆，去不去？</div>
+          </div>
+          <div class="bubble-row out">
+            <div class="avatar b">我</div>
+            <div class="bubble">去啊，我正想说要约你</div>
+          </div>
+          <div class="bubble-row">
+            <div class="avatar a">满</div>
+            <div class="bubble">那周六晚上七点？我先订位</div>
+          </div>
+        </div>
+        <div class="composer">
+          <div class="round">⊕</div>
+          <div class="field"><span>好，到时候我提前过去接你</span><span class="caret"></span></div>
+          <div class="round">😊</div>
+        </div>
+      </div>
+
+      <div class="keyboard h438">
+        <div class="candbar">
+          <div class="cand empty-hint">墨语 · 会 AI 的输入法</div>
+          <div class="cand-right"><div class="cand-chev">⌄</div></div>
+        </div>
+        <div class="aibar">
+          <div class="aibar-scroll">
+            <div class="chip sel"><span class="ci">✨</span>润色</div>
+            <div class="chip"><span class="ci">💬</span>扩写</div>
+            <div class="chip"><span class="ci">🌐</span>翻译</div>
+            <div class="chip"><span class="ci">🧠</span>回复</div>
+            <div class="chip"><span class="ci">🎨</span>生图</div>
+            <div class="chip"><span class="ci">⚙️</span>设置</div>
+          </div>
+          <div class="aibar-fade-l"></div>
+          <div class="aibar-fade-r"></div>
+        </div>
+
+        <div class="result-wrap">
+          <div class="rcard">
+            <div class="rcard-head">
+              <span class="h-ic">✨</span>
+              <span class="h-ttl">润色</span>
+              <span class="h-meta">DeepSeek · 正在生成</span>
+              <span class="h-x">✕</span>
+            </div>
+            <div class="rcard-body">
+              <p>好呀，周六晚上七点没问题，我提前过去接你，咱们就在商场门口碰面吧。那家店我听朋友提过，<span class="stream-dots"><i></i><i></i><i></i></span><span class="cur"></span></p>
+            </div>
+            <div class="rcard-acts">
+              <div class="abtn pri">插入</div>
+              <div class="abtn">复制</div>
+              <div class="abtn ghost">编辑</div>
+              <div class="sp"></div>
+              <div class="icon-btn">↻</div>
+              <div class="icon-btn">✕</div>
+            </div>
+            <div class="rcard-foot">正在生成… · 已用 0.8 秒</div>
+          </div>
+        </div>
+      </div>
+      <div class="homebar"><i></i></div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       04 主 App · AI 服务列表（Provider）
+       ============================================================ -->
+  <section class="stage">
+    <div class="stage-label"><b>04</b>主 App · AI 服务<span>Provider 列表 / 浅色</span></div>
+    <div class="phone light">
+      <div class="statusbar">
+        <div class="sb-time">9:41</div>
+        <div class="sb-right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-5g">5G</span>
+          <span class="sb-battery"><i></i></span>
+        </div>
+      </div>
+      <div class="navbar">
+        <div class="nav-back"><i>›</i> 设置</div>
+        <div class="nav-title">AI 服务</div>
+        <div class="nav-right" style="font-size:22px;letter-spacing:0">＋</div>
+      </div>
+      <div class="large-title">AI 服务</div>
+      <div class="app-body">
+        <div class="group" style="margin-top:6px">
+          <div class="banner">
+            <span class="bi">🔒</span>
+            <span class="btext">API Key 只存在本机钥匙串，不会上传到任何服务器。</span>
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="prow">
+            <div class="pavatar">D</div>
+            <div class="pmeta">
+              <div class="pname">DeepSeek <span class="def">默认</span></div>
+              <div class="psub"><span class="pstat ok"></span>deepseek-chat · 已连接</div>
+            </div>
+            <div class="row"><span class="chev">›</span></div>
+          </div>
+          <div class="prow">
+            <div class="pavatar g">通</div>
+            <div class="pmeta">
+              <div class="pname">通义千问</div>
+              <div class="psub"><span class="pstat idle"></span>qwen-plus · 未测试</div>
+            </div>
+            <div class="row"><span class="chev">›</span></div>
+          </div>
+          <div class="prow">
+            <div class="pavatar p">K</div>
+            <div class="pmeta">
+              <div class="pname">Kimi</div>
+              <div class="psub"><span class="pstat bad"></span>moonshot-v1-8k · 连接失败</div>
+            </div>
+            <div class="row"><span class="chev">›</span></div>
+          </div>
+        </div>
+
+        <div class="addbtn">＋ 添加服务</div>
+
+        <div class="group">
+          <div class="group-head">默认设置</div>
+          <div class="card">
+            <div class="row">
+              <div class="ico">🎚</div>
+              <div class="stack"><div class="ttl">默认语气</div></div>
+              <div class="val">自然</div>
+              <div class="chev">›</div>
+            </div>
+            <div class="row">
+              <div class="ico">🔢</div>
+              <div class="stack"><div class="ttl">回复建议条数</div></div>
+              <div class="val">3</div>
+              <div class="chev">›</div>
+            </div>
+            <div class="row">
+              <div class="ico">🖼</div>
+              <div class="stack"><div class="ttl">生图尺寸</div></div>
+              <div class="val">1024×1024</div>
+              <div class="chev">›</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sig-line">墨语 1.0.0 (1) · 签名剩余 6 天</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       05 主 App · AI 试验场（生图绘制中）
+       ============================================================ -->
+  <section class="stage">
+    <div class="stage-label"><b>05</b>主 App · 试验场<span>生图绘制中 5–20s</span></div>
+    <div class="phone light">
+      <div class="statusbar">
+        <div class="sb-time">9:41</div>
+        <div class="sb-right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-5g">5G</span>
+          <span class="sb-battery"><i></i></span>
+        </div>
+      </div>
+      <div class="navbar">
+        <div class="nav-back" style="font-size:17px">AI</div>
+        <div class="nav-title">试验场</div>
+        <div class="nav-right" style="font-size:20px;letter-spacing:0">⋯</div>
+      </div>
+      <div class="large-title" style="font-size:32px">AI 试验场</div>
+      <div class="app-body">
+        <div class="pg-input">
+          <div class="pg-ta">一只在深夜书桌前打字的橘猫，霓虹城市背景，胶片质感</div>
+          <div class="pg-tool">
+            <span class="pg-count">28 / 2000</span>
+            <span class="pg-clear">清空</span>
+          </div>
+        </div>
+
+        <div class="feat-row">
+          <div class="feat">✨ 润色</div>
+          <div class="feat">💬 扩写</div>
+          <div class="feat">🌐 翻译</div>
+          <div class="feat">🧠 回复</div>
+          <div class="feat sel">🎨 生图</div>
+        </div>
+
+        <div class="param-row">
+          <div class="param"><span class="pl">服务</span>DeepSeek<span class="pv">⌄</span></div>
+          <div class="param"><span class="pl">尺寸</span><span class="pv">1024²</span></div>
+        </div>
+
+        <div class="gen-main">生成</div>
+
+        <div class="imgcard">
+          <div class="ring">
+            <svg viewBox="0 0 60 60">
+              <circle cx="30" cy="30" r="25" fill="none" stroke="rgba(10,132,255,0.14)" stroke-width="5"></circle>
+              <circle cx="30" cy="30" r="25" fill="none" stroke="#0A84FF" stroke-width="5"
+                      stroke-linecap="round" stroke-dasharray="157" stroke-dashoffset="94"
+                      transform="rotate(-90 30 30)"></circle>
+            </svg>
+            <div class="rtxt">40%</div>
+          </div>
+          <div class="imgmeta">
+            <div class="t1">绘制中…</div>
+            <div class="t2">已等待 <b>8</b> 秒 · 预计 5–20 秒</div>
+            <div class="t3">提示词已增强：orange cat typing at a desk at midnight…</div>
+            <div class="t4">阶段：正在绘制</div>
+            <div class="cancelbtn">取消</div>
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="group-head">提示</div>
+          <div class="banner warn">
+            <span class="bi">⚠️</span>
+            <span class="btext">生图由即梦 / 通义万相异步返回，通常需要 5–20 秒，请勿退出页面。</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       06 键盘 · 深色模式（候选序号开启）
+       ============================================================ -->
+  <section class="stage">
+    <div class="stage-label"><b>06</b>键盘 · 深色<span>Dark / 候选序号开启</span></div>
+    <div class="phone dark">
+      <div class="host">
+        <div class="statusbar">
+          <div class="sb-time">9:41</div>
+          <div class="sb-right">
+            <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+            <span class="sb-5g">5G</span>
+            <span class="sb-battery"><i></i></span>
+          </div>
+        </div>
+        <div class="navbar">
+          <div class="nav-back"><i>›</i> 消息</div>
+          <div class="nav-title">陈一舟</div>
+          <div class="nav-right">⋯</div>
+        </div>
+        <div class="chat">
+          <div class="chat-day">昨天 22:14</div>
+          <div class="bubble-row">
+            <div class="avatar a">陈</div>
+            <div class="bubble">那份方案我看了，整体没问题，明天再对一下细节？</div>
+          </div>
+          <div class="bubble-row out">
+            <div class="avatar b">我</div>
+            <div class="bubble">可以，明天上午我去找你</div>
+          </div>
+          <div class="bubble-row">
+            <div class="avatar a">陈</div>
+            <div class="bubble">行 👍</div>
+          </div>
+        </div>
+        <div class="composer">
+          <div class="round">⊕</div>
+          <div class="field"><span class="marked">mingtian</span><span class="caret"></span></div>
+          <div class="round">😊</div>
+        </div>
+      </div>
+
+      <div class="keyboard h258">
+        <div class="candbar">
+          <div class="cand first"><span class="idx">1</span>明天</div>
+          <div class="cand"><span class="idx">2</span>名田</div>
+          <div class="cand"><span class="idx">3</span>明早</div>
+          <div class="cand"><span class="idx">4</span>名字</div>
+          <div class="cand-right">
+            <div class="pagedots"><i class="on"></i><i></i></div>
+            <div class="cand-chev">⌄</div>
+          </div>
+        </div>
+
+        <div class="aibar">
+          <div class="aibar-scroll">
+            <div class="chip"><span class="ci">✨</span>润色</div>
+            <div class="chip"><span class="ci">💬</span>扩写</div>
+            <div class="chip"><span class="ci">🌐</span>翻译</div>
+            <div class="chip"><span class="ci">🧠</span>回复</div>
+            <div class="chip"><span class="ci">🎨</span>生图</div>
+            <div class="chip"><span class="ci">⚙️</span>设置</div>
+          </div>
+          <div class="aibar-fade-l" style="background:linear-gradient(90deg,rgba(44,44,46,.9) 20%,rgba(44,44,46,0) 100%)"></div>
+          <div class="aibar-fade-r" style="background:linear-gradient(270deg,rgba(44,44,46,.9) 20%,rgba(44,44,46,0) 100%)"></div>
+        </div>
+
+        <div class="keys">
+          <div class="krow top">
+            <div class="key">q</div><div class="key">w</div><div class="key">e</div><div class="key">r</div>
+            <div class="key">t</div><div class="key">y</div><div class="key">u</div><div class="key">i</div>
+            <div class="key">o</div><div class="key">p</div>
+          </div>
+          <div class="krow">
+            <div class="key">a</div><div class="key">s</div><div class="key">d</div><div class="key">f</div>
+            <div class="key">g</div><div class="key">h</div><div class="key">j</div><div class="key">k</div>
+            <div class="key">l</div>
+          </div>
+          <div class="krow">
+            <div class="key fn">⇧</div>
+            <div class="key">z</div><div class="key">x</div><div class="key">c</div><div class="key">v</div>
+            <div class="key">b</div><div class="key">n</div><div class="key">m</div>
+            <div class="key fn">⌫</div>
+          </div>
+          <div class="krow">
+            <div class="key fn">🌐</div>
+            <div class="key space">空格</div>
+            <div class="key fn">😊</div>
+            <div class="key wide accent">换行</div>
+          </div>
+        </div>
+      </div>
+      <div class="homebar"><i></i></div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       07 主 App · 设置首页（浅色）
+       ============================================================ -->
+  <section class="stage">
+    <div class="stage-label"><b>07</b>主 App · 设置<span>分组大标题 / 浅色</span></div>
+    <div class="phone light">
+      <div class="statusbar">
+        <div class="sb-time">9:41</div>
+        <div class="sb-right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-5g">5G</span>
+          <span class="sb-battery"><i></i></span>
+        </div>
+      </div>
+      <div class="navbar">
+        <div class="nav-back" style="font-size:17px">设置</div>
+        <div class="nav-title">设置</div>
+        <div class="nav-right" style="font-size:20px;letter-spacing:0"></div>
+      </div>
+      <div class="large-title">设置</div>
+      <div class="app-body">
+        <div class="group" style="margin-top:6px">
+          <div class="group-head">AI</div>
+          <div class="card">
+            <div class="row">
+              <div class="ico">🤖</div>
+              <div class="stack"><div class="ttl">AI 服务</div></div>
+              <div class="val">DeepSeek</div>
+              <div class="chev">›</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="group-head">键盘</div>
+          <div class="card">
+            <div class="row">
+              <div class="ico gray">⌨️</div>
+              <div class="stack"><div class="ttl">键盘布局</div></div>
+              <div class="segmented"><span class="sel">26 键</span><span>9 键</span></div>
+            </div>
+            <div class="row">
+              <div class="ico gray">🔊</div>
+              <div class="stack"><div class="ttl">按键音</div></div>
+              <div class="switch"><i></i></div>
+            </div>
+            <div class="row">
+              <div class="ico gray">📳</div>
+              <div class="stack"><div class="ttl">振动反馈</div></div>
+              <div class="switch on"><i></i></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="group-head">隐私</div>
+          <div class="card">
+            <div class="row">
+              <div class="ico green">📋</div>
+              <div class="stack"><div class="ttl">剪贴板历史</div><div class="sub">关闭后键盘不读取剪贴板</div></div>
+              <div class="switch"><i></i></div>
+            </div>
+            <div class="row">
+              <div class="ico green">🧠</div>
+              <div class="stack"><div class="ttl">本地学习</div><div class="sub">词频与自造词只存在本机</div></div>
+              <div class="switch on"><i></i></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="group-head">支持</div>
+          <div class="card">
+            <div class="row">
+              <div class="ico orange">📦</div>
+              <div class="stack"><div class="ttl">安装与续签指南</div></div>
+              <div class="chev">›</div>
+            </div>
+            <div class="row">
+              <div class="ico orange">🩺</div>
+              <div class="stack"><div class="ttl">诊断</div></div>
+              <div class="val"><span class="pstat ok" style="display:inline-block"></span></div>
+              <div class="chev">›</div>
+            </div>
+            <div class="row">
+              <div class="ico gray">ℹ️</div>
+              <div class="stack"><div class="ttl">关于</div></div>
+              <div class="val">1.0.0</div>
+              <div class="chev">›</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sig-line">墨语 1.0.0 (1) · 签名剩余 6 天</div>
+      </div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

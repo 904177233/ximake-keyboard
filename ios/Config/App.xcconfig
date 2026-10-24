@@ -1,0 +1,32 @@
+//
+//  App.xcconfig
+//  宿主 App target：AIKeyboard（bundle id 占位 com.example.moyu）
+//
+//  改 Bundle ID：把下面的 PRODUCT_BUNDLE_IDENTIFIER 改成你自己唯一的反向域名，
+//  例如 com.zhangsan.moyu。<重要> 扩展的 Bundle ID 必须是 App 的 Bundle ID + ".keyboard"，
+//  两边一起改（App.xcconfig / Extension.xcconfig），否则 Xcode 会报
+//  "Embedded binary's bundle identifier is not prefixed with the parent app's bundle identifier"。
+//
+
+#include "Base.xcconfig"
+
+// ============================== 产物与标识 ==============================
+PRODUCT_NAME = AIKeyboard
+PRODUCT_MODULE_NAME = AIKeyboard
+PRODUCT_BUNDLE_IDENTIFIER = com.example.moyu
+
+// ============================== Info.plist 与签名开关 ==============================
+INFOPLIST_FILE = Config/App-Info.plist
+GENERATE_INFOPLIST_FILE = NO
+CODE_SIGN_ENTITLEMENTS = Config/AIKeyboard.entitlements
+
+// ============================== 资源 ==============================
+// 图标与品牌色来自 ios/Resources/Assets.xcassets（由 scripts/make_appicon.py 生成）。
+ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon
+ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor
+
+// ============================== 其他 ==============================
+// App 需要被安装进 .app 包（与扩展的 SKIP_INSTALL = YES 相对）。
+SKIP_INSTALL = NO
+APPLICATION_EXTENSION_API_ONLY = NO
+LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/Frameworks

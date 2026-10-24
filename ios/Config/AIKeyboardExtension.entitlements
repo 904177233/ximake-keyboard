@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!--
+  墨语（Moyu）键盘扩展 entitlements —— 默认「空」。
+
+  键盘扩展在免费签名下不需要任何 entitlements；"允许完全访问" 是用户在系统设置里
+  手动打开的开关（由 Info.plist 的 NSExtensionAttributes.RequestsOpenAccess 控制是否显示），
+  不是 entitlements 能力。
+-->
+<dict/>
+</plist>

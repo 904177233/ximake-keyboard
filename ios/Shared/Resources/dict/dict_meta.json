@@ -1,0 +1,48 @@
+{
+  "count": 5276,
+  "files": {
+    "base_dict.tsv": {
+      "bytes": 139702,
+      "sha256": "fb04d1cb74ececc74927e8210d12b070abcbd5a14fef4fbbe2077bacba13c0c8"
+    },
+    "phrases.tsv": {
+      "bytes": 21827,
+      "sha256": "592bb4b2b52e800aee687ff0f5bee41c1f1498d118adc92fec91119ae05f3c9b"
+    }
+  },
+  "flags": {
+    "bless": 344,
+    "chat": 1761,
+    "core": 3400,
+    "emoji": 415,
+    "idiom": 120,
+    "net": 368,
+    "punct": 57
+  },
+  "generated_at": "2026-10-24",
+  "phrase_count": 755,
+  "pinyin": "pypinyin 0.55.0 (Style.NORMAL, 多音字取默认读音)",
+  "sources": [
+    {
+      "license": "MIT",
+      "name": "jieba dict.txt",
+      "url": "https://github.com/fxsjy/jieba"
+    },
+    {
+      "license": "项目内使用",
+      "name": "chat_supplement.py",
+      "url": "本项目原创"
+    },
+    {
+      "license": "项目内使用",
+      "name": "symbol_map.py",
+      "url": "本项目原创"
+    },
+    {
+      "license": "项目内使用",
+      "name": "phrase_pairs.py",
+      "url": "本项目原创"
+    }
+  ],
+  "version": "1.0.0"
+}

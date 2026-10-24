@@ -1,0 +1,45 @@
+# ---------------------------------------------------------------------------
+# 墨语（Moyu）· 统一行尾与二进制识别
+# 目的：开发机是 Windows、编译机是 macOS。若不加这层约束，
+#       core.autocrlf 会把 .swift / .py / .yml 转成 CRLF 提交，
+#       在 macOS 上虽然多数工具能读，但 gen_xcodeproj.py 的幂等校验、
+#       CI 里 `git diff --stat` 的"应为空"判断都会因为行尾差异而误报。
+# ---------------------------------------------------------------------------
+
+# 默认：所有文本文件入库统一 LF（检出时也保持 LF，不做平台转换）
+* text=auto eol=lf
+
+# 明确写死为 LF 的源码与配置
+*.swift      text eol=lf
+*.py         text eol=lf
+*.md         text eol=lf
+*.json       text eol=lf
+*.yml        text eol=lf
+*.yaml       text eol=lf
+*.tsv        text eol=lf
+*.sh         text eol=lf
+*.html       text eol=lf
+*.css        text eol=lf
+*.plist      text eol=lf
+*.entitlements text eol=lf
+*.pbxproj    text eol=lf
+*.xcconfig   text eol=lf
+*.xcscheme   text eol=lf
+.gitignore   text eol=lf
+.gitattributes text eol=lf
+*.xcworkspacedata text eol=lf
+
+# PowerShell 脚本：本仓库自己的 .ps1 用 LF；Windows 也能正常执行
+*.ps1        text eol=lf
+
+# 二进制：禁止任何行尾/文本转换
+*.png        binary
+*.jpg        binary
+*.jpeg       binary
+*.ico        binary
+*.ipa        binary
+*.zip        binary
+*.xcarchive  binary
+*.p12        binary
+*.mobileprovision binary
+*.pyc        binary

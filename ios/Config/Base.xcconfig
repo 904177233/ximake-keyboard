@@ -1,0 +1,104 @@
+//
+//  Base.xcconfig
+//  墨语（Moyu）AI 输入法 —— 两个 target 共享的基础构建设置
+//
+//  设计原则：
+//  1. 所有构建设置集中在本目录（Config/*.xcconfig），project.pbxproj 里不写死这些值，
+//     这样 scripts/gen_xcodeproj.py 可以随时重跑而不会覆盖你手改的配置。
+//  2. 需要改 Bundle ID / Team / 版本号，改这里，不要在 Xcode 的 Build Settings 面板里改
+//     （面板里改的值会被写进 pbxproj，下次重跑生成器会丢失）。
+//  3. 注意：xcconfig 里 "//" 开始即注释，所以这里不能写 URL（http:// 会被截断）。
+//
+//  免费 Apple ID 说明：DEVELOPMENT_TEAM 留空，由用户在 Xcode 的 Signing & Capabilities
+//  面板里选择个人 Team（会自动写入 pbxproj 的 target 级设置，优先级高于本文件，属正常）。
+//
+
+// ============================== 平台与版本 ==============================
+IPHONEOS_DEPLOYMENT_TARGET = 16.0
+SDKROOT = iphoneos
+SUPPORTED_PLATFORMS = iphoneos
+TARGETED_DEVICE_FAMILY = 1,2
+SWIFT_VERSION = 5.0
+MARKETING_VERSION = 1.0.0
+CURRENT_PROJECT_VERSION = 1
+
+// ============================== 代码签名（免费账号） ==============================
+// 团队 ID 留空：用户在 Xcode > Signing & Capabilities 里选自己的 Personal Team 即可。
+// 免费账号无需付费开发者计划；有效期 7 天，过期重跑一次 Run 即续签。
+CODE_SIGN_STYLE = Automatic
+DEVELOPMENT_TEAM =
+CODE_SIGN_IDENTITY[sdk=iphoneos*] = Apple Development
+// 免费签名不支持 App Groups / iCloud / Push。默认 entitlements 为空，不要在这里开特殊能力。
+// （需要 App Group 时见 Config/AIKeyboard.entitlements.appgroup.sample 的说明，且需付费账号。）
+
+// ============================== 位码与优化 ==============================
+// iOS 16 起已不需要 bitcode；保持 NO 以避免 Xcode 14/15/16 行为差异。
+ENABLE_BITCODE = NO
+COPY_PHASE_STRIP = NO
+STRIP_INSTALLED_PRODUCT = NO
+DEAD_CODE_STRIPPING = YES
+
+SWIFT_OPTIMIZATION_LEVEL[config=Debug] = -Onone
+SWIFT_OPTIMIZATION_LEVEL[config=Release] = -O
+SWIFT_COMPILATION_MODE[config=Release] = wholemodule
+GCC_OPTIMIZATION_LEVEL[config=Debug] = 0
+ONLY_ACTIVE_ARCH[config=Debug] = YES
+ENABLE_TESTABILITY[config=Debug] = YES
+DEBUG_INFORMATION_FORMAT[config=Debug] = dwarf
+DEBUG_INFORMATION_FORMAT[config=Release] = dwarf-with-dsym
+SWIFT_ACTIVE_COMPILATION_CONDITIONS[config=Debug] = DEBUG
+GCC_PREPROCESSOR_DEFINITIONS[config=Debug] = DEBUG=1 $(inherited)
+
+// ============================== Swift / SwiftUI（iOS 16 语言） ==============================
+// 用 Swift 5 语言模式（Xcode 16 的 Swift 6 编译器默认仍兼容 5.0 模式）。
+SWIFT_OBJC_BRIDGING_HEADER =
+SWIFT_STRICT_CONCURRENCY = minimal
+SWIFT_EMIT_LOC_STRINGS = YES
+// 让 SwiftUI Preview 在 Xcode 里可用（仅影响开发期）。
+ENABLE_PREVIEWS = YES
+LOCALIZATION_PREFERS_STRING_CATALOGS = NO
+// 本工程没有 Run Script 阶段；显式关掉 Xcode 15+ 的脚本沙箱，避免后续加脚本时踩坑。
+ENABLE_USER_SCRIPT_SANDBOXING = NO
+
+// ============================== 警告（尽量严格，早暴露问题） ==============================
+CLANG_ENABLE_MODULES = YES
+CLANG_ENABLE_OBJC_ARC = YES
+CLANG_ENABLE_OBJC_WEAK = YES
+CLANG_ANALYZER_NONNULL = YES
+CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE
+CLANG_CXX_LANGUAGE_STANDARD = gnu++20
+CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES
+CLANG_WARN_BOOL_CONVERSION = YES
+CLANG_WARN_COMMA = YES
+CLANG_WARN_CONSTANT_CONVERSION = YES
+CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES
+CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR
+CLANG_WARN_DOCUMENTATION_COMMENTS = YES
+CLANG_WARN_EMPTY_BODY = YES
+CLANG_WARN_ENUM_CONVERSION = YES
+CLANG_WARN_INFINITE_RECURSION = YES
+CLANG_WARN_INT_CONVERSION = YES
+CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES
+CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES
+CLANG_WARN_OBJC_LITERAL_CONVERSION = YES
+CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR
+CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES
+CLANG_WARN_RANGE_LOOP_ANALYSIS = YES
+CLANG_WARN_STRICT_PROTOTYPES = YES
+CLANG_WARN_SUSPICIOUS_MOVE = YES
+CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE
+CLANG_WARN_UNREACHABLE_CODE = YES
+CLANG_WARN__DUPLICATE_METHOD_MATCH = YES
+GCC_C_LANGUAGE_STANDARD = gnu17
+GCC_NO_COMMON_BLOCKS = YES
+GCC_WARN_64_TO_32_BIT_CONVERSION = YES
+GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR
+GCC_WARN_UNDECLARED_SELECTOR = YES
+GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE
+GCC_WARN_UNUSED_FUNCTION = YES
+GCC_WARN_UNUSED_VARIABLE = YES
+ENABLE_STRICT_OBJC_MSGSEND = YES
+
+// ============================== 目录 ==============================
+// 搜索路径保持默认；本工程不使用任何第三方框架。
+ALWAYS_SEARCH_USER_PATHS = NO

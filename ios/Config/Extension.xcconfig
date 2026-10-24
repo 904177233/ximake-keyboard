@@ -1,0 +1,32 @@
+//
+//  Extension.xcconfig
+//  键盘扩展 target：AIKeyboardExtension（bundle id 占位 com.example.moyu.keyboard）
+//
+//  Bundle ID 规则（Xcode 强制）：必须是宿主 App 的 Bundle ID 前缀 + 后缀，
+//  即 com.example.moyu.keyboard。改了 App 的 ID 一定要同步改这里。
+//
+//  键盘扩展的两条硬性设置：
+//  1. APPLICATION_EXTENSION_API_ONLY = YES —— 禁止使用 UIApplication.shared 等仅 App 可用的 API。
+//  2. SKIP_INSTALL = YES —— 扩展不能独立安装，必须被宿主 App 嵌入（Embed Foundation Extensions）。
+//
+
+#include "Base.xcconfig"
+
+// ============================== 产物与标识 ==============================
+PRODUCT_NAME = AIKeyboardExtension
+PRODUCT_MODULE_NAME = AIKeyboardExtension
+PRODUCT_BUNDLE_IDENTIFIER = com.example.moyu.keyboard
+
+// ============================== Info.plist 与签名开关 ==============================
+INFOPLIST_FILE = Config/Extension-Info.plist
+GENERATE_INFOPLIST_FILE = NO
+CODE_SIGN_ENTITLEMENTS = Config/AIKeyboardExtension.entitlements
+
+// ============================== 扩展专属 ==============================
+APPLICATION_EXTENSION_API_ONLY = YES
+SKIP_INSTALL = YES
+// 键盘扩展到 iOS 16 仍需要 UIKit 主线程入口；不用 UIApplication。
+LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/Frameworks @executable_path/../../Frameworks
+
+// 扩展里没有 Assets 目录（图标只属于 App），但保留 AccentColor 名称不设置。
+ASSETCATALOG_COMPILER_APPICON_NAME =

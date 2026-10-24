@@ -1,0 +1,241 @@
+//
+//  KeyboardRootView.swift
+//  墨语（Moyu）键盘扩展 · SwiftUI 根视图与键盘外壳
+//
+//  模块职责：键盘扩展的视图树根。负责：
+//            ①`KeyboardShell` 统一背景（keyboardBackground + 顶部 0.5pt 阴影）；
+//            ②候选栏 44 + AI 工具条 40 共用一条 84pt 连续玻璃背景（布局规范 §8 ④）；
+//            ③按 `model.page` 切换键区内容（26 键 / 数字 / 符号 / emoji / AI 面板 / 结果 / 设置）；
+//            ④浮层（短语 / 剪贴板）与 Toast 的叠加。
+//  设计依据：design/键盘布局规范.md §1（总高 258）、§4（各页）、§8（视觉层级）、§5（12 状态）。
+//  约束：本视图不计算高度——高度由 `KeyboardViewController` 的 `heightAnchor` 唯一决定；
+//        本视图只负责在给定高度内排布，因此所有子视图都用固定高度，不用 `Spacer` 撑高。
+//
+
+import SwiftUI
+
+/// 键盘根视图。
+struct KeyboardRootView: View {
+
+    /// 键盘状态机（由 `KeyboardViewController` 注入并持有）。
+    @ObservedObject var model: KeyboardViewModel
+
+    /// 创建根视图。
+    /// - Parameter model: 键盘状态机。
+    init(model: KeyboardViewModel) {
+        self.model = model
+    }
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            KeyboardShell {
+                VStack(spacing: 0) {
+                    chrome
+                    keyArea
+                }
+            }
+
+            if model.overlay != .none {
+                overlayLayer
+            }
+
+            if let toast = model.toastMessage {
+                toastLayer(toast)
+            }
+
+            if model.showsFullAccessCard {
+                fullAccessLayer
+            }
+        }
+        .environment(\.layoutDirection, .leftToRight)
+    }
+
+    // MARK: - 候选栏 + AI 工具条（共用 84pt 玻璃背景）
+
+    /// 候选栏与 AI 工具条。
+    private var chrome: some View {
+        ZStack(alignment: .top) {
+            KMGlassSurface(level: .bar, cornerRadius: 0, showsHighlight: false) {
+                Color.clear.frame(height: KMLayout.chromeHeight)
+            }
+
+            VStack(spacing: 0) {
+                CandidateBar(
+                    items: model.currentPageCandidates,
+                    highlightedIndex: model.highlightedCandidateIndex,
+                    showsIndex: model.candidates.isEmpty == false,
+                    pageIndex: model.candidatePageIndex,
+                    pageCount: model.candidatePageCount,
+                    composingText: model.composing,
+                    onSelect: { index in model.selectCandidate(at: model.candidatePageIndex * KeyboardViewModel.candidatePageSize + index) },
+                    onLongPress: { index in model.longPressCandidate(at: model.candidatePageIndex * KeyboardViewModel.candidatePageSize + index) },
+                    onTogglePage: { delta in model.turnCandidatePage(delta) }
+                )
+                .frame(height: KMLayout.candidateBarHeight)
+
+                AIBar(
+                    items: KMAIBarItem.defaults,
+                    availability: model.aiAvailability,
+                    isBusy: model.aiState.isBusy,
+                    landscapeCompact: model.isLandscape,
+                    activeFeature: model.aiState.isBusy ? model.lastFeature : nil,
+                    onSelect: { feature in model.startAI(feature) },
+                    onOpenSettings: { model.tap(.openSettings) },
+                    onOpenPanel: { model.openAIPanel() },
+                    onDisabledTap: { model.handleAIBarDisabledTap() }
+                )
+                .frame(height: KMLayout.aiBarHeight)
+            }
+        }
+        .frame(height: KMLayout.chromeHeight)
+    }
+
+    // MARK: - 键区（按页面切换）
+
+    /// 键区（固定占满剩余高度，内部各页自己排布）。
+    @ViewBuilder
+    private var keyArea: some View {
+        switch model.page {
+        case .letters:
+            KeyRowsView(
+                layoutMode: model.layoutMode,
+                shiftState: model.shiftState,
+                isLandscape: model.isLandscape,
+                onTap: { key in model.tap(key) }
+            )
+        case .numbers:
+            NumberPadView(onTap: { key in model.tap(key) })
+        case .symbols:
+            SymbolPadView(onTap: { key in model.tap(key) })
+        case .emoji:
+            EmojiPanelView(
+                onTap: { key in model.tap(key) },
+                onInsert: { emoji in model.insertText(emoji) }
+            )
+        case .aiPanel:
+            AIPanelView(model: model)
+        case .result:
+            AIResultCardView(model: model)
+        case .settings:
+            ExtensionSettingsSheet(model: model)
+        }
+    }
+
+    // MARK: - 浮层
+
+    /// 短语 / 剪贴板浮层（叠加在键区之上，不改变键盘高度）。
+    @ViewBuilder
+    private var overlayLayer: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            PhraseBarView(
+                mode: model.overlay == .clipboardBar ? .clipboard : .phrases,
+                phrases: model.phrases.map { $0.text },
+                clipboardItems: model.clipboardItems,
+                onSelect: { text in
+                    model.insertText(text)
+                    model.tap(.closeOverlay)
+                },
+                onClose: { model.tap(.closeOverlay) }
+            )
+            .frame(height: KMLayout.keyRowsHeight + KMLayout.keyGap)
+            .background(Theme.keyboardBackground)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+        .background(Theme.overlayScrim.opacity(0.35))
+        .onTapGesture { model.tap(.closeOverlay) }
+        .zIndex(1)
+    }
+
+    // MARK: - Toast
+
+    /// 一次性提示条。
+    /// - Parameter message: 提示文案。
+    private func toastLayer(_ message: String) -> some View {
+        VStack {
+            Spacer(minLength: 0)
+            Text(message)
+                .font(Theme.fontFootnote)
+                .foregroundColor(Theme.textOnAccent)
+                .padding(.horizontal, Theme.Spacing.lg)
+                .padding(.vertical, Theme.Spacing.md)
+                .background(Theme.overlayScrim)
+                .clipShape(Capsule())
+                .padding(.bottom, Theme.Spacing.xl)
+                .accessibilityLabel(Text(message))
+        }
+        .frame(maxWidth: .infinity)
+        .allowsHitTesting(false)
+        .transition(.opacity)
+        .zIndex(2)
+    }
+
+    // MARK: - 完全访问说明卡
+
+    /// 完全访问说明卡（扩展内无法跳转设置，只能列步骤文字引导）。
+    private var fullAccessLayer: some View {
+        VStack(spacing: Theme.Spacing.lg) {
+            HStack {
+                Text("需要开启完全访问")
+                    .font(Theme.fontHeadline)
+                    .foregroundColor(Theme.textPrimary)
+                Spacer(minLength: 0)
+                Button(action: { model.setFullAccessCard(false) }) {
+                    KMIconGlyph(symbol: "xmark.circle.fill", fallback: "✕", size: 20, tint: Theme.textTertiary)
+                        .frame(width: Theme.Sizing.minTapTarget, height: Theme.Sizing.minTapTarget)
+                }
+                .buttonStyle(KMPressableStyle())
+                .accessibilityLabel(Text("关闭"))
+            }
+
+            Text(KeyboardViewModel.noFullAccessMessage)
+                .font(Theme.fontCaption)
+                .foregroundColor(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                ForEach(Array(KeyboardViewModel.fullAccessSteps.enumerated()), id: \.offset) { pair in
+                    Text("\(pair.offset + 1). \(pair.element)")
+                        .font(Theme.fontCaption)
+                        .foregroundColor(Theme.textSecondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(Theme.Spacing.xl)
+        .background(Theme.surfaceElevated)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+                .strokeBorder(Theme.separator, lineWidth: Theme.MaterialToken.strokeWidth)
+        )
+        .padding(Theme.Spacing.xl)
+        .zIndex(3)
+        .transition(.opacity)
+    }
+}
+
+// MARK: - 键盘外壳
+
+/// 键盘外壳：统一背景 + 顶部阴影 + 内容槽。
+///
+/// 高度不在这里计算；调用方负责让内容恰好填满 `inputView` 的高度。
+struct KeyboardShell<Content: View>: View {
+
+    /// 内容（候选栏 + 键区）。
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            Theme.keyboardBackground
+            VStack(spacing: 0) {
+                // 顶部 0.5pt 阴影：键盘与宿主界面的分界（无圆角，符合系统键盘观感）。
+                Rectangle()
+                    .fill(Theme.keyboardTopShadow)
+                    .frame(height: Theme.MaterialToken.strokeWidth)
+                content()
+            }
+        }
+        .ignoresSafeArea(edges: .bottom)
+    }
+}

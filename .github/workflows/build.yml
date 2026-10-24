@@ -1,0 +1,294 @@
+name: Build Unsigned IPA
+
+# ---------------------------------------------------------------------------
+# 墨语（Moyu）iOS 输入法 · 云端构建未签名 IPA
+#
+# 为什么需要这个 workflow
+# ----------------------
+# 本项目作者只有 Windows 电脑，没有 Mac、没有 Apple Developer Program（免费 Apple ID）。
+# iOS 应用只能在 macOS 上编译，所以用 GitHub Actions 的 macOS runner 编译出**未签名**
+# 的 IPA（AIKeyboard-unsigned.ipa），再在 Windows 上用 Sideloadly / AltStore 之类工具
+# 用自己的免费 Apple ID 重签名装到 iPhone 上（签名 7 天有效，到期重装即可）。
+#
+# 用法
+# ----
+#   1. 把仓库推到 GitHub（public 或 private 均可，免费额度足够）。
+#   2. Actions 页面 → 左侧 "Build Unsigned IPA" → "Run workflow" 手动触发；
+#      或直接 push 到 main 分支自动触发。
+#   3. 构建完成后在该次运行底部 Artifacts 里下载 AIKeyboard-unsigned.ipa（保留 7 天）。
+#   4. Windows 侧：装 iTunes（微软商店版即可）→ Sideloadly 选 ipa + 输入 Apple ID →
+#      生成 7 天有效期的描述文件 → 手机信任开发者 → 添加键盘。
+#      详见 docs/04-安装与续签指南.md 与 docs/ios/README-构建.md。
+#
+# 重要约定
+# --------
+# * 必须用 `-project + -scheme`，**不要**用 `-workspace`：本仓库没有 .xcworkspace
+#   工作区文件（单工程、零第三方依赖，不需要 workspace）。
+# * CODE_SIGNING_ALLOWED=NO 产出的是未签名包；PlugIns 里的 .appex 必须保留，
+#   否则装到手机上键盘根本不会出现在"设置-通用-键盘"里（这是最常见的坑）。
+# ---------------------------------------------------------------------------
+
+on:
+  workflow_dispatch:
+    inputs:
+      configuration:
+        description: "构建配置（默认 Release）"
+        required: false
+        default: "Release"
+        type: choice
+        options:
+          - Release
+          - Debug
+  push:
+    branches:
+      - main
+    paths:
+      - "ios/**"
+      - "scripts/gen_xcodeproj.py"
+      - "scripts/validate_project.py"
+      - ".github/workflows/build.yml"
+
+# 同一分支只保留最新一次运行，避免多个 macOS 任务排队烧时长
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # 统一时区与编码，日志里的中文不要乱码
+  TZ: Asia/Shanghai
+  LANG: en_US.UTF-8
+  PRODUCT_SCHEME: AIKeyboard
+  XCODEPROJ: ios/AIKeyboard.xcodeproj
+  BUILD_DIR: build
+  CONFIGURATION: ${{ github.event.inputs.configuration || 'Release' }}
+
+jobs:
+  build-unsigned-ipa:
+    name: Build unsigned IPA (macOS)
+    runs-on: macos-14
+    timeout-minutes: 40
+
+    steps:
+      # ---------------------------------------------------------------------
+      # 0) 取出源码
+      # ---------------------------------------------------------------------
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # ---------------------------------------------------------------------
+      # 1) 环境自检：Xcode 版本 / Python 版本
+      # ---------------------------------------------------------------------
+      - name: Show Xcode version
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          echo "----"
+          xcode-select -p
+          echo "----"
+          sw_vers
+          echo "----"
+          python3 --version
+
+      # ---------------------------------------------------------------------
+      # 2) 预检：键盘扩展必须真的有源码，否则装到手机上键盘不出现
+      #    （并行开发阶段 ios/AIKeyboardExtension/ 可能是空的，这里提前拦住，
+      #      给出比 xcodebuild 莫名其妙的链接错误清楚得多的提示）
+      # ---------------------------------------------------------------------
+      - name: Preflight - extension sources exist
+        run: |
+          set -euo pipefail
+          ext_dir="ios/AIKeyboardExtension"
+          if [ ! -d "$ext_dir" ]; then
+            echo "::error::目录 $ext_dir 不存在。键盘扩展没有源码，无法构建可用的键盘。"
+            exit 1
+          fi
+          count=$(find "$ext_dir" -name '*.swift' -type f | wc -l | tr -d ' ')
+          echo "ios/AIKeyboardExtension 下的 .swift 文件数：$count"
+          if [ "$count" -eq 0 ]; then
+            echo "::error::$ext_dir 下没有任何 .swift 文件。请先落盘 KeyboardViewController，再重跑构建。"
+            exit 1
+          fi
+          if ! grep -rqE 'class[[:space:]]+KeyboardViewController\b' "$ext_dir"; then
+            echo "::error::$ext_dir 里没有找到 KeyboardViewController 类；Extension-Info.plist 的 NSExtensionPrincipalClass 指向它，缺了会启动即崩溃。"
+            exit 1
+          fi
+          echo "OK：键盘扩展源码齐全。"
+
+      - name: Preflight - shared sources exist
+        run: |
+          set -euo pipefail
+          count=$(find ios/Shared -name '*.swift' -type f 2>/dev/null | wc -l | tr -d ' ')
+          echo "ios/Shared 下的 .swift 文件数：$count"
+          if [ "$count" -eq 0 ]; then
+            echo "::error::ios/Shared 下没有任何 .swift 文件，两个 target 都会编译失败。"
+            exit 1
+          fi
+
+      # macOS 是唯一能真正跑 bash 的环境（开发机是 Windows，没有 bash），
+      # 所以在这里对壳脚本做语法检查，保证 finalize.sh 交到用户手上时是能跑的。
+      - name: Preflight - shell script syntax
+        run: |
+          set -euo pipefail
+          if [ -f scripts/finalize.sh ]; then
+            bash -n scripts/finalize.sh
+            echo "OK：scripts/finalize.sh 语法通过（bash -n）。"
+          else
+            echo "::warning::scripts/finalize.sh 不存在（跳过语法检查）。"
+          fi
+
+      # ---------------------------------------------------------------------
+      # 3) 按磁盘上的真实文件重新生成 project.pbxproj
+      #    gen_xcodeproj.py 是确定性生成器（UUID = 路径哈希），所以：
+      #      * 谁新加了 .swift 忘了重跑脚本，CI 会自动补上；
+      #      * 生成结果与仓库里提交的 pbxproj 应当一致，否则说明有人手改了 pbxproj。
+      # ---------------------------------------------------------------------
+      - name: Regenerate Xcode project from source tree
+        run: |
+          set -euo pipefail
+          python3 scripts/gen_xcodeproj.py
+          echo "---- 生成后与仓库版本的差异（正常应为空）----"
+          git --no-pager diff --stat -- ios/AIKeyboard.xcodeproj || true
+          git --no-pager diff -- ios/AIKeyboard.xcodeproj | head -n 200 || true
+
+      - name: Validate generated project structure
+        run: |
+          set -euo pipefail
+          python3 scripts/validate_project.py
+
+      # ---------------------------------------------------------------------
+      # 4) 列出 scheme，确认 AIKeyboard 被 Xcode 识别
+      # ---------------------------------------------------------------------
+      - name: List schemes
+        run: |
+          set -euo pipefail
+          mkdir -p "${BUILD_DIR}"
+          # 先落盘再 grep：避免 `set -o pipefail` 下 grep -q 提前退出导致
+          # xcodebuild 收到 SIGPIPE、整个管道返回 141 的假失败。
+          xcodebuild -list -project "${XCODEPROJ}" > "${BUILD_DIR}/schemes.txt"
+          cat "${BUILD_DIR}/schemes.txt"
+          echo "----"
+          if grep -q "^[[:space:]]*${PRODUCT_SCHEME}$" "${BUILD_DIR}/schemes.txt"; then
+            echo "OK：找到 scheme ${PRODUCT_SCHEME}"
+          else
+            echo "::error::xcodebuild -list 里没有 scheme ${PRODUCT_SCHEME}；请检查 ios/AIKeyboard.xcodeproj/xcshareddata/xcschemes/"
+            exit 1
+          fi
+
+      # ---------------------------------------------------------------------
+      # 5) 归档（关闭一切签名，产未签名 .xcarchive）
+      #    注意：必须用 -project + -scheme，不能用 -workspace（没有 workspace 文件）
+      # ---------------------------------------------------------------------
+      - name: Build unsigned archive
+        run: |
+          set -euo pipefail
+          mkdir -p "${BUILD_DIR}"
+          xcodebuild \
+            -project "${XCODEPROJ}" \
+            -scheme "${PRODUCT_SCHEME}" \
+            -configuration "${CONFIGURATION}" \
+            -sdk iphoneos \
+            -derivedDataPath "${BUILD_DIR}/dd" \
+            -archivePath "${BUILD_DIR}/App.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            DEVELOPMENT_TEAM="" \
+            ENABLE_BITCODE=NO \
+            archive
+
+      # ---------------------------------------------------------------------
+      # 6) 打包成 IPA：Payload/AIKeyboard.app 必须包含 PlugIns/AIKeyboardExtension.appex
+      # ---------------------------------------------------------------------
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          APP_PATH="${BUILD_DIR}/App.xcarchive/Products/Applications/AIKeyboard.app"
+          if [ ! -d "${APP_PATH}" ]; then
+            echo "::error::归档里没有找到 AIKeyboard.app：${APP_PATH}"
+            echo "---- 归档目录内容 ----"
+            find "${BUILD_DIR}/App.xcarchive" -maxdepth 4 -print || true
+            exit 1
+          fi
+
+          rm -rf "${BUILD_DIR}/Payload"
+          mkdir -p "${BUILD_DIR}/Payload"
+          cp -R "${APP_PATH}" "${BUILD_DIR}/Payload/"
+
+          echo "---- Payload 结构 ----"
+          ls -R "${BUILD_DIR}/Payload/AIKeyboard.app"
+
+          # 关键校验：.appex 必须在 PlugIns 里
+          APPEX="${BUILD_DIR}/Payload/AIKeyboard.app/PlugIns/AIKeyboardExtension.appex"
+          if [ ! -d "${APPEX}" ]; then
+            echo "::error::IPA 里缺少 PlugIns/AIKeyboardExtension.appex —— 装到手机上键盘不会出现在键盘列表里。"
+            echo "常见原因：App target 的 \"Embed Foundation Extensions\" Copy Files 阶段丢了（dstSubfolderSpec = 13）。"
+            exit 1
+          fi
+          if [ ! -f "${APPEX}/AIKeyboardExtension" ]; then
+            echo "::error::${APPEX} 里没有可执行文件 AIKeyboardExtension。"
+            ls -la "${APPEX}" || true
+            exit 1
+          fi
+          echo "OK：PlugIns/AIKeyboardExtension.appex 及可执行文件都在。"
+
+          # 校验扩展 Info.plist 里的键盘点标识（漏了它系统不认这个键盘）
+          if command -v plutil >/dev/null 2>&1; then
+            echo "---- Extension-Info.plist 关键键 ----"
+            plutil -p "${APPEX}/Info.plist" | grep -E 'NSExtensionPointIdentifier|NSExtensionPrincipalClass|RequestsOpenAccess' || true
+          fi
+
+          # 用 ditto 保证符号链接/资源叉在压缩时不出问题
+          ( cd "${BUILD_DIR}" && ditto -c -k --sequesterRsrc --keepParent Payload AIKeyboard-unsigned.ipa )
+
+          echo "---- 产物 ----"
+          ls -lh "${BUILD_DIR}/AIKeyboard-unsigned.ipa"
+          echo "---- 产物大小校验 ----"
+          size=$(stat -f%z "${BUILD_DIR}/AIKeyboard-unsigned.ipa")
+          echo "bytes=${size}"
+          if [ "${size}" -lt 100000 ]; then
+            echo "::error::IPA 只有 ${size} 字节，明显不正常（可能没把 .app 打进去）。"
+            exit 1
+          fi
+
+      - name: Verify IPA contents
+        run: |
+          set -euo pipefail
+          echo "---- IPA 内文件清单（前 80 行）----"
+          unzip -l "${BUILD_DIR}/AIKeyboard-unsigned.ipa" | head -n 80
+          echo "---- 关键条目检查 ----"
+          unzip -l "${BUILD_DIR}/AIKeyboard-unsigned.ipa" | grep -q 'Payload/AIKeyboard.app/PlugIns/AIKeyboardExtension.appex/' \
+            || { echo "::error::IPA 内没有 PlugIns/AIKeyboardExtension.appex"; exit 1; }
+          unzip -l "${BUILD_DIR}/AIKeyboard-unsigned.ipa" | grep -q 'Payload/AIKeyboard.app/AIKeyboard$' \
+            || { echo "::error::IPA 内没有主程序 Payload/AIKeyboard.app/AIKeyboard"; exit 1; }
+          unzip -l "${BUILD_DIR}/AIKeyboard-unsigned.ipa" | grep -q 'Payload/AIKeyboard.app/Info.plist' \
+            || { echo "::error::IPA 内没有 Payload/AIKeyboard.app/Info.plist"; exit 1; }
+          echo "OK：IPA 结构完整。"
+
+      # ---------------------------------------------------------------------
+      # 7) 上传产物（保留 7 天，与免费签名 7 天有效期一致）
+      # ---------------------------------------------------------------------
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIKeyboard-unsigned-ipa
+          path: build/AIKeyboard-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+      # 构建失败时把 xcodebuild 日志也传上去，方便排查（没有 xcresult 时也能看）
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            build/dd/Logs/Build
+          if-no-files-found: ignore
+          retention-days: 7

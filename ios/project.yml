@@ -1,0 +1,177 @@
+# =============================================================================
+# 墨语（Moyu）iOS 输入法 · XcodeGen 工程描述（参考文件）
+# =============================================================================
+#
+# ⚠️ 重要：本文件**不是**构建的必需文件，也**不是**被自动执行的脚本。
+#
+#   本项目真正生成 `ios/AIKeyboard.xcodeproj/project.pbxproj` 的是
+#   `scripts/gen_xcodeproj.py`（Python 标准库，Windows/macOS 都能跑，零第三方依赖）：
+#
+#       python scripts/gen_xcodeproj.py      # 按磁盘上真实存在的 .swift 重新生成工程
+#       python scripts/validate_project.py   # 结构校验
+#
+#   这样做是因为：作者只有 Windows，没有 Mac，手写 pbxproj 极易出错；
+#   用 Python 程序化生成 + 独立校验，才能在 Windows 上就确认工程结构是对的。
+#
+#   本 project.yml 的用途有两个：
+#     1) 作为一份**人类可读的工程声明**，让人一眼看清两个 target 的文件归属、依赖、
+#        资源、签名配置分别是什么（pbxproj 太难读）。
+#     2) 兜底：如果哪天 pbxproj 被改坏了，而手边正好有 Mac，可以装 XcodeGen
+#        （`brew install xcodegen`）后用它在 ios/ 目录下执行 `xcodegen generate`
+#        重新生成一份工程。**但请注意**：XcodeGen 生成的 pbxproj 与
+#        gen_xcodeproj.py 生成的**不完全一致**（UUID 不同、分组顺序不同），
+#        提交前请以 scripts/gen_xcodeproj.py 的产物为准，或至少跑一遍
+#        `python scripts/validate_project.py` 确认结构仍达标。
+#
+#   维护约定：改了 target / 源文件归属 / 构建设置，请**同时**改
+#   `scripts/gen_xcodeproj.py`（权威）与本文档（镜像），并重跑生成 + 校验。
+# =============================================================================
+
+name: AIKeyboard
+
+options:
+  # Bundle ID 前缀（实际值写在各 target 的 settings 里，见下面的 PRODUCT_BUNDLE_IDENTIFIER）
+  bundleIdPrefix: com.example.moyu
+  # 与 Config/Base.xcconfig 的 IPHONEOS_DEPLOYMENT_TARGET 保持一致
+  deploymentTarget:
+    iOS: "16.0"
+  # 中间分组自动创建：让 Xcode 左侧导航树按磁盘目录结构展开
+  createIntermediateGroups: true
+  # objectVersion / compatibilityVersion 由生成器决定；这里只声明 Xcode 版本提示
+  xcodeVersion: "15.0"
+  # 生成 shared scheme（对应 ios/AIKeyboard.xcodeproj/xcshareddata/xcschemes/）
+  generateEmptyDirectories: true
+  # 关闭「自动创建 Info.plist」：本项目 Info.plist 全部手写在 ios/Config/ 下
+  # （对应 GENERATE_INFOPLIST_FILE = NO，见 Config/*.xcconfig）
+  settingPresets: all
+
+# -----------------------------------------------------------------------------
+# 构建配置：Debug / Release 两套（与 pbxproj 里的 XCConfigurationList 一致）
+# -----------------------------------------------------------------------------
+configs:
+  Debug: debug
+  Release: release
+
+# 工程级基础配置：所有 target 共享 Config/Base.xcconfig
+# （Base.xcconfig 里已有 SWIFT_VERSION / IPHONEOS_DEPLOYMENT_TARGET /
+#   TARGETED_DEVICE_FAMILY / CODE_SIGN_STYLE / DEVELOPMENT_TEAM 留空 等）
+configFiles:
+  Debug: Config/Base.xcconfig
+  Release: Config/Base.xcconfig
+
+# -----------------------------------------------------------------------------
+# 全局设置（仅列 xcconfig 之外的、工程级的项；实际以 Config/Base.xcconfig 为准）
+# -----------------------------------------------------------------------------
+settings:
+  base:
+    # 免费 Apple ID 不支持 App Group / iCloud / Push（docs/01 §6 硬约束），
+    # 因此这里**不启用**任何 capability；entitlements 文件留空 dict。
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    CLANG_ENABLE_MODULES: YES
+    CLANG_ENABLE_OBJC_ARC: YES
+    SWIFT_STRICT_CONCURRENCY: minimal
+
+# -----------------------------------------------------------------------------
+# Target 1：宿主 App
+# -----------------------------------------------------------------------------
+targets:
+  AIKeyboard:
+    type: application
+    platform: iOS
+    configFiles:
+      Debug: Config/App.xcconfig
+      Release: Config/App.xcconfig
+    sources:
+      # ① App 自己的源码：只进 App target
+      - path: AIKeyboard
+      # ② Shared 源码：同时进 App 与 Extension 两个 target（docs/02 §2 约定）
+      - path: Shared
+        excludes:
+          - "Resources/**"          # 资源单独作为 folder reference 加，避免重复
+      # ③ 图片资源 / 颜色资源：只进 App
+      - path: Resources/Assets.xcassets
+        buildPhase: resources
+      # ④ 词库等运行时资源：作为 **folder reference（蓝色文件夹）** 加入，
+      #    这样 Bundle.main.url(forResource:withExtension:subdirectory:) 能直接寻址，
+      #    且新增词库文件不需要改工程文件。
+      - path: Shared/Resources
+        type: folder
+        buildPhase: resources
+    dependencies:
+      # App 依赖扩展；embed: true 会生成 "Embed Foundation Extensions" Copy Files 阶段
+      # （pbxproj 里对应 PBXCopyFilesBuildPhase，dstSubfolderSpec = 13，dstPath = ""）
+      - target: AIKeyboardExtension
+        embed: true
+        codeSign: true
+    settings:
+      base:
+        PRODUCT_NAME: AIKeyboard
+        PRODUCT_MODULE_NAME: AIKeyboard
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.moyu
+        INFOPLIST_FILE: Config/App-Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: Config/AIKeyboard.entitlements
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""                 # ← 用户自己在 Base.xcconfig 里填
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        APPLICATION_EXTENSION_API_ONLY: NO
+        SKIP_INSTALL: NO
+        SWIFT_VERSION: "5.0"
+        IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+    scheme:
+      # 对应 xcshareddata/xcschemes/AIKeyboard.xcscheme（CI 里 xcodebuild -scheme AIKeyboard 靠它）
+      testTargets: []
+      gatherCoverageData: false
+
+# -----------------------------------------------------------------------------
+# Target 2：键盘扩展
+# -----------------------------------------------------------------------------
+  AIKeyboardExtension:
+    type: app-extension
+    platform: iOS
+    configFiles:
+      Debug: Config/Extension.xcconfig
+      Release: Config/Extension.xcconfig
+    sources:
+      # ① 扩展自己的源码：只进 Extension target（KeyboardViewController 必须在这里）
+      - path: AIKeyboardExtension
+      # ② Shared 源码：与 App 共用（同一份代码编进两个 target，无需 framework）
+      - path: Shared
+        excludes:
+          - "Resources/**"
+      # ③ 词库资源：扩展也要能读到（完全访问开启后联网 + 本地词库）
+      - path: Shared/Resources
+        type: folder
+        buildPhase: resources
+      # 注意：**没有** Resources/Assets.xcassets —— 资源目录只进 App，
+      # 扩展里不需要 AppIcon，ASSETCATALOG_COMPILER_APPICON_NAME 因此在
+      # Extension.xcconfig 里被显式置空。
+    settings:
+      base:
+        PRODUCT_NAME: AIKeyboardExtension
+        PRODUCT_MODULE_NAME: AIKeyboardExtension
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.moyu.keyboard
+        INFOPLIST_FILE: Config/Extension-Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: Config/AIKeyboardExtension.entitlements
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""
+        # 扩展必须开这两个（App Store / 系统加载都要求）
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        LD_RUNPATH_SEARCH_PATHS:
+          - "$(inherited)"
+          - "@executable_path/Frameworks"
+          - "@executable_path/../../Frameworks"
+        SWIFT_VERSION: "5.0"
+        IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+    scheme:
+      testTargets: []

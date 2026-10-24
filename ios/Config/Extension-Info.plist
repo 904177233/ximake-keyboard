@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- 墨语（Moyu）键盘扩展 Info.plist -->
+
+	<key>CFBundleDevelopmentRegion</key>
+	<string>zh_CN</string>
+
+	<!-- 「设置 > 通用 > 键盘 > 键盘」列表里显示的名字 -->
+	<key>CFBundleDisplayName</key>
+	<string>墨语</string>
+
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+
+	<key>CFBundlePackageType</key>
+	<string>XPC!</string>
+
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+
+	<!-- ============================ 键盘扩展核心声明 ============================ -->
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.keyboard-service</string>
+
+		<!-- $(PRODUCT_MODULE_NAME) 展开成 AIKeyboardExtension，即
+		     AIKeyboardExtension.KeyboardViewController（类需要 @objc 可见，UIInputViewController 子类默认可见） -->
+		<key>NSExtensionPrincipalClass</key>
+		<string>$(PRODUCT_MODULE_NAME).KeyboardViewController</string>
+
+		<key>NSExtensionAttributes</key>
+		<dict>
+			<!-- 是否为 ASCII 键盘（决定是否出现在英文键盘选择里） -->
+			<key>IsASCIICapable</key>
+			<true/>
+
+			<key>PrefersRightToLeft</key>
+			<false/>
+
+			<!-- 主语言：简体中文（拼音） -->
+			<key>PrimaryLanguage</key>
+			<string>zh-Hans</string>
+
+			<!-- 是否请求「完全访问权限」：
+			     YES = 系统在设置里显示「允许完全访问」开关（联网调用 AI 必须开启）；
+			     NO  = 不显示该开关，扩展只能离线工作。 -->
+			<key>RequestsOpenAccess</key>
+			<true/>
+		</dict>
+	</dict>
+
+	<key>UILaunchScreen</key>
+	<dict/>
+
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © 2026 墨语 Moyu. All rights reserved.</string>
+</dict>
+</plist>

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!--
+  ============================================================================
+  墨语（Moyu）App Groups 可选配置样例 —— 仅限【付费 Apple Developer Program】
+  ============================================================================
+
+  本文件是 **样例（sample）**，不是工程实际使用的 entitlements。
+  工程默认使用 Config/AIKeyboard.entitlements（内容为空的 <dict/>），
+  因为免费 Apple ID 签名不支持 App Groups，声明了会导致真机签名失败。
+
+  ───────────────────────────── 何时使用 ─────────────────────────────
+  只有满足下面全部条件才启用：
+    1. 你已加入付费 Apple Developer Program（$99/年，或学校/公司团队）；
+    2. 你希望 App 与键盘扩展**实时共享** UserDefaults / 文件，
+       而不是靠「命名 UIPasteboard 手动同步配置」；
+    3. 你愿意为两个 Bundle ID 都开启 App Groups capability。
+
+  ───────────────────────────── 启用步骤 ─────────────────────────────
+  【第 1 步】把 Group ID 改成全局唯一的：
+      把下面的 group.com.example.moyu 改成 group.<你的BundleID前缀>.moyu
+      例如 group.com.zhangsan.moyu
+      （Group ID 必须与两个 target 完全一致。）
+
+  【第 2 步】Xcode 里给**两个 target** 都加 capability：
+      AIKeyboard target      → Signing & Capabilities → + Capability → App Groups
+                              → 勾选 group.com.zhangsan.moyu
+      AIKeyboardExtension    → 同上，勾选同一个 group
+
+  【第 3 步】让工程指向本文件（二选一）：
+      方式 A（推荐）：把本文件复制成两份并改名，覆盖默认空文件：
+          copy Config\AIKeyboard.entitlements.appgroup.sample Config\AIKeyboard.entitlements
+          copy Config\AIKeyboard.entitlements.appgroup.sample Config\AIKeyboardExtension.entitlements
+        （注意：本样例文件里 Group 数组对两个 target 相同，这是允许的。）
+      方式 B：在 Xcode 的 target Build Settings 里把
+          CODE_SIGN_ENTITLEMENTS = Config/AIKeyboard.entitlements.appgroup.sample
+          填给两个 target（不推荐，重跑 gen_xcodeproj.py 会覆盖回默认值）。
+
+  【第 4 步】代码层确认：
+      SharedStore 会自动探测 `UserDefaults(suiteName: "group.xxx")` 是否可用，
+      可用即走 App Group 分支（见 ios/Shared/Storage/SharedStore.swift 的 isAppGroupAvailable）。
+      注意 App Group ID 在代码里也要同步改，否则仍会退化到 standard UserDefaults。
+
+  【第 5 步】重新生成工程并构建：
+      python scripts/gen_xcodeproj.py
+      python scripts/validate_project.py
+
+  ───────────────────────────── 关闭/回退 ─────────────────────────────
+      把 Config/AIKeyboard.entitlements 与 Config/AIKeyboardExtension.entitlements
+      恢复为只有 <dict/> 的空内容即可（本仓库默认状态），
+      并在 Xcode 两个 target 里移除 App Groups capability。
+  ============================================================================
+-->
+<dict>
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.example.moyu</string>
+	</array>
+</dict>
+</plist>

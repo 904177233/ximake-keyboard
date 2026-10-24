@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!--
+  墨语（Moyu）宿主 App entitlements —— 默认「空」。
+
+  为什么是空的：
+  - 免费 Apple ID 签名**不支持** App Groups / iCloud / Push / Associated Domains 等能力。
+    一旦在 entitlements 里声明这些键，真机签名会直接失败，报
+    "Provisioning profile doesn't support the App Groups capability"。
+  - 本项目的 App ⇄ 键盘配置同步走「各自标准 UserDefaults + 命名 UIPasteboard 桥」方案
+    （见 ios/Shared/Storage/），不依赖任何 entitlements。
+
+  什么时候需要改：
+  - 只有当你升级为付费 Apple Developer Program，并希望 App 与键盘共享 UserDefaults 时，
+    才按 Config/AIKeyboard.entitlements.appgroup.sample 的说明打开 App Groups。
+-->
+<dict/>
+</plist>
