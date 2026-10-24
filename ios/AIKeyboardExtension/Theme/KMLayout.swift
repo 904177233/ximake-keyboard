@@ -151,7 +151,10 @@ enum KMLayout {
     static let aiChatKnobSize: CGFloat = 34  // TOKEN: sizing.aiChatKnobSize
 
     /// 32 —— 旋钮视觉圆直径（横屏，规范 §2.1「横屏 32」）。
-    static let aiChatKnobLandscapeSize: CGFloat = 32  // TOKEN: sizing.aiChatKnobLandscapeSize
+    ///
+    /// 由 `aiChatKnobSize − 2` 派生而非独立令牌：`tokens.json` 的 `sizing` 组里没有这一项，
+    /// 硬写 `// TOKEN:` 会让一致性检查指向一个不存在的键（v1.1 收尾时按规范 §6 的备选方案改派生）。
+    static let aiChatKnobLandscapeSize: CGFloat = aiChatKnobSize - 2
 
     /// 44 —— 旋钮命中区边长（横竖屏恒 44）。
     static let aiChatKnobHitSize: CGFloat = Theme.Sizing.minTapTarget

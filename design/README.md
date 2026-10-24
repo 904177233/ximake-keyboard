@@ -46,7 +46,7 @@
 |---|---:|
 | `design/` 下文件总数 | **19**（含 appicon/ 9 个） |
 | `tokens.json` 叶子键 | **256**（9 个顶层组；color.light / color.dark 各 36，键集相同） |
-| 组件契约 | **26 个 `public struct`**（其中 19 个是独立组件，7 个是子元素/条目类型）+ 12 个配套 `enum`；**另加 3 个**（`KMChatKnob` / `KMKnobGlyph` / `ChatPanelView`，见 `04-AI对话与智能联想规范.md` §2.8/§4.7） |
+| 组件契约 | **26 个 `public struct`**（其中 19 个是独立组件，7 个是子元素/条目类型）+ 12 个配套 `enum`；**另加 5 个已落地组件**（`KMChatKnob` / `KMKnobGlyph` / `ChatPanelView` / `ChatMessageListView` / `KMSuggestionChip`，见 `04-AI对话与智能联想规范.md` §2.8/§4.7） |
 | 键盘页 / 态 | **8 个页面**（letters/numbers/symbols/emoji/aiPanel/result/settings/**aiChat**）× **17 个状态**（12 既有 + 5 新增） |
 | 视觉稿 | **7 屏**（≥ 要求的 5 屏），共 **2 张**截图 |
 | App 图标 | **1 套 6 个尺寸**（1024 / 180 / 120 / 80 / 60 / 40） |
@@ -189,5 +189,6 @@ A：`preview-overview.png` 是 3020×930 的长图，直接双击打开即可（
 
 | 版本 | 日期 | 变更 |
 |---|---|---|
+| v1.2 | 2026-10-25 | `04-AI对话与智能联想规范.md` 与 `docs/07` 镜像同步升到 **v1.1**：§2.8 / §4.7 / §9 由「待实现清单」改写为「**已落地清单**」（旋钮、对话面板、联想三块的代码已于本日全部合入 `ios/AIKeyboardExtension/`，新增 `KMChatKnob.swift`、`ChatPanelView.swift`、`ChatMessageListView.swift`、`KMSuggestionChips.swift`、`KeyboardViewModel+Chat/Suggest.swift`）；记录两处「实现优于设计」的偏差与一处待补令牌（`aiChatKnobLandscapeSize`）。全文复查：`design/` 7 份产物 MD 与 HTML **旧签名工具名命中 0**（签名/安装工具统一为 **iloader**）。 |
 | v1.1 | 2026-10-25 | 新增 `04-AI对话与智能联想规范.md`（权威版）+ `docs/07-AI对话与智能联想规范.md`（镜像）：AI 对话旋钮（44 命中 / 34 视觉圆，五态）、全场对话面板（438 = 40+180+44+174，保留 174 键区）、AI 智能联想（3 条 ≤12 字，防抖 0.35s，失败静默）。`tokens.json` 由 238 → **256** 叶子：sizing +15、motion +3，**零新增高度令牌、零新增 hex**，QA 仍 `P0=0 P1=0 P2=0`。 |
 | v1.0 | 2026-10-24 | 初版：tokens.json（238 leaves / 9 顶层组）、键盘布局规范、主App界面规范、组件库、视觉稿 + 2 张截图、App 图标方案 + 脚本 + 6 尺寸 PNG、docs/03 设计与交互规范（+ design 镜像）、本索引。 |

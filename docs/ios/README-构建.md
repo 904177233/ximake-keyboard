@@ -43,7 +43,7 @@
 
 你有两条路可以编译，选一条：
 
-- **路线 A（推荐，不需要 Mac）**：GitHub Actions 云端 macOS 编译 → 下载未签名 IPA → Windows 上用 Sideloadly 用自己的 Apple ID 重签 → 装到 iPhone。
+- **路线 A（推荐，不需要 Mac）**：GitHub Actions 云端 macOS 编译 → 下载未签名 IPA → Windows 上用 iloader 用自己的 Apple ID 重签 → 装到 iPhone。
   完整操作见 [04 · 安装与续签指南](../04-安装与续签指南.md)；本文第 6 章只讲**工程侧**的注意事项。
 - **路线 B（有 Mac 时最省事）**：Xcode 直接打开工程 → Run 到真机。见本文第 2–4 章。
 
@@ -422,7 +422,7 @@ find ~/Library/Developer/Xcode/DerivedData -name "AIKeyboardExtension.appex" -pa
 ## 6. 路线 A：没有 Mac 时怎么编译（Windows 用户路径）
 
 **核心思路**：Mac 上的编译步骤交给 GitHub Actions 的 macOS runner 免费跑，产物是**未签名 IPA**；
-签名和安装回到 Windows 上用 Sideloadly 完成（用你自己的免费 Apple ID，7 天续签一次）。
+签名和安装回到 Windows 上用 iloader 完成（用你自己的免费 Apple ID，7 天续签一次）。
 
 工程侧需要你知道的只有三件事（其余全在 [04 · 安装与续签指南](../04-安装与续签指南.md)）：
 
@@ -445,7 +445,7 @@ find ~/Library/Developer/Xcode/DerivedData -name "AIKeyboardExtension.appex" -pa
    注意用的是 **`-project`** 不是 `-workspace`（本仓库没有 xcworkspace，零第三方依赖）。
    流水线里有**强校验**：IPA 里如果少了 `Payload/AIKeyboard.app/PlugIns/AIKeyboardExtension.appex`，构建会**故意失败**并打印原因 —— 防止你装上后键盘根本不出现。
 3. **产物**：运行页底部 Artifacts → `AIKeyboard-unsigned-ipa`（zip，解压得到 `.ipa`，保留 7 天）。
-   下载后按 [docs/04](../04-安装与续签指南.md) 第 4 章用 Sideloadly 签名安装。
+   下载后按 [docs/04](../04-安装与续签指南.md) 第 4 章用 iloader 签名安装。
 
 > 📌 关于 `scripts/gen_xcodeproj.py`：CI 里会**先重跑一遍生成器**（`python3 scripts/gen_xcodeproj.py`），
 > 再 `xcodebuild`。所以哪怕有人新加了 `.swift` 忘了重跑脚本，云端也会自动把文件纳入工程；
@@ -531,7 +531,7 @@ find ~/Library/Developer/Xcode/DerivedData -name "AIKeyboardExtension.appex" -pa
 
 | 文档 | 内容 |
 |---|---|
-| [04 · 安装与续签指南](../04-安装与续签指南.md) | ★ Windows 全程：云编译 → Sideloadly → 启用键盘 → 7 天续签 → 16 条报错对照表 |
+| [04 · 安装与续签指南](../04-安装与续签指南.md) | ★ Windows 全程：云编译 → iloader → 启用键盘 → 7 天续签 → 16 条报错对照表 |
 | [05 · 常见问题](../05-常见问题.md) | 28 个高频疑问（安全/耗电/迁移/费用…） |
 | [02 · 技术架构与接口契约](../02-技术架构与接口契约.md) | 目录归属、编码规范、接口签名 |
 | [01 · 产品需求与方案](../01-产品需求与方案.md) | 做什么、不做什么、硬约束 |
