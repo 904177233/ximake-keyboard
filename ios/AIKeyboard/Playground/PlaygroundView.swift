@@ -178,11 +178,25 @@ struct PlaygroundView: View {
 
     // MARK: - 能力
 
+    /// 试验场里可选的能力：润色 / 扩写 / 翻译 / 回复建议 / 生图。
+    ///
+    /// 刻意不列「AI 对话」「智能联想」「自定义」这三种：
+    /// - `.chat` 是键盘里多轮对话用的，单轮改写语义不对；
+    /// - `.suggestion` 的输出格式是「最多 3 条、每条一行」，放进单轮结果卡片里读起来像乱码；
+    /// - `.custom` 没有独立入口（用户自定义提示词走「提示词库」页）。
+    static let playgroundFeatures: [AIFeature] = [
+        .polish,
+        .expand,
+        .translate,
+        .replySuggestion,
+        .image
+    ]
+
     /// 能力胶囊：润色 / 扩写 / 翻译 / 回复 / 生图。
     var featureChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: AppMetrics.blockGap) {
-                ForEach(AIFeature.allCases, id: \.rawValue) { item in
+                ForEach(Self.playgroundFeatures, id: \.rawValue) { item in
                     PillChip(
                         item.title,
                         systemImage: FeatureGlyph.symbol(for: item),

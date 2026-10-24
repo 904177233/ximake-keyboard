@@ -42,10 +42,33 @@ extension PlaygroundView {
     }
 
     /// 是否可以生成。
+    ///
+    /// 除了「配置齐了」（`isChatReady` / `isImageReady`）之外，还必须**真的有一把能用的
+    /// API Key**。此前只查 `isChatReady`，而它只看 baseURL + model 是否为空，
+    /// 于是没填 Key 的服务商也能点亮「生成」，点下去只会弹一张失败卡片，
+    /// 用户看到的就是「试验场点了没反应 / 不能用」。
     var canGenerate: Bool {
         !engine.isRunning
             && !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && (isImageFeature ? appState.isImageReady : appState.isChatReady)
+            && hasKeyForCurrentProvider
+    }
+
+    /// 当前选中的服务商是否已经填了 API Key。
+    var hasKeyForCurrentProvider: Bool {
+        guard let provider = currentPlaygroundProvider else { return false }
+        let key = appState.apiKey(for: provider.id) ?? ""
+        return !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// 当前选中的服务商（生图看生图列表，对话看对话列表）。
+    var currentPlaygroundProvider: AIProviderConfig? {
+        if isImageFeature {
+            return appState.imageProviders.first(where: { $0.id == currentProviderID })
+                ?? appState.imageProvider
+        }
+        return appState.chatProviders.first(where: { $0.id == currentProviderID })
+            ?? appState.defaultChatProvider
     }
 
     /// 不能生成时的原因。
@@ -61,6 +84,9 @@ extension PlaygroundView {
         }
         if !isImageFeature && !appState.isChatReady {
             return "请先在「设置 › AI 服务」里配置一个对话服务商"
+        }
+        if let provider = currentPlaygroundProvider, !hasKeyForCurrentProvider {
+            return "「\(provider.name)」还没有填 API Key，去「设置 › AI 服务」补上"
         }
         return ""
     }

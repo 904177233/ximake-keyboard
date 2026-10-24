@@ -49,13 +49,17 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
     // MARK: - LLMClient
 
     /// 流式对话。取消 `Task` 会立即中断底层 URLSession 任务。
+    ///
+    /// 注意这里必须**强持有** `self`（`Task { [self] in … }`，不能写 `[weak self]`）：
+    /// 调用方常见的写法是 `let client = AIClientFactory.makeLLM(...)` 然后立刻
+    /// `return client.stream(request)`（探活探针 `ConnectivityProbe.makeHelloStream` 就是这样）。
+    /// 若 Task 只弱引用 self，client 在函数返回瞬间被释放，流会立刻以
+    /// `AIError.cancelled` 结束 —— 上层把它当成「用户主动取消」而静默忽略，
+    /// 表现就是「点测试连接没有任何反应」。`onTermination` 里仍会取消 task，
+    /// 因此不存在强引用循环。
     public func stream(_ request: ChatRequest) -> AsyncThrowingStream<ChatDelta, Error> {
         AsyncThrowingStream { continuation in
-            let task = Task { [weak self] in
-                guard let self else {
-                    continuation.finish(throwing: AIError.cancelled)
-                    return
-                }
+            let task = Task { [self] in
                 do {
                     try await self.runStream(request, continuation: continuation)
                 } catch {
@@ -120,10 +124,14 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
             "max_tokens": AIProviderConfig.clampMaxTokens(maxTokens),
             "stream": stream
         ]
-        // 部分服务端（如 DeepSeek 流式）支持 include_usage，能拿到最后一片 token 统计。
-        if stream {
-            body["stream_options"] = ["include_usage": true]
-        }
+        // 注意：这里**不加** `stream_options`。
+        //
+        // 它是 OpenAI 专有参数，大量「OpenAI 兼容」端点并不认识：DeepSeek 部分版本、
+        // 通义 compatible-mode、Kimi、智谱 GLM、硅基流动、部分 OpenRouter 模型都会直接
+        // 返回 400 `Unrecognized request argument supplied: stream_options`，
+        // 表现为「试验场点了没反应 / 直接失败」。
+        // 而流式侧的 usage 本来就没被使用（见 `runStream` 里的 `_ = usage`），
+        // 去掉它对功能零损失，换来的是对所有兼容端点可用。
         return body
     }
 
@@ -142,7 +150,8 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
             auth: .bearer(apiKey),
             extraHeaders: config.extraHeaders,
             timeout: config.timeout,
-            body: body
+            body: body,
+            accept: "text/event-stream"
         )
 
         let (bytes, response) = try await session.bytes(for: urlRequest)
@@ -166,10 +175,19 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
         var parser = SSEParser()
         var accumulatedFinishReason: String?
         var didEmitFinal = false
+        var didEmitText = false
         let promptTokens = estimatePromptTokens(request)
+        // 兜底用：如果服务端根本没按 SSE 返回（有些「OpenAI 兼容」网关会忽略
+        // `stream: true`，直接一次性吐一个完整 JSON），这里要把原始字节留下来，
+        // 结束时按非流式响应再解析一次。否则用户只会看到「服务商没有返回内容」。
+        var rawBuffer = Data()
 
         for try await line in bytes.lines {
             try Task.checkCancellation()
+            rawBuffer.append(Data((line + "\n").utf8))
+            if rawBuffer.count > 1024 * 1024 {
+                rawBuffer.removeAll(keepingCapacity: true)
+            }
             let events = parser.feed(Data((line + "\n").utf8))
             for event in events {
                 if event.isDone {
@@ -186,6 +204,7 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
                 }
                 // 忽略 reasoning_content（推理模型思维链），仅正文进入流。
                 if !payload.text.isEmpty {
+                    didEmitText = true
                     continuation.yield(ChatDelta(text: payload.text, isFinal: false))
                 }
                 // 某些服务端把 usage 放在最后一片（stream_options.include_usage）。
@@ -200,7 +219,20 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
             if event.isDone { break }
             guard let payload = parseStreamPayload(event.data) else { continue }
             if !payload.text.isEmpty {
+                didEmitText = true
                 continuation.yield(ChatDelta(text: payload.text, isFinal: false))
+            }
+        }
+        // 二级兜底：整段流里一个正文字符都没拿到，且缓冲区看起来是一个 JSON 对象，
+        // 说明服务端忽略了 `stream: true`。按非流式响应解析，把完整回复一次性吐出来。
+        if !didEmitText, !rawBuffer.isEmpty {
+            let trimmed = rawBuffer
+                .drop(while: { $0 == 0x20 || $0 == 0x0A || $0 == 0x0D || $0 == 0x09 })
+            if trimmed.first == UInt8(ascii: "{") {
+                let payload = try parseCompletion(data: rawBuffer)
+                if !payload.text.isEmpty {
+                    continuation.yield(ChatDelta(text: payload.text, isFinal: false))
+                }
             }
         }
         _ = accumulatedFinishReason

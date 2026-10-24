@@ -90,10 +90,19 @@ public enum AIClientFactory {
   ],
   "temperature": 0.3,
   "max_tokens": 1024,
-  "stream": true,
-  "stream_options": {"include_usage": true}
+  "stream": true
 }
 ```
+
+> **注意：不要加 `stream_options`。**
+> 它是 OpenAI 专有参数，大量「OpenAI 兼容」端点不认识：DeepSeek 部分版本、通义
+> compatible-mode、Kimi、智谱 GLM、硅基流动、部分 OpenRouter 模型都会直接返回
+> `400 Unrecognized request argument supplied: stream_options`。
+> 流式侧的 usage 本来也不参与展示（只有 `complete()` 的非流式响应会解析 usage），
+> 去掉它对功能零损失，换来的是对所有兼容端点可用。
+>
+> 流式请求的 `Accept` 头会由 `HTTPTransport.makeJSONRequest(accept:)` 设成
+> `text/event-stream`，非流式仍是 `application/json`。
 
 响应（SSE，每个 `data:` 一行一个 JSON）：
 

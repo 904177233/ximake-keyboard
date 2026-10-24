@@ -42,13 +42,14 @@ public final class AnthropicClient: LLMClient, @unchecked Sendable {
     // MARK: - LLMClient
 
     /// 流式对话。
+    ///
+    /// 注意这里必须**强持有** `self`（`Task { [self] in … }`，不能写 `[weak self]`）：
+    /// 调用方常见写法是 `let client = AIClientFactory.makeLLM(...)` 后立刻
+    /// `return client.stream(request)`，若 Task 只弱引用 self，client 在函数返回瞬间
+    /// 被释放，流会立刻以 `AIError.cancelled` 结束，上层当成「用户取消」静默忽略。
     public func stream(_ request: ChatRequest) -> AsyncThrowingStream<ChatDelta, Error> {
         AsyncThrowingStream { continuation in
-            let task = Task { [weak self] in
-                guard let self else {
-                    continuation.finish(throwing: AIError.cancelled)
-                    return
-                }
+            let task = Task { [self] in
                 do {
                     try await self.runStream(request, continuation: continuation)
                 } catch {
@@ -148,7 +149,8 @@ public final class AnthropicClient: LLMClient, @unchecked Sendable {
             auth: .apiKey(apiKey),
             extraHeaders: anthropicHeaders(),
             timeout: config.timeout,
-            body: body
+            body: body,
+            accept: "text/event-stream"
         )
 
         let (bytes, response) = try await session.bytes(for: urlRequest)

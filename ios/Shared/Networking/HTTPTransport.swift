@@ -143,18 +143,24 @@ public enum HTTPTransport {
     // MARK: - 请求构造
 
     /// 构造 JSON POST 请求：设置 `content-type: application/json`、鉴权头与额外头。
+    ///
+    /// - Parameter accept: `Accept` 头的值。流式（SSE）请求必须传
+    ///   `"text/event-stream"`，否则部分服务端/网关会按普通 JSON 请求处理，
+    ///   直接一次性返回完整结果甚至 406，客户端就会「点了没反应」。
+    ///   非流式请求保持默认的 `application/json`。
     public static func makeJSONRequest(
         url: URL,
         auth: AuthHeader,
         extraHeaders: [String: String],
         timeout: TimeInterval,
-        body: [String: Any]
+        body: [String: Any],
+        accept: String = "application/json"
     ) throws -> URLRequest {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = min(max(timeout, 5), 180)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(accept, forHTTPHeaderField: "Accept")
         switch auth {
         case let .bearer(key):
             request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
