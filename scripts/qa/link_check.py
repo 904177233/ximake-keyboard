@@ -80,6 +80,10 @@ FILE_EXTS = {
 #: 明显不是仓库内路径的片段（URL、绝对路径、占位符）—— 直接跳过
 SKIP_PATTERNS = [
     re.compile(r"^(?:https?|ftp|mailto):", re.I),
+    # 省略协议头的域名（`developer.apple.com/library/.../CustomKeyboard.html`、
+    # `github.com/hkgood/OSGKeyboard`）：判断依据是「第一段含点、且点后直接接斜杠」，
+    # 因此 `README.md` / `design/tokens.json` 这类真文件引用不会被误跳过。
+    re.compile(r"^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+(?=/)", re.I),
     re.compile(r"^[A-Za-z]:[\\/]"),          # C:\...  Windows 绝对路径
     re.compile(r"^\\\\"),                     # UNC 路径
     re.compile(r"^/"),                        # Unix 绝对路径

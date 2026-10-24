@@ -266,7 +266,12 @@ PAIR_GROUPS = [
 | `symbol_map.py` | emoji / 标点联想映射 |
 | `phrase_pairs.py` | 上屏后联想短语对 |
 | `gen_swift_syllables.py` | 由 `syllable_table.py` 生成 `ios/Shared/IMECore/PinyinSyllables.swift`，保证两侧音节表永远一致 |
-| `_simulate_engine.py` | 用 Python 复刻 `PinyinEngine` 候选算法，读真实词库跑 37 条断言（验证算法与数据，不替代 Xcode 编译） |
+| `_simulate_engine.py` | 用 Python 复刻 `PinyinEngine` 候选算法（含模糊音），读真实词库跑 **65 条断言**（验证算法与数据，不替代 Xcode 编译） |
+| `_probe_loadtime.py` | 分阶段测量词库加载耗时（读文件 / 解码 / 解析 / 分组 / 排序 / 首字母 DP），给出 Python 上界估算 |
+| `_probe_fuzzy_perf.py` | 测量模糊音变体数与开关前后的按键耗时差（对应 README §3.8 的性能表） |
+| `_probe_seed.py` | 抽取 `PinyinDictionary.swift` 内置兜底词表，统计条数 / 常用字覆盖 |
+| `_probe_balance.py` | 剥注释与字符串后统计 IMECore 各 swift 文件的括号配平与编码问题 |
+| `_count_assertions.py` | 统计 `_simulate_engine.py` 各分组的断言条数（用于核对 README 里的数字） |
 | `.cache/jieba_dict.txt` | jieba 原始词表缓存（4.9 MB，**不打包进 App**） |
 | `_fetch_src.py` / `_probe.py` | 数据源获取与格式探查的一次性脚本（保留备查） |
 

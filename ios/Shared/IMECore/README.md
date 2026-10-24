@@ -459,12 +459,12 @@ let engine = PinyinEngine(dictionary: dict, learning: learning)
 ### 6.8 已验证结论（Python 算法复刻）
 
 Windows 环境无法编译 Swift，因此用 `tools/dict/_simulate_engine.py` 以 Python 复刻了
-`PinyinDictionary` + `PinyinEngine` 的完整候选算法（音节切分 DP、组合 DP、前缀预测、
-简拼索引、排序公式、类型判定），读**真实的** `base_dict.tsv` 跑断言：
+`PinyinDictionary` + `PinyinEngine` + `FuzzyPinyin` 的完整候选算法（音节切分 DP、组合 DP、
+前缀预测、简拼索引、排序公式、类型判定、模糊音变体展开与命中收集），读**真实的** `base_dict.tsv` 跑断言：
 
 ```
 词库条数 = 5276，短语条数 = 755
-结果：39 / 39 通过
+结果：65 / 65 通过
 ```
 
 覆盖内容与实测值：
@@ -474,8 +474,9 @@ Windows 环境无法编译 Swift，因此用 `tools/dict/_simulate_engine.py` �
 | 词库加载 | 7 | `lookup("zhongguo")[0] = 中国`；`hasPrefix("zhongg") = true`；`hasPrefix("zzzzz") = false`；`initials["zg"] ⊇ zhongguo` |
 | 候选生成 | 12 | `candidates("zg")[0] = 中国`；`candidates("zhongguo")[0] = 中国`；`candidates("zhongg") ⊇ 中国`；`candidates("nihao") ⊇ 你好`；`candidates("xiexie")[0] = 谢谢`；`candidates("zaijian")[0] = 再见`；`candidates("hh") ⊇ 哈哈`；`candidates("yyds") ⊇ english`；`candidates("2333")[0] = 2333`；`candidates("woxihuanni") ⊇ 喜欢` |
 | 候选质量 | 10 | 数量 ≤ 30、score 严格降序、无重复文本、汉字候选全 `.word`、`candidates("kaixin") ⊇ emoji`、`selectionIndex("zhongguo2") = 1`、`candidates("zhongguo2")` 不含整串英文、`candidates("yyds")[0].kind = english` |
-| 短语库 | 3 | 755 条 ≥ 300；含触发词 `谢谢`/`晚安`；`谢谢 → 不客气` |
-| 词库数据质量 | 7 | 无空词/无空白词/无重复、词频降序、纯汉字无 `punct` 标记、条数 ∈ [4000, 7000] |
+| 短语库 | 4 | 755 条 ≥ 300；含触发词 `谢谢`/`晚安`；`谢谢 → 不客气` |
+| 词库数据质量 | 6 | 无空词/无空白词/无重复、词频降序、纯汉字无 `punct` 标记、条数 ∈ [4000, 7000] |
+| 模糊音 | 26 | 9 条规则、默认 5 条；`variants("zhong")[0] = zhong` 且含 `zong`；`si → shi`、`lin → nin`；单音节 ≤4 条且全是合法音节；`expand("zhongguo")[0] = zhongguo` 且含 `zongguo`、`zongguo → zhongguo`；`zongg → zhongg`（尾音节保留）；`candidates("zongguo") ⊇ 中国`，关闭后不含；`candidates("zhongguo")[0]` 仍是「中国」（精确优先）；候选池已满时模糊候选不挤入；模糊命中排在精确之后 |
 
 > 说明：该脚本验证的是**算法与数据**，不能替代 Xcode 编译。Swift 侧的类型/签名正确性
 > 依靠 `scripts/qa/static_check.py` 的静态扫描（当前 `P0=0 P1=0`）+ 逐文件人工复核。
@@ -610,7 +611,7 @@ final class IMECoreSmokeTests: XCTestCase {
         assert(zhong.first == "zhong")
         assert(zhong.contains("zong"))
         assert(FuzzyPinyin.variants(of: "zhong", rules: []).count == 1)
-        assert(FuzzyPinyin.variants(of: "ling", rules: [.enEng]).count == 1, "单字母 n 不应参与 l/n 折叠")
+        assert(FuzzyPinyin.variants(of: "n", rules: [.lN]).count == 1, "单字母 n（嗯）不应参与 l/n 折叠")
 
         // 整串变体：按改动音节数从少到多，原文永远第 0 位
         let expanded = FuzzyPinyin.expand("zhongguo", rules: FuzzyPinyinOptions.defaultRules)
@@ -632,8 +633,9 @@ final class IMECoreSmokeTests: XCTestCase {
         assert(engine.candidates(for: "zhongguo").first?.text == "中国", "精确命中必须仍是首候选")
         let fuzzy = engine.candidates(for: "zongguo")
         assert(fuzzy.contains { $0.text == "中国" }, "zh/z 模糊应能打出「中国」")
-        assert(fuzzy.first?.score ?? .infinity <= engine.candidates(for: "zhongguo").first?.score ?? 0,
-               "模糊命中不应比精确命中分更高")
+        let exactTop = engine.candidates(for: "zhongguo").first?.score ?? 0
+        let fuzzyTop = fuzzy.first?.score ?? 0
+        assert(fuzzyTop <= exactTop, "模糊命中不应比精确命中分更高")
         engine.fuzzyOptions = .off
         assert(engine.candidates(for: "zongguo").contains { $0.text == "中国" } == false,
                "关闭模糊音后不应再出「中国」")

@@ -328,6 +328,7 @@ python scripts\qa\final_acceptance.py
 | [`docs/05-常见问题.md`](docs/05-常见问题.md) | 28 个高频疑问（安全、费用、功能边界…） | 有疑问时 |
 | [`docs/06-QA报告.md`](docs/06-QA报告.md) | 静态检查结果、P0/P1/P2 问题清单、真编译踩的 14 个坑 | 想知道代码质量 |
 | [`docs/07-AI对话与智能联想规范.md`](docs/07-AI对话与智能联想规范.md) | AI 对话旋钮、全屏对话面板、非传统联想胶囊的施工图 | 想改对话/联想功能 |
+| [`docs/08-AI输入法能力调研报告.md`](docs/08-AI输入法能力调研报告.md) | 竞品矩阵、真实用户差评、Apple 技术边界、缺口优先级与路线图 | 规划下一步做什么 |
 | [`docs/ios/README-构建.md`](docs/ios/README-构建.md) | 工程生成器原理、CI 细节 | 想改构建流程 |
 | [`design/tokens.json`](design/tokens.json) | 设计令牌（颜色 / 字号 / 间距 / 动效，256 个叶子） | 想改配色 / 尺寸 |
 | [`design/键盘布局规范.md`](design/键盘布局规范.md) | 26 键 / 9 键布局与尺寸 | 想改键盘布局 |
