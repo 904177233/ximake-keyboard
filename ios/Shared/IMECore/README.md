@@ -132,11 +132,12 @@ print(dict.hasPrefix("zhongg"))                     // true
 
 ### 词库数据来源与重新生成
 
-`ios/Shared/dict/` 下的三个文件**全部由脚本生成，不要手改**：
+`ios/Shared/dict/` 下的四个文件**全部由脚本生成，不要手改**：
 
 | 文件 | 条数 | 说明 |
 | --- | --- | --- |
-| `base_dict.tsv` | 33160 | 基础词库，列：`拼音<TAB>词<TAB>词频<TAB>flags`，按词频降序；806 KB |
+| `base_dict.tsv` | 33239 | 基础词库，列：`拼音<TAB>词<TAB>词频<TAB>flags`，按词频降序；809 KB |
+| `chat_priority.tsv` | 328 | 聊天高频词权重，列：`词<TAB>权重`（1.0–3.0）；**只作用于简拼排序**，见 §3.4 |
 | `phrases.tsv` | 755 | 上屏后联想，列：`建议词拼音<TAB>触发词<TAB>建议词` |
 | `dict_meta.json` | — | `version = 1.1.0`、条数、flags 分布、数据来源与许可、每个文件的 SHA256 |
 
@@ -144,6 +145,8 @@ print(dict.hasPrefix("zhongg"))                     // true
 
 1. **jieba 词典**（MIT 协议，数据源自 cppjieba 的 `dict/jieba.dict.utf8`）——经词长/词频/常用字/专名四层清洗后取前 31,628 条（v1.1.0 扩库结果，扩库前为 3,400 条；筛选规则与调参依据见 `tools/dict/README.md` 的「词库扩展」一节）；
 2. `tools/dict/chat_supplement.py` —— 本项目手写的高频聊天补充表（问候、感谢、情绪、网络梗、祝福、成语等），1,953 条；
+   `tools/dict/chat_priority.py` —— 聊天高频词权重表（328 条，五档 3.0/2.5/2.0/1.5/1.0），生成 `chat_priority.tsv`，
+   并把表内缺失的词以 `flags=chat` + 偏高频次补进 `base_dict.tsv`（`tools/dict/_apply_chat_priority.py`，已有词频一律不动）；
 3. `tools/dict/symbol_map.py` —— emoji / 标点联想别名表，240 条；
 4. `tools/dict/phrase_pairs.py` —— 触发词 → 建议词对，生成 `phrases.tsv`（755 条）。
 
@@ -152,7 +155,9 @@ print(dict.hasPrefix("zhongg"))                     // true
 ```bash
 python tools/dict/build_dict.py           # 重新生成三个产物
 python tools/dict/build_dict.py --check   # 只做质量自查，不写文件
-python tools/dict/_simulate_engine.py     # 用 Python 复刻 Swift 算法跑断言（65 条）
+python tools/dict/_apply_chat_priority.py # 把 chat_priority.tsv 的缺词补进 base_dict.tsv（幂等）
+python tools/dict/_simulate_engine.py     # 用 Python 复刻 Swift 算法跑断言（78 条）
+python tools/dict/_eval_suggestion.py     # L1 联想质量体检（30 个典型上文 -> 产出）
 python tools/dict/gen_swift_syllables.py  # 音节表变更后重生成 PinyinSyllables.swift
 ```
 
@@ -233,6 +238,21 @@ for start in 0..<n where best[start] 可达:
   同时也覆盖"末段只打首字母"的形态，因为前缀匹配对 `zhongg*` 一视同仁。
 - **全拼** `zhongguo`：精确匹配优先级最高。
 
+#### 3.3.1 简拼排序：聊天权重 × 词频
+
+`wq` 这种两字母简拼只给了首字母，候选顺序完全由词库决定——而词库词频来自新闻/百科语料，
+于是「完全/武器/晚期」排在「我去」前面，用户看到的就是「候选词有严重逻辑问题」。
+三层修法都在 `PinyinEngine+Initials.swift`：
+
+1. **聊天权重**：`chat_priority.tsv` 给 328 个高频口语词 1.0–3.0 的权重，简拼候选的排序值
+   与最终得分都乘 `1 + 权重`；**全拼/精确命中不乘**（音节已经打全，不该被先验表改写）。
+   注意乘子作用在对数尺度上：×4 意味着 5,000 词频的词能压过 60,000 词频的词。
+2. **同结构去重**：同一个全拼键最多 2 条；同一「首字 + 长度」结构最多 2 条
+   （`嗯好/嗯哈/嗯还`、`在吗/在嘛/在么` 各只留 2 个）。不按「长度」硬卡，是因为 n 个字母的
+   简拼只能命中 n 字词，按长度卡等于每条简拼只给 2 个候选、把候选栏打空。
+3. **第一页兜底**：排完序若前 5 条没有聊天词，把最靠前的聊天词提到第 5 位
+   （只在前 5 全无聊天词时触发，不乱动已有顺序）。
+
 ### 3.4 排序公式
 
 ```
@@ -241,6 +261,8 @@ score = log(freq + 1) * 1.0
       + recentBoost(text) * 8.0
       - max(0, 字数 - 1) * 0.35
       + base(来源加成)
+
+score = 上式 * chatMultiplier   # 仅简拼路径：1 + chatPriority(词)；其余路径恒为 1
 ```
 
 - `freq`：词库词频；组合候选为 0，靠 `base` 体现。
@@ -868,7 +890,7 @@ Executed 8 tests, with 89 assertions, 0 failures, 0 unexpected
    值 = 用户在该上下文之后上屏过的句子（`Entry{text, count, updatedAt}`）。
    查询时按「最长键优先」：末 4 字命中权重 1.0、末 3 字 0.96、末 2 字 0.92。
    学习入口是 `record(context:committed:)`（注意传入的是**生成候选时**的上下文，不是上屏后的）。
-2. **内置模板兜底** — `ContextualSeedTemplates`（81 组规则 / 169 条候选短句）：
+2. **内置模板兜底** — `ContextualSeedTemplates`（88 组规则 / 179 条候选短句）：
    取「能匹配上下文末尾的**最长**触发词」那一组，命中即用（长触发词更具体，避免混组）。
    置信度 = `rule.confidence * 0.92`。
 
@@ -972,7 +994,7 @@ assert(AISuggestionPrompt.parse("1. 好的", limit: 0).isEmpty)
 
 预期输出：以上断言全部通过（`0 failures`）。L1 侧不依赖 `dict/` 文件，词库缺失时也能跑通。
 
-复杂度：L1 单次查询 = 最多 3 次字典查找 + 最多 81 条规则的 `hasSuffix` 比较（规则按触发词长度降序，
+复杂度：L1 单次查询 = 最多 3 次字典查找 + 最多 88 条规则的后缀比较（规则按触发词长度降序，
 命中即 `break`），实测远低于 5ms 预算；L2 无本地 CPU 开销（纯字符串拼接与解析）。
 
 ## 10. 词库自检与诊断

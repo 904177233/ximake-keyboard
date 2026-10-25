@@ -34,7 +34,8 @@ python tools/dict/build_dict.py --out /tmp/moyu-dict
 
 | 文件 | 条数 | 字节 | SHA256 |
 | --- | --- | --- | --- |
-| `base_dict.tsv` | 33160 | 825646 | `4eb3333c95b72e2a63da7856eba66eacef8ee1839a40b4c4ad6da759dda302ab` |
+| `base_dict.tsv` | 33239 | 827895 | `6715be2b50a5fc4a267db7c39f23573f3ff1d6bd6b19f5cf53afc1d4747f21ab` |
+| `chat_priority.tsv` | 328 | 4043 | 聊天高频词权重（`词<TAB>权重`，1.0–3.0），只作用于简拼排序 |
 | `phrases.tsv` | 755 | 21827 | `178468c1261ae8eebb3e7a2a7d38877c81f806b72941b07cc3a36250ac3f751e` |
 
 v1.0.0 是 5276 条 / 139702 字节（SHA256 `fb04d1cb…`），v1.1.0 按 `docs/08` 的
@@ -185,19 +186,19 @@ PAIR_GROUPS = [
 脚本每次运行都会打印：总条数、按 flags 统计、按来源统计、词长分布、词频范围、
 重复词 / 空词 / 含空白词检查结果，以及固定步长抽取的 30 条样例。
 
-### flags 分布（v1.1.0，共 33160 条）
+### flags 分布（v1.1.0，共 33239 条）
 
 | flag | 条数 | 含义 |
 | --- | --- | --- |
 | `core` | 31628 | jieba 通用高频词（v1.1.0 扩库后占比最大） |
-| `chat` | 1761 | 聊天场景用词 |
+| `chat` | 1840 | 聊天场景用词（含 `_apply_chat_priority.py` 补入的 78 条） |
 | `emoji` | 415 | 可联想表情 / emoji 条目（**含 symbol_map 的纯汉字别名**，见下方说明） |
 | `net` | 368 | 网络用语 / 热梗 |
 | `bless` | 344 | 祝福 / 问候 |
 | `idiom` | 120 | 成语 |
 | `punct` | 57 | 标点符号 / 颜文字 |
 
-来源分布：`jieba 31628 / chat_supplement 1953 / symbol_map 240`。词长分布：1 字 2882、2 字 23527、3 字 4123、4 字 2422、5 字 149、6 字 48、7 字 6、8 字 2、9 字 1。
+来源分布：`jieba 31628 / chat_supplement 1953 / symbol_map 240 / chat_priority 78`。词长分布：1 字 2882、2 字 23551、3 字 4165、4 字 2434、5 字 150、6 字 48、7 字 6、8 字 2、9 字 1。
 
 ### 数据完整性检查
 
@@ -269,8 +270,12 @@ PAIR_GROUPS = [
 | `symbol_map.py` | emoji / 标点联想映射 |
 | `phrase_pairs.py` | 上屏后联想短语对 |
 | `gen_swift_syllables.py` | 由 `syllable_table.py` 生成 `ios/Shared/IMECore/PinyinSyllables.swift`，保证两侧音节表永远一致 |
-| `_simulate_engine.py` | 用 Python 复刻 `PinyinEngine` 候选算法（含模糊音），读真实词库跑 **65 条断言**（验证算法与数据，不替代 Xcode 编译） |
-| `_probe_loadtime.py` | 分阶段测量词库加载耗时（读文件 / 解码 / 解析 / 分组 / 排序 / 首字母 DP），给出 Python 上界估算 |
+| `_simulate_engine.py` | 用 Python 复刻 `PinyinEngine` 候选算法（含模糊音与简拼聊天权重），读真实词库跑 **78 条断言**（验证算法与数据，不替代 Xcode 编译） |
+| `_probe_loadtime.py` | 冷/热两次分阶段测量加载耗时（同步段：读文件 / 解码 / 解析 / 分组 / 排序 + 聊天权重表，对照 80 ms 预算；懒加载段：首字母 DP 单独报） |
+| `chat_priority.py` | 聊天高频词权重表（328 条，五档 3.0/2.5/2.0/1.5/1.0）的唯一真相源，生成 `chat_priority.tsv`，并提供缺词词频换算 |
+| `_apply_chat_priority.py` | 把 `chat_priority.tsv` 里词库缺失的词以 `flags=chat` 补进 `base_dict.tsv`（已有词频一律不动，幂等） |
+| `_probe_initials_rank.py` | 打印指定简拼的前 N 候选（`--keys` 打首字母桶、`--words` 查词落点），改排序前后对照用 |
+| `_eval_suggestion.py` | L1 本地联想质量体检：30 个典型上文跑一遍，打印「上文 → 末句 → 产出」，`--strict` 校验模板规范 |
 | `_probe_fuzzy_perf.py` | 测量模糊音变体数与开关前后的按键耗时差（对应 README §3.8 的性能表） |
 | `_probe_seed.py` | 抽取 `PinyinDictionary.swift` 内置兜底词表，统计条数 / 常用字覆盖 |
 | `_probe_balance.py` | 剥注释与字符串后统计 IMECore 各 swift 文件的括号配平与编码问题 |
