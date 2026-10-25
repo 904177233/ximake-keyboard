@@ -131,7 +131,7 @@ struct AIBar: View {
             .opacity(0.55)
         } else {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: Theme.Spacing.sm) {
+                HStack(spacing: Theme.Sizing.aiChipGap) {
                     ForEach(items) { item in
                         iconButton(
                             symbol: item.feature.systemImage,
@@ -188,13 +188,13 @@ struct AIBar: View {
             action()
         }) {
             ZStack {
-                Circle()
+                RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous)
                     .fill(isSelected ? Theme.accentSoft : Color.clear)
                 iconButtonGlyph(
                     symbol: symbol,
                     fallback: fallback,
                     tint: isSelected ? Theme.accent : Theme.textSecondary,
-                    size: 15
+                    size: 17
                 )
             }
             .frame(width: Theme.Sizing.aiChipHeight, height: Theme.Sizing.aiChipHeight)
@@ -226,7 +226,7 @@ struct AIBar: View {
     private var edgeMasks: some View {
         HStack(spacing: 0) {
             LinearGradient(
-                colors: [Theme.keyboardBackground, Theme.keyboardBackground.opacity(0)],
+                colors: [Theme.candidateBar, Theme.candidateBar.opacity(0)],
                 startPoint: .leading,
                 endPoint: .trailing
             )
@@ -236,7 +236,7 @@ struct AIBar: View {
             Spacer(minLength: 0)
 
             LinearGradient(
-                colors: [Theme.keyboardBackground.opacity(0), Theme.keyboardBackground],
+                colors: [Theme.candidateBar.opacity(0), Theme.candidateBar],
                 startPoint: .leading,
                 endPoint: .trailing
             )

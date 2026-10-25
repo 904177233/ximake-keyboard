@@ -95,16 +95,14 @@ struct KMKeyCap: View {
                 .foregroundColor(foregroundColor)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
-                .frame(maxWidth: .infinity, alignment: style == .space ? .center : .leading)
-                .padding(.leading, style == .space ? 0 : Theme.Spacing.md)
+                .frame(maxWidth: .infinity, alignment: .center)
         case let .symbol(text):
             Text(text)
                 .font(.system(size: 17, weight: .regular))  // TOKEN: typography.candidate.size（符号页相对 22pt 主字号降级）
                 .foregroundColor(foregroundColor)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, Theme.Spacing.sm)
+                .frame(maxWidth: .infinity, alignment: .center)
         case let .icon(symbol, fallback):
             KMIconGlyph(symbol: symbol, fallback: fallback, size: iconSize, weight: .regular, tint: foregroundColor)
                 .frame(maxWidth: .infinity)
@@ -145,14 +143,11 @@ struct KMKeyCap: View {
     private var backgroundLayer: some View {
         switch style {
         case .letter:
+            // v2.1：**去掉键帽投影**。iOS 26 / 微信输入法的键帽是纯色平片，
+            // 1pt 投影在密集网格里会形成一圈脏边，反而让键盘显廉价。
+            // 键与键之间的距离由 keyGap(6) 本身保证，不需要投影分层。
             RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous)
                 .fill(Theme.keyBackground)
-                .shadow(
-                    color: Theme.keyShadow,
-                    radius: Theme.Shadow.key.blur,
-                    x: 0,
-                    y: Theme.Shadow.key.y
-                )
         case .function:
             RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous)
                 .fill(isHighlighted ? Theme.keyFunctionBackgroundPressed : Theme.keyFunctionBackground)

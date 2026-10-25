@@ -203,15 +203,7 @@ private func chatKnobState(for model: KeyboardViewModel) -> KMChatKnobState {
     private var keyArea: some View {
         switch model.page {
         case .letters:
-            KeyRowsView(
-                layoutMode: model.layoutMode,
-                shiftState: model.shiftState,
-                isLandscape: model.isLandscape,
-                onTap: { key in model.tap(key) },
-                mascot: mascotConfig,
-                accent: themeAccent,
-                returnKeyKind: model.returnKeyKind
-            )
+            letterKeys
         case .numbers:
             NumberPadView(onTap: { key in model.tap(key) })
         case .symbols:
@@ -222,11 +214,24 @@ private func chatKnobState(for model: KeyboardViewModel) -> KMChatKnobState {
                 onInsert: { emoji in model.insertText(emoji) }
             )
         case .aiPanel:
-            AIPanelView(model: model)
+            // v2.1 修：面板页不再是「面板顶替键区」，而是「面板叠在键区之上」。
+            // 键盘高度 386 = 44(效用行) + 168(面板) + 174(键区)，原来只渲染面板
+            // （面板自身 168）会让下面空出 174pt 的键盘底色 —— 就是用户截图里
+            // 「设置页/对话框被裁掉、下面一大片灰」的那块空白。
+            VStack(spacing: 0) {
+                AIPanelView(model: model)
+                letterKeys
+            }
         case .result:
-            AIResultCardView(model: model)
+            VStack(spacing: 0) {
+                AIResultCardView(model: model)
+                letterKeys
+            }
         case .settings:
-            ExtensionSettingsSheet(model: model)
+            VStack(spacing: 0) {
+                ExtensionSettingsSheet(model: model)
+                letterKeys
+            }
         case .aiChat:
             ChatPanelView(model: model)
         case .voice:
@@ -236,6 +241,19 @@ private func chatKnobState(for model: KeyboardViewModel) -> KMChatKnobState {
                 onCommit: { text in model.insertText(text) }
             )
         }
+    }
+
+    /// 字母键区（多处复用：字母页本体，以及各个「面板 + 键盘」页的下半部分）。
+    private var letterKeys: some View {
+        KeyRowsView(
+            layoutMode: model.layoutMode,
+            shiftState: model.shiftState,
+            isLandscape: model.isLandscape,
+            onTap: { key in model.tap(key) },
+            mascot: mascotConfig,
+            accent: themeAccent,
+            returnKeyKind: model.returnKeyKind
+        )
     }
 
     // MARK: - 浮层
