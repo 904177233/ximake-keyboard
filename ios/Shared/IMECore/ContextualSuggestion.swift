@@ -284,9 +284,10 @@ public final class LocalSuggestionIndex: @unchecked Sendable {
         // 2) 再用内置模板兜底（只取最长命中的那一组，避免不同触发词的建议混在一起）。
         //    注意：这里**不能**排除「触发词 == 整句」的情况——「在吗」「谢谢你」这类最常见的
         //    上下文本身就是触发词，排除掉会让 L1 几乎永远命中不了；重复上屏由下面的 text != sentence 挡住。
+        //    触发词比对面稍宽：末句尾部的语气词（啊/呀/呢/吧…）会先被剥掉再比，见 `triggerMatches`。
         if results.count < budget {
             for rule in seedRules {
-                guard sentence.hasSuffix(rule.trigger) else { continue }
+                guard Self.triggerMatches(sentence: sentence, trigger: rule.trigger) else { continue }
                 for raw in rule.texts {
                     if results.count >= budget {
                         break
@@ -382,6 +383,36 @@ public final class LocalSuggestionIndex: @unchecked Sendable {
     /// - Returns: 归一化结果。
     static func normalizedComposing(_ composing: String) -> String {
         composing.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    /// 句末语气词：真人聊天几乎不会完整打出「怎么办」，多半是「怎么办啊」。
+    ///
+    /// 这些字只在**句尾**被剥掉，且必须剩下比触发词更长的部分，避免把
+    /// 「好啊」剥成「好」这种把短句削没的情况。
+    static let sentenceFinalParticles: Set<Character> = [
+        "啊", "呀", "呢", "吧", "嘛", "哦", "啦", "咯", "呐", "哈"
+    ]
+
+    /// 判断末句是否命中某个触发词（允许句尾带语气词）。
+    ///
+    /// 为什么不在模板里把 `谢谢` / `谢谢啊` / `谢谢呀` 各写一条：那是 3 倍的维护成本，
+    /// 而且永远补不全（`呢`/`啦`/`咯`…）。把语气词剥掉统一处理，模板表才能保持干净。
+    ///
+    /// - Parameters:
+    ///   - sentence: 已归一化的末句。
+    ///   - trigger: 模板触发词。
+    /// - Returns: 命中返回 `true`。
+    static func triggerMatches(sentence: String, trigger: String) -> Bool {
+        guard !trigger.isEmpty else { return false }
+        if sentence.hasSuffix(trigger) { return true }
+        var trimmed = sentence
+        while let last = trimmed.last,
+              sentenceFinalParticles.contains(last),
+              trimmed.count > trigger.count {
+            trimmed.removeLast()
+            if trimmed.hasSuffix(trigger) { return true }
+        }
+        return false
     }
 
     /// 取末句的上下文键（后 `contextKeyLength` 个字，不足则取全部）。

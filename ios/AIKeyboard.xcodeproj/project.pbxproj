@@ -66,6 +66,7 @@
 		971CCAD72389EA4513057B65 /* SignatureClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0377E7C647CBC18A120FB21A /* SignatureClock.swift */; };
 		27246486384FFAD9836744F1 /* ViewCompat.swift in Sources */ = {isa = PBXBuildFile; fileRef = B53E108D18332269CEA6347E /* ViewCompat.swift */; };
 		10F0A718116F7ECC50E30CEB /* AISuggestionPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0072B30A6D8C1B911E482BEF /* AISuggestionPrompt.swift */; };
+		FE414206CE9B6A6161E98A87 /* ChatPriority.swift in Sources */ = {isa = PBXBuildFile; fileRef = A846448F7117BEEE632E8CCD /* ChatPriority.swift */; };
 		3EFAC17AD45DE3F75A743760 /* ContextualSeedTemplates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9939316CA31AB3076553567F /* ContextualSeedTemplates.swift */; };
 		95D7CA40851062E930CDE30F /* ContextualSuggestion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80072FDA1FC064C72F38FC69 /* ContextualSuggestion.swift */; };
 		173FB665298158BCBF768AF6 /* FuzzyPinyin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 315B20D6652F09690A0CF6EF /* FuzzyPinyin.swift */; };
@@ -75,6 +76,7 @@
 		8E70D64FAEF71136C2A23418 /* PhraseSuggestion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1FF3A4955FF727E7D4B841 /* PhraseSuggestion.swift */; };
 		CD664DDE477C50C6CFB69067 /* PinyinDictionary+Seed.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8E9A33C626ABF335A45DBA7 /* PinyinDictionary+Seed.swift */; };
 		F87FB81A0C6EECBAE7B1DF52 /* PinyinDictionary.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2155FC22D8522473988520D /* PinyinDictionary.swift */; };
+		79399F34F0AB0D95F1E7E496 /* PinyinEngine+Initials.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07FCAFE2E2C7132B7E0ED279 /* PinyinEngine+Initials.swift */; };
 		D2C0E1F196630520BD5433D9 /* PinyinEngine+TypoCorrection.swift in Sources */ = {isa = PBXBuildFile; fileRef = D187E706AC764A493C2EE319 /* PinyinEngine+TypoCorrection.swift */; };
 		DE5A7C6ADB27BC3A17E70DEC /* PinyinEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D4E36CE045EC674511C8771 /* PinyinEngine.swift */; };
 		F938C0EBEE6B845B351BD862 /* PinyinSyllables.swift in Sources */ = {isa = PBXBuildFile; fileRef = B387002A9EFC3CDC3B455245 /* PinyinSyllables.swift */; };
@@ -154,6 +156,7 @@
 		FD11AA932294F8B080B5AC01 /* KeyboardRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CBF6766FBB130C6E8D535F6 /* KeyboardRootView.swift */; };
 		4F5E0C7A831305BBDD8C8CBC /* PhraseBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B9FC7F2273877F64D1F8FA8 /* PhraseBarView.swift */; };
 		7E7ACB7EEB03ED7ABBD67DC8 /* AISuggestionPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0072B30A6D8C1B911E482BEF /* AISuggestionPrompt.swift */; };
+		8A92689C3294979CDA54D793 /* ChatPriority.swift in Sources */ = {isa = PBXBuildFile; fileRef = A846448F7117BEEE632E8CCD /* ChatPriority.swift */; };
 		2648174532A42FC94FECE735 /* ContextualSeedTemplates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9939316CA31AB3076553567F /* ContextualSeedTemplates.swift */; };
 		F8E8C4B0FEFCFBC236229136 /* ContextualSuggestion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80072FDA1FC064C72F38FC69 /* ContextualSuggestion.swift */; };
 		5EB6746B3CA87DB4C9C35D5C /* FuzzyPinyin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 315B20D6652F09690A0CF6EF /* FuzzyPinyin.swift */; };
@@ -163,6 +166,7 @@
 		8AC449D978406F97ED9F6585 /* PhraseSuggestion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1FF3A4955FF727E7D4B841 /* PhraseSuggestion.swift */; };
 		A073098D7537A4AE63716F9D /* PinyinDictionary+Seed.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8E9A33C626ABF335A45DBA7 /* PinyinDictionary+Seed.swift */; };
 		0CD7502D52AABCD056AC7344 /* PinyinDictionary.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2155FC22D8522473988520D /* PinyinDictionary.swift */; };
+		26A845192FC352EC5EA2E837 /* PinyinEngine+Initials.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07FCAFE2E2C7132B7E0ED279 /* PinyinEngine+Initials.swift */; };
 		ABA704315A9164F327D42F6B /* PinyinEngine+TypoCorrection.swift in Sources */ = {isa = PBXBuildFile; fileRef = D187E706AC764A493C2EE319 /* PinyinEngine+TypoCorrection.swift */; };
 		B1212008B6DF4E85EB63C0FE /* PinyinEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D4E36CE045EC674511C8771 /* PinyinEngine.swift */; };
 		766B51B0AA613CE6470829DE /* PinyinSyllables.swift in Sources */ = {isa = PBXBuildFile; fileRef = B387002A9EFC3CDC3B455245 /* PinyinSyllables.swift */; };
@@ -342,6 +346,7 @@
 		DCD4D069D0B5DF79008B0142 /* 扩展心跳契约.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "Config/扩展心跳契约.md"; sourceTree = SOURCE_ROOT; };
 		2B8A8F20CB99CE391C782335 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Resources/Assets.xcassets; sourceTree = SOURCE_ROOT; };
 		0072B30A6D8C1B911E482BEF /* AISuggestionPrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/AISuggestionPrompt.swift; sourceTree = SOURCE_ROOT; };
+		A846448F7117BEEE632E8CCD /* ChatPriority.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/ChatPriority.swift; sourceTree = SOURCE_ROOT; };
 		9939316CA31AB3076553567F /* ContextualSeedTemplates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/ContextualSeedTemplates.swift; sourceTree = SOURCE_ROOT; };
 		80072FDA1FC064C72F38FC69 /* ContextualSuggestion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/ContextualSuggestion.swift; sourceTree = SOURCE_ROOT; };
 		315B20D6652F09690A0CF6EF /* FuzzyPinyin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/FuzzyPinyin.swift; sourceTree = SOURCE_ROOT; };
@@ -351,6 +356,7 @@
 		2F1FF3A4955FF727E7D4B841 /* PhraseSuggestion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/PhraseSuggestion.swift; sourceTree = SOURCE_ROOT; };
 		B8E9A33C626ABF335A45DBA7 /* PinyinDictionary+Seed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/IMECore/PinyinDictionary+Seed.swift"; sourceTree = SOURCE_ROOT; };
 		D2155FC22D8522473988520D /* PinyinDictionary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/PinyinDictionary.swift; sourceTree = SOURCE_ROOT; };
+		07FCAFE2E2C7132B7E0ED279 /* PinyinEngine+Initials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/IMECore/PinyinEngine+Initials.swift"; sourceTree = SOURCE_ROOT; };
 		D187E706AC764A493C2EE319 /* PinyinEngine+TypoCorrection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/IMECore/PinyinEngine+TypoCorrection.swift"; sourceTree = SOURCE_ROOT; };
 		3D4E36CE045EC674511C8771 /* PinyinEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/PinyinEngine.swift; sourceTree = SOURCE_ROOT; };
 		B387002A9EFC3CDC3B455245 /* PinyinSyllables.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/PinyinSyllables.swift; sourceTree = SOURCE_ROOT; };
@@ -671,6 +677,7 @@
 			isa = PBXGroup;
 			children = (
 				0072B30A6D8C1B911E482BEF /* AISuggestionPrompt.swift */,
+				A846448F7117BEEE632E8CCD /* ChatPriority.swift */,
 				9939316CA31AB3076553567F /* ContextualSeedTemplates.swift */,
 				80072FDA1FC064C72F38FC69 /* ContextualSuggestion.swift */,
 				315B20D6652F09690A0CF6EF /* FuzzyPinyin.swift */,
@@ -680,6 +687,7 @@
 				2F1FF3A4955FF727E7D4B841 /* PhraseSuggestion.swift */,
 				B8E9A33C626ABF335A45DBA7 /* PinyinDictionary+Seed.swift */,
 				D2155FC22D8522473988520D /* PinyinDictionary.swift */,
+				07FCAFE2E2C7132B7E0ED279 /* PinyinEngine+Initials.swift */,
 				D187E706AC764A493C2EE319 /* PinyinEngine+TypoCorrection.swift */,
 				3D4E36CE045EC674511C8771 /* PinyinEngine.swift */,
 				B387002A9EFC3CDC3B455245 /* PinyinSyllables.swift */,
@@ -941,6 +949,7 @@
 				971CCAD72389EA4513057B65 /* SignatureClock.swift in Sources */,
 				27246486384FFAD9836744F1 /* ViewCompat.swift in Sources */,
 				10F0A718116F7ECC50E30CEB /* AISuggestionPrompt.swift in Sources */,
+				FE414206CE9B6A6161E98A87 /* ChatPriority.swift in Sources */,
 				3EFAC17AD45DE3F75A743760 /* ContextualSeedTemplates.swift in Sources */,
 				95D7CA40851062E930CDE30F /* ContextualSuggestion.swift in Sources */,
 				173FB665298158BCBF768AF6 /* FuzzyPinyin.swift in Sources */,
@@ -950,6 +959,7 @@
 				8E70D64FAEF71136C2A23418 /* PhraseSuggestion.swift in Sources */,
 				CD664DDE477C50C6CFB69067 /* PinyinDictionary+Seed.swift in Sources */,
 				F87FB81A0C6EECBAE7B1DF52 /* PinyinDictionary.swift in Sources */,
+				79399F34F0AB0D95F1E7E496 /* PinyinEngine+Initials.swift in Sources */,
 				D2C0E1F196630520BD5433D9 /* PinyinEngine+TypoCorrection.swift in Sources */,
 				DE5A7C6ADB27BC3A17E70DEC /* PinyinEngine.swift in Sources */,
 				F938C0EBEE6B845B351BD862 /* PinyinSyllables.swift in Sources */,
@@ -1036,6 +1046,7 @@
 				FD11AA932294F8B080B5AC01 /* KeyboardRootView.swift in Sources */,
 				4F5E0C7A831305BBDD8C8CBC /* PhraseBarView.swift in Sources */,
 				7E7ACB7EEB03ED7ABBD67DC8 /* AISuggestionPrompt.swift in Sources */,
+				8A92689C3294979CDA54D793 /* ChatPriority.swift in Sources */,
 				2648174532A42FC94FECE735 /* ContextualSeedTemplates.swift in Sources */,
 				F8E8C4B0FEFCFBC236229136 /* ContextualSuggestion.swift in Sources */,
 				5EB6746B3CA87DB4C9C35D5C /* FuzzyPinyin.swift in Sources */,
@@ -1045,6 +1056,7 @@
 				8AC449D978406F97ED9F6585 /* PhraseSuggestion.swift in Sources */,
 				A073098D7537A4AE63716F9D /* PinyinDictionary+Seed.swift in Sources */,
 				0CD7502D52AABCD056AC7344 /* PinyinDictionary.swift in Sources */,
+				26A845192FC352EC5EA2E837 /* PinyinEngine+Initials.swift in Sources */,
 				ABA704315A9164F327D42F6B /* PinyinEngine+TypoCorrection.swift in Sources */,
 				B1212008B6DF4E85EB63C0FE /* PinyinEngine.swift in Sources */,
 				766B51B0AA613CE6470829DE /* PinyinSyllables.swift in Sources */,

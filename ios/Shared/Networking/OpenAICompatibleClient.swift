@@ -120,15 +120,23 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
         guard !messages.isEmpty else {
             throw AIError.notConfigured
         }
-        let temperature = request.temperature ?? config.temperature
         let maxTokens = resolvedMaxTokens(request)
         var body: [String: Any] = [
             "model": config.model,
             "messages": messages,
-            "temperature": AIProviderConfig.clampTemperature(temperature),
             "max_tokens": AIProviderConfig.clampMaxTokens(maxTokens),
             "stream": stream
         ]
+        // 推理模型**不下发** `temperature`。
+        //
+        // OpenAI 的 o1 / o3 只接受 temperature = 1，给别的值直接 400
+        // `Unsupported value: 'temperature' does not support 0.7 with this model`；
+        // DeepSeek 的 `deepseek-reasoner` 则是「不报错也不生效」。
+        // 两种情况下唯一正确的做法都是别发 —— 少一个字段永远不会导致失败。
+        if !OpenAICompatibleClient.isReasoningModel(config.model) {
+            let temperature = request.temperature ?? config.temperature
+            body["temperature"] = AIProviderConfig.clampTemperature(temperature)
+        }
         // 注意：这里**不加** `stream_options`。
         //
         // 它是 OpenAI 专有参数，大量「OpenAI 兼容」端点并不认识：DeepSeek 部分版本、

@@ -74,7 +74,6 @@ struct KMKeyCap: View {
                 .frame(maxWidth: .infinity)
                 .frame(width: width, height: height)
                 .background(backgroundLayer)
-                .overlay(highlightLayer)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous))
                 .contentShape(Rectangle())
                 .frame(minHeight: Theme.Sizing.minTapTarget)
@@ -118,22 +117,30 @@ struct KMKeyCap: View {
     }
 
     /// 文字 / 图标颜色。
+    ///
+    /// v2：**上档锁定不再用主色**（design/06 §1.5「选中态不用颜色，用字重」）。
+    /// v1 里 Shift 锁定时字母变成主题蓝，在「主色只留 3 处」的规则下这是第 4 处。
+    /// 现在改成 `keyFunctionBackgroundPressed` 深一档的底 + 保持 `text.primary` 字色，
+    /// 由 `shift.fill` 图标本身表达「已锁定」。
     private var foregroundColor: Color {
         switch style {
         case .accent:
             return Theme.textOnAccent
-        case .letter:
-            return isHighlighted ? Theme.accent : Theme.textPrimary
-        case .function, .space:
-            return isHighlighted ? Theme.accent : Theme.textPrimary
+        case .letter, .function, .space:
+            return Theme.textPrimary
         case .ai:
-            return Theme.accent
+            return Theme.textPrimary
         }
     }
 
     // MARK: - 背景与高光
 
     /// 键帽底色。
+    ///
+    /// v2（design/06 §1.6、§5.2）：**没有高光渐变**。真实 iOS 键帽是纯色平片，
+    /// 顶部 45% 白渐变是 v1「塑料感」的主要来源，已删除（`highlightLayer` 整个移除）。
+    /// 唯一的层级手段是 1pt 底边（`shadow.key`，blur = 0），它渲染出来是一条暗缝
+    /// 而不是投影，作用是让密集网格里相邻键帽之间能分辨出来。
     @ViewBuilder
     private var backgroundLayer: some View {
         switch style {
@@ -158,26 +165,6 @@ struct KMKeyCap: View {
         case .ai:
             RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous)
                 .fill(Theme.accentSoft)
-        }
-    }
-
-    /// 顶部 45% 玻璃高光（仅字母与空格键，符合规范 §8 ①）。
-    @ViewBuilder
-    private var highlightLayer: some View {
-        if style == .letter || style == .space {
-            GeometryReader { proxy in
-                LinearGradient(
-                    colors: [Color.white.opacity(0.25), Color.white.opacity(0)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: proxy.size.height * 0.45)
-                .frame(maxHeight: .infinity, alignment: .top)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous))
-                .allowsHitTesting(false)
-            }
-        } else {
-            EmptyView()
         }
     }
 

@@ -45,7 +45,7 @@ public final class PinyinEngine {
     private static let prefixKeyLimit = 40
 
     /// 简拼最多展开的首字母串长度（超长串不再按简拼处理，避免误命中）。
-    private static let maxInitialsQueryLength = 6
+    static let maxInitialsQueryLength = 6
 
     /// 模糊音命中降权系数（精确 1.0、模糊 0.85，约等于「词频低一个数量级」，
     /// 仍能排进候选栏但永远在精确命中之后）。
@@ -142,7 +142,9 @@ public final class PinyinEngine {
             let userTerm = learning.weight(for: scored.text) * Self.userWeight
             let recentTerm = learning.recentBoost(for: scored.text) * Self.recentWeight
             let penalty = Double(max(0, scored.text.count - 1)) * Self.lengthPenalty
-            let score = scored.base + frequencyTerm + userTerm + recentTerm - penalty
+            // 聊天权重乘子只由简拼路径写入（其余路径恒为 1.0），所以这里统一相乘是安全的。
+            let rawScore = scored.base + frequencyTerm + userTerm + recentTerm - penalty
+            let score = rawScore * scored.chatMultiplier
             results.append(IMECandidate(text: scored.text, pinyin: scored.pinyin, score: score, kind: scored.kind))
         }
         results.sort { lhs, rhs in
@@ -151,6 +153,9 @@ public final class PinyinEngine {
             if lhs.pinyin != rhs.pinyin { return lhs.pinyin < rhs.pinyin }
             return lhs.text < rhs.text
         }
+
+        // 简拼第一页兜底：前 5 条若没有聊天高频词，把最靠前的那条提上来。
+        results = promoteChatToFirstPage(results, query: normalized)
 
         var finalCandidates = Array(results.prefix(limit))
         // 输入纠错：原始输入「无候选」或「候选过少」时，追加带 `[纠错]` 标记的候选到尾部。
@@ -265,29 +270,8 @@ public final class PinyinEngine {
 
     // MARK: - 数据来源：简拼
 
-    /// 收集简拼候选（`zg` -> 中国/这个…）。
-    private func appendInitialsCandidates(normalized: String, into pool: inout [String: Scored]) {
-        guard normalized.count >= dictionary.minimumInitialsLength,
-              normalized.count <= dictionary.maximumInitialsLength,
-              normalized.count <= Self.maxInitialsQueryLength
-        else { return }
-
-        let keys = dictionary.pinyinKeys(initials: normalized, limit: 24)
-        for (offset, key) in keys.enumerated() {
-            guard offset < 12 else { break }
-            for entry in dictionary.exactEntries(pinyin: key, limit: 1) {
-                let base = 0.6 - Double(offset) * 0.05
-                insert(
-                    text: entry.text,
-                    pinyin: key,
-                    frequency: entry.frequency,
-                    base: base,
-                    kind: Self.kind(for: entry),
-                    into: &pool
-                )
-            }
-        }
-    }
+    // 简拼候选（`wq` -> 我去）已拆到 `PinyinEngine+Initials.swift`：
+    // 它现在要叠聊天权重、做同结构去重和第一页兜底，逻辑量放不进本文件（单文件 ≤600 行）。
 
     // MARK: - 数据来源：多词组合切分（DP）
 
@@ -454,7 +438,7 @@ public final class PinyinEngine {
     // MARK: - 内部工具
 
     /// 候选池中的一条（打分前的原始信息）。
-    private struct Scored {
+    struct Scored {
         /// 候选文本。
         var text: String
         /// 对应拼音。
@@ -465,24 +449,39 @@ public final class PinyinEngine {
         var base: Double
         /// 候选类型。
         var kind: IMECandidate.Kind
+        /// 聊天权重乘子（`1 + chatPriority`，只有简拼路径会 > 1，其余路径恒为 1）。
+        var chatMultiplier: Double = 1.0
     }
 
     /// 写入候选池（同文本取更优者）。
-    private func insert(
+    func insert(
         text: String,
         pinyin: String,
         frequency: Int,
         base: Double,
         kind: IMECandidate.Kind,
+        chatMultiplier: Double = 1.0,
         into pool: inout [String: Scored]
     ) {
         guard !text.isEmpty else { return }
-        let incoming = Scored(text: text, pinyin: pinyin, frequency: frequency, base: base, kind: kind)
-        if let existing = pool[text] {
+        let incoming = Scored(
+            text: text,
+            pinyin: pinyin,
+            frequency: frequency,
+            base: base,
+            kind: kind,
+            chatMultiplier: chatMultiplier
+        )
+        if var existing = pool[text] {
+            // 同一个词可能同时被「全拼精确」和「简拼」命中：分数取更优的分支，
+            // 聊天乘子取两者较大值，避免简拼的加成被后面的路径覆盖掉。
+            existing.chatMultiplier = max(existing.chatMultiplier, chatMultiplier)
             let existingRank = existing.base + Self.logScore(existing.frequency)
             let incomingRank = incoming.base + Self.logScore(incoming.frequency)
             if incomingRank > existingRank {
                 pool[text] = incoming
+            } else {
+                pool[text] = existing
             }
         } else {
             pool[text] = incoming
@@ -517,13 +516,13 @@ public final class PinyinEngine {
     }
 
     /// 对数词频：`log(freq + 1)`，freq 为 0 时返回 0。
-    private static func logScore(_ frequency: Int) -> Double {
+    static func logScore(_ frequency: Int) -> Double {
         log(Double(max(frequency, 0)) + 1.0)
     }
 
     /// 词条类型映射（判定顺序：纯汉字 → `.word`；纯 ASCII 按有无字母数字分 `.english`/
     /// `.punctuation`；其余按 `emoji`/`punct` 标记归类）。
-    private static func kind(for entry: DictionaryEntry) -> IMECandidate.Kind {
+    static func kind(for entry: DictionaryEntry) -> IMECandidate.Kind {
         if isPureCJK(entry.text) { return .word }
         if isPureASCII(entry.text) {
             let hasAlphanumeric = entry.text.unicodeScalars.contains { scalar in

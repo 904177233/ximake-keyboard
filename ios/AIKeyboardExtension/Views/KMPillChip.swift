@@ -78,8 +78,8 @@ struct KMPillChip: View {
             .frame(minHeight: Theme.Sizing.minTapTarget, alignment: .center)
             .background(background)
             .overlay(border)
-            .clipShape(Capsule())
-            .contentShape(Capsule())
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous))
         }
         .buttonStyle(KMPressableStyle(scale: isSelected ? 1.0 : 0.96, pressedOpacity: isSelected ? 1.0 : 0.94))
         .disabled(!isEnabled)
@@ -137,11 +137,11 @@ struct KMPillChip: View {
         case .tool:
             return Theme.chipText
         case .tone:
-            return isSelected ? Theme.textOnAccent : Theme.textPrimary
+            return Theme.textPrimary
         case .tag:
-            return Theme.accent
+            return Theme.textPrimary
         case .provider:
-            return isSelected ? Theme.accent : Theme.textPrimary
+            return Theme.textPrimary
         }
     }
 
@@ -152,11 +152,11 @@ struct KMPillChip: View {
         case .tool:
             Theme.chipBackground
         case .tone:
-            isSelected ? Theme.accent : Theme.chipBackground.opacity(0.4)
+            isSelected ? Theme.keyFunctionBackground : Theme.chipBackground.opacity(0.4)
         case .tag:
-            Theme.accentSoft
+            Theme.chipBackground
         case .provider:
-            isSelected ? Theme.accentSoft : Theme.chipBackground
+            isSelected ? Theme.keyFunctionBackground : Theme.chipBackground
         }
     }
 
@@ -164,7 +164,8 @@ struct KMPillChip: View {
     @ViewBuilder
     private var border: some View {
         if style == .tool || style == .provider {
-            Capsule().strokeBorder(Theme.chipBorder, lineWidth: Theme.MaterialToken.strokeWidth)
+            RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous)
+                .strokeBorder(Theme.chipBorder, lineWidth: Theme.MaterialToken.strokeWidth)
         } else {
             EmptyView()
         }

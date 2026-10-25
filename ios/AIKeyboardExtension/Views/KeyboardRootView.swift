@@ -140,9 +140,10 @@ private func chatKnobState(for model: KeyboardViewModel) -> KMChatKnobState {
     /// 效用行：候选条与 AI 工具条占同一格，按 `showsCandidateRow` 交叉淡入淡出。
     private var chrome: some View {
         ZStack {
-            KMGlassSurface(level: .bar, cornerRadius: 0, showsHighlight: false) {
-                Color.clear.frame(height: KMLayout.utilityRowHeight)
-            }
+            // v2（design/06 §1.6）：效用行**不用玻璃**，实色 `Theme.candidateBar` + 底部 0.5pt 发丝线。
+            // 键盘背后是任意 App 内容，玻璃会让候选字对比度随背景漂移（白色文档上发灰、
+            // 深色视频上发亮），只有实色才可控。
+            Theme.candidateBar
 
             if showsCandidateRow {
                 CandidateBar(
@@ -187,6 +188,10 @@ private func chatKnobState(for model: KeyboardViewModel) -> KMChatKnobState {
         }
         .frame(height: KMLayout.utilityRowHeight)
         .clipped()
+        .overlay(alignment: .bottom) {
+            // 0.5pt 发丝线：v2 唯一允许的分隔手段（design/06 §1.1「唯一辅助手法：发丝分隔」）。
+            Theme.candidateSeparator.frame(height: 0.5)
+        }
         .animation(Theme.Motion.fastAnimation, value: showsCandidateRow)
     }
 
@@ -271,7 +276,7 @@ private func chatKnobState(for model: KeyboardViewModel) -> KMChatKnobState {
                 .padding(.horizontal, Theme.Spacing.lg)
                 .padding(.vertical, Theme.Spacing.md)
                 .background(Theme.overlayScrim)
-                .clipShape(Capsule())
+                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous))
                 .padding(.bottom, Theme.Spacing.xl)
                 .accessibilityLabel(Text(message))
         }

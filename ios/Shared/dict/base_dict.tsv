@@ -1,4 +1,4 @@
-# 墨语输入法基础词库 v1.1.0 | 拼音	词	词频	flags | 共 33238 条
+# 墨语输入法基础词库 v1.1.0 | 拼音	词	词频	flags | 共 33239 条
 le	了	883634	core
 shi	是	803491	chat,core
 zai	在	727915	core
@@ -1275,6 +1275,7 @@ woshuile	我睡了	7500	chat
 wozaijia	我在家	7500	chat
 wozaikaihui	我在开会	7500	chat
 wozaishangban	我在上班	7500	chat
+xiangqu	想去	7500	chat
 xianguale	先挂了	7500	chat
 youshijian	有时间	7500	chat
 zaimang	在忙	7500	chat

@@ -88,6 +88,12 @@ public final class PinyinDictionary {
     /// 词文本 -> 最高词频（供排序打分快速取词频）。
     private let textFrequency: [String: Int]
 
+    /// 聊天高频词权重表（`chat_priority.tsv`，缺失时为空表）。
+    ///
+    /// 词库词频来自新闻/百科语料，简拼（`wq`）按它排序会先给「完全/武器」；
+    /// 这张可选表是「聊天场景先验」，引擎只在简拼路径上用它纠偏。
+    private let chatPriorityTable: ChatPriorityTable
+
     // MARK: - 首字母索引惰性构建
 
     /// 确保首字母索引已建好（幂等、线程安全，双检锁）。
@@ -136,6 +142,7 @@ public final class PinyinDictionary {
         self.allEntries = sorted
         self.entriesByPinyin = grouped
         self.textFrequency = Self.buildTextFrequency(sorted)
+        self.chatPriorityTable = ChatPriorityTable.load()
         self.sortedPinyinKeys = grouped.keys.sorted()
         self.initialsIndexStorage = nil
         self.initialsLengthRangeStorage = nil
@@ -156,6 +163,7 @@ public final class PinyinDictionary {
         self.allEntries = sorted
         self.entriesByPinyin = grouped
         self.textFrequency = Self.buildTextFrequency(sorted)
+        self.chatPriorityTable = ChatPriorityTable.load()
         self.sortedPinyinKeys = grouped.keys.sorted()
         self.initialsIndexStorage = nil
         self.initialsLengthRangeStorage = nil
@@ -300,6 +308,22 @@ public final class PinyinDictionary {
     public func frequency(of text: String) -> Int {
         textFrequency[text] ?? 0
     }
+
+    /// 某个词的「聊天高频」权重（`chat_priority.tsv`，1.0–3.0）。
+    ///
+    /// 语义与 `frequency(of:)` 互补：词频回答「这个词语料里多常见」，聊天权重回答
+    /// 「聊天里会不会先打它」。只有**仅首字母命中**的简拼路径会用它（见
+    /// `PinyinEngine+Initials.swift`），全拼/精确命中一律不参与，避免先验表改写用户
+    /// 已经明确打出来的音节对应的排序。
+    ///
+    /// - Parameter word: 候选词文本。
+    /// - Returns: 表内权重；不在表里或表文件缺失时返回 0（表示不加成）。
+    public func chatPriority(for word: String) -> Double {
+        chatPriorityTable.weight(for: word)
+    }
+
+    /// 聊天权重表条目数（诊断/单元测试用）。
+    public var chatPriorityCount: Int { chatPriorityTable.count }
 
     // MARK: - 加载：候选路径
 

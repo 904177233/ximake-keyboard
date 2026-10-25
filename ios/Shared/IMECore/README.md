@@ -9,17 +9,19 @@
 | --- | --- | --- |
 | `IMECandidate.swift` | 契约 §4.6 的公共数据结构：`IMECandidate`（含 `isTypoCorrection` 纠错标记）、`DictionaryEntry` | 102 |
 | `PinyinSyllables.swift` | 无声调音节表（421 个音节）+ 音节切分 DP（**自动生成，勿手工编辑**） | 170 |
-| `PinyinDictionary.swift` | 加载 `base_dict.tsv`，建全拼哈希索引与首字母简拼索引 | 576 |
+| `PinyinDictionary.swift` | 加载 `base_dict.tsv` + `chat_priority.tsv`，建全拼哈希索引与首字母简拼索引 | 551 |
 | `PinyinEngine.swift` | 输入串 → 候选：全拼/简拼/混拼/组合切分/前缀预测/模糊音兜底/输入纠错/英文直通 + 排序 | 598 |
+| `PinyinEngine+Initials.swift` | 简拼（首字母）候选：聊天权重、同「首字 + 长度」去重、第一页聊天词兜底（从主文件抽出，避免超 600 行上限） | 168 |
+| `ChatPriority.swift` | 聊天高频词权重表 `chat_priority.tsv` 的解析与加载（缺失静默降级为空表） | 119 |
 | `PinyinEngine+TypoCorrection.swift` | 纠错候选的收集与追加（从主文件抽出，避免超 600 行上限） | 44 |
 | `TypoCorrector.swift` | 输入纠错（§3.9）：复用 `FuzzyPinyin` 规则表 + 编辑距离 1，产出 `Correction` | 192 |
 | `FuzzyPinyin.swift` | 模糊音（§3.8）：9 条规则、变体展开 `variants`/`expand`、词库命中 `matches`、设置单例 `FuzzyPinyinSettings` | 514 |
 | `UserLearningStore.swift` | 选词计频、最近使用环形缓冲（200 条）、自造词，经 `SharedStore` 持久化 | 279 |
 | `PhraseSuggestion.swift` | 加载 `phrases.tsv`，实现"上屏后联想" | 188 |
 | `PhraseLibrary.swift` | 用户短语库 `PhraseItem`/`PhraseLibrary`（占位符展开）+ `ClipboardHistory` | 341 |
-| `ContextualSuggestion.swift` | 上下文联想（§9）：`ContextualSuggestion` 数据模型、`AISuggestionPolicy` 参数、L1 `LocalSuggestionIndex` | 460 |
+| `ContextualSuggestion.swift` | 上下文联想（§9）：`ContextualSuggestion` 数据模型、`AISuggestionPolicy` 参数、L1 `LocalSuggestionIndex`（含句尾语气词匹配） | 492 |
 | `AISuggestionPrompt.swift` | 上下文联想 L2：prompt 构造 `userMessage`/`systemPrompt` + 模型返回文本解析 `parse` | 258 |
-| `ContextualSeedTemplates.swift` | L1 的内置触发词模板（81 组规则、169 条候选短句） | 130 |
+| `ContextualSeedTemplates.swift` | L1 的内置触发词模板（88 组规则、179 条候选短句） | 145 |
 | `IMEKit.swift` | 门面：一次性组装上述组件 + 词库来源诊断（`dictionarySource` / `diagnosticsSummary`）+ 模糊音开关（`fuzzyPinyin` / `fuzzyDiagnosticsSummary`），供 UI 层使用 | 230 |
 
 依赖方向（单向，无环）：

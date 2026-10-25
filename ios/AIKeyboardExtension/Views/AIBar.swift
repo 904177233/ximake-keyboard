@@ -119,10 +119,11 @@ struct AIBar: View {
                         .frame(minHeight: Theme.Sizing.minTapTarget)
                         .background(Theme.chipBackground)
                         .overlay(
-                            Capsule().strokeBorder(Theme.chipBorder, lineWidth: Theme.MaterialToken.strokeWidth)
+                            RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous)
+                                .strokeBorder(Theme.chipBorder, lineWidth: Theme.MaterialToken.strokeWidth)
                         )
-                        .clipShape(Capsule())
-                        .contentShape(Capsule())
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous))
+                        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous))
                     }
                     .buttonStyle(KMPressableStyle(scale: 0.97, pressedOpacity: 0.9))
                     .accessibilityLabel(Text(reason.message))
