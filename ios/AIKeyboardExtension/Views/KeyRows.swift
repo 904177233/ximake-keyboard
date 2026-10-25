@@ -27,6 +27,9 @@ struct KeyRowsView: View {
     /// 按键回调。
     let onTap: (KeyboardKey) -> Void
 
+    /// 空格横向滑动时移动光标（参数为字符偏移，正数向右）。
+    var onMoveCursor: (Int) -> Void = { _ in }
+
     /// 底行最右的小形象配置（`nil` 表示不显示，空格键自动回弹到 194 设计宽）。
     var mascot: KMMascotConfig? = nil
 
@@ -95,11 +98,7 @@ struct KeyRowsView: View {
                 ForEach(Self.thirdRow, id: \.self) { character in
                     letterKey(character, width: keyWidth, height: rowHeight)
                 }
-                functionKey(icon: "delete.left", fallback: "⌫",
-                            width: KMLayout.functionKeyWidth, height: rowHeight,
-                            accessibility: "退格") {
-                    onTap(.backspace)
-                }
+                KMBackspaceKey(height: rowHeight) { onTap(.backspace) }
             }
             .padding(.horizontal, thirdInset)
             .frame(height: rowHeight)
@@ -110,6 +109,7 @@ struct KeyRowsView: View {
                 accent: accent,
                 returnKeyKind: returnKeyKind,
                 mascot: mascot,
+                onMoveCursor: onMoveCursor,
                 onTap: onTap
             )
         }
@@ -141,11 +141,7 @@ struct KeyRowsView: View {
                     onTap(.pageNumbers)
                 }
                 spaceKey(height: rowHeight, flexible: true)
-                functionKey(icon: "delete.left", fallback: "⌫",
-                            width: KMLayout.functionKeyWidth, height: rowHeight,
-                            accessibility: "退格") {
-                    onTap(.backspace)
-                }
+                KMBackspaceKey(height: rowHeight) { onTap(.backspace) }
             }
             .padding(.horizontal, KMLayout.functionKeyWidth)
             .frame(height: rowHeight)
@@ -399,27 +395,30 @@ struct NumberPadView: View {
     ///   - key: 按键。
     ///   - height: 行高。
     private func trailingKey(_ key: KeyboardKey, height: CGFloat) -> some View {
-        let isReturn = key == .newline
-        return Button(action: {
-            if isReturn { KMHaptics.rigid() } else { KMHaptics.function() }
+        // 退格走可长按连续删除的专用按键；回车仍是普通 Button。
+        if key != .newline {
+            return AnyView(KMBackspaceKey(height: height) { onTap(key) })
+        }
+        return AnyView(Button(action: {
+            KMHaptics.rigid()
             onTap(key)
         }) {
             KMIconGlyph(
-                symbol: isReturn ? "return" : "delete.left",
-                fallback: isReturn ? "⏎" : "⌫",
+                symbol: "return",
+                fallback: "⏎",
                 size: 18,
-                tint: isReturn ? Theme.textOnAccent : Theme.textPrimary
+                tint: Theme.textOnAccent
             )
             .frame(width: KMLayout.functionKeyWidth, height: height)
             .background(
                 RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous)
-                    .fill(isReturn ? Theme.accent : Theme.keyFunctionBackground)
+                    .fill(Theme.accent)
             )
             .contentShape(Rectangle())
         }
-        .buttonStyle(KMKeyCapStyle(style: isReturn ? .accent : .function))
-        .accessibilityLabel(Text(isReturn ? "回车" : "退格"))
-        .accessibilityAddTraits(.isKeyboardKey)
+        .buttonStyle(KMKeyCapStyle(style: .accent))
+        .accessibilityLabel(Text("回车"))
+        .accessibilityAddTraits(.isKeyboardKey))
     }
 
     /// 末行：[ABC] [0] [.] [⏎]。
@@ -552,20 +551,7 @@ struct SymbolPadView: View {
             KMKeyCap(label: .symbol("."), style: .letter, width: KMLayout.functionKeyWidth, height: height,
                      action: { onTap(.character(".")) })
 
-            Button(action: {
-                KMHaptics.function()
-                onTap(.backspace)
-            }) {
-                KMIconGlyph(symbol: "delete.left", fallback: "⌫", size: 18, tint: Theme.textPrimary)
-                    .frame(width: KMLayout.functionKeyWidth, height: height)
-                    .background(
-                        RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous)
-                            .fill(Theme.keyFunctionBackground)
-                    )
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(KMKeyCapStyle(style: .function))
-            .accessibilityLabel(Text("退格"))
+            KMBackspaceKey(height: height) { onTap(.backspace) }
         }
         .frame(height: height)
     }

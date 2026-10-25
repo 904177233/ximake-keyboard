@@ -50,6 +50,9 @@ struct KeyRowsBottomRow: View {
     /// 按键回调。
     let onTap: (KeyboardKey) -> Void
 
+    /// 空格横向滑动时移动光标（参数为字符偏移，正数向右）。
+    var onMoveCursor: (Int) -> Void = { _ in }
+
     var body: some View {
         HStack(spacing: KMLayout.keyGap) {
             numberKey
@@ -71,47 +74,48 @@ struct KeyRowsBottomRow: View {
     /// 右下角的位置原本放的是地球键。用户反馈「为什么要有这个，而没有数字键」——
     /// 主流输入法（微信、搜狗、Gboard）左下角都是 `123`，切键盘收进长按里。
     ///
-    /// v1.4 修真实 bug（用户反馈「数字键盘完全没有用」）：上一版是 `Button` +
-    /// `.highPriorityGesture(LongPressGesture)`，而 **highPriorityGesture 会抢走
-    /// Button 的 tap** —— 结果只有长按 0.45s 有效，点按永远收不到 `.pageNumbers`。
-    /// 这里改成不用 Button、自己用 `LongPressGesture.exclusively(before: TapGesture)`
-    /// 组合：先等长按，松手够快就判定为点按。两条路径都显式发事件，不再互相抢。
+    /// ## v1.7 修（用户第三次反馈「数字键还是不能用」）
+    /// 前两次都试图用 SwiftUI 的手势组合解决，**都错了**：
+    /// · v1.4 用 `Button` + `.highPriorityGesture(LongPressGesture)` → 长按抢走 tap，只长按有效；
+    /// · v1.6 改 `LongPressGesture().exclusively(before: TapGesture())` → **仍然点不动**。
+    ///   原因：长按手势在「快速点击」时不会立即判负，而是继续等待到 0.45s；
+    ///   用户抬手时 tap 的触摸序列已经结束，`TapGesture` 永远等不到完整的按下-抬起，
+    ///   于是 quick tap 被丢弃。
+    /// · v1.7 改用 `KMPressKey`：它用 `DragGesture(minimumDistance: 0)` 自己拿
+    ///   「按下 / 持续 / 抬手」的完整时序，**按下瞬间就发点按事件**，
+    ///   超过 0.42s 才升级成长按。两个行为不再互相竞争。
     private var numberKey: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous)
-                .fill(Theme.keyFunctionBackground)
-            Text("123")
-                .font(Theme.fontCaption)
-                .foregroundColor(Theme.textPrimary)
+        KMPressKey(
+            onPress: {
+                KMHaptics.function()
+                onTap(.pageNumbers)
+            },
+            onLongPress: { onTap(.globe) },
+            accessibilityLabel: "数字与符号",
+            accessibilityHint: "长按切换输入法"
+        ) {
+            ZStack {
+                RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous)
+                    .fill(Theme.keyFunctionBackground)
+                Text("123")
+                    .font(Theme.fontCaption)
+                    .foregroundColor(Theme.textPrimary)
+            }
+            .frame(width: KMLayout.functionKeyWidth, height: height)
         }
-        .frame(width: KMLayout.functionKeyWidth, height: height)
-        .contentShape(Rectangle())
-        .gesture(
-            LongPressGesture(minimumDuration: 0.45)
-                .onEnded { _ in
-                    KMHaptics.function()
-                    onTap(.globe)
-                }
-                .exclusively(
-                    before: TapGesture().onEnded {
-                        KMHaptics.function()
-                        onTap(.pageNumbers)
-                    }
-                )
-        )
-        .accessibilityElement()
-        .accessibilityAddTraits(.isButton)
-        .accessibilityLabel(Text("数字与符号"))
-        .accessibilityHint(Text("长按切换输入法"))
         .accessibilityAddTraits(.isKeyboardKey)
     }
 
-    /// 空格键（弹性宽度，吸收取整差）。
+    /// 空格键（弹性宽度，吸收取整差）：点按输入空格，**横向滑动移动光标**。
+    ///
+    /// 空格滑移是 Gboard / 微信 / 搜狗 的通用手势（用户反馈「移动光标也没做好」）。
+    /// 用 `KMSpaceKey` 而不是 `Button`：后者拿不到全程位移。
     private var spaceKey: some View {
-        Button(action: {
-            KMHaptics.key()
-            onTap(.space)
-        }) {
+        KMSpaceKey(
+            onSpace: { onTap(.space) },
+            onMoveCursor: { offset in onMoveCursor(offset) },
+            accessibilityLabel: "空格，可左右滑动移动光标"
+        ) {
             Text("空格")
                 .font(Theme.fontBody)
                 .foregroundColor(Theme.textSecondary)
@@ -121,11 +125,7 @@ struct KeyRowsBottomRow: View {
                     RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous)
                         .fill(Theme.keyBackground)
                 )
-                .contentShape(Rectangle())
         }
-        .buttonStyle(KMKeyCapStyle(style: .space))
-        .accessibilityLabel(Text("空格"))
-        .accessibilityAddTraits(.isKeyboardKey)
     }
 
     /// 表情键（切到 emoji 页）。

@@ -204,6 +204,25 @@ struct CandidateBar: View {
                     .font(isHighlighted ? Theme.fontHeadline : Theme.fontCandidate)
                     .foregroundColor(isHighlighted ? accent : Theme.textPrimary)
                     .lineLimit(1)
+                // 纠错候选的角标。
+                //
+                // v1.7 修：`isTypoCorrection` 之前**只在设置页文案里被提到**，候选栏一行都没渲染，
+                // 用户看到一条奇怪的词排在最前面却不知道它是「打错字纠出来的」，所以
+                // 反馈「纠错基本用不了」。这里补一个极简角标：不占位、不换行，只用小字 + 次级色，
+                // 与候选文字之间留 2pt，避免抢走词本身的可读性。
+                if candidate.isTypoCorrection {
+                    Text("纠错")
+                        .font(Theme.fontCaption)
+                        .foregroundColor(Theme.textTertiary)
+                        .lineLimit(1)
+                        .padding(.horizontal, Theme.Spacing.xs)
+                        .padding(.vertical, 1)
+                        .background(
+                            RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous)
+                                .fill(Theme.textTertiary.opacity(Theme.MaterialToken.strokeWidth * 0.12))
+                        )
+                        .accessibilityHidden(true)
+                }
             }
             .padding(.horizontal, Theme.Spacing.sm)
             .frame(minWidth: Theme.Sizing.candidateItemMinWidth)

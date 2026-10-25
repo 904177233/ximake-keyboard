@@ -158,7 +158,7 @@ public final class PinyinEngine {
         results = promoteChatToFirstPage(results, query: normalized)
 
         var finalCandidates = Array(results.prefix(limit))
-        // 输入纠错：原始输入「无候选」或「候选过少」时，追加带 `[纠错]` 标记的候选到尾部。
+        // 输入纠错：整串没有精确词条（= 很可能打错一个字母）时插到最前面，否则只追加到尾部。
         appendTypoCorrections(normalized: normalized, limit: limit, into: &finalCandidates)
         return finalCandidates
     }

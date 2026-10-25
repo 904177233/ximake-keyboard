@@ -250,6 +250,7 @@ private func chatKnobState(for model: KeyboardViewModel) -> KMChatKnobState {
             shiftState: model.shiftState,
             isLandscape: model.isLandscape,
             onTap: { key in model.tap(key) },
+            onMoveCursor: { offset in model.moveCursor(byCharacterOffset: offset) },
             mascot: mascotConfig,
             accent: themeAccent,
             returnKeyKind: model.returnKeyKind

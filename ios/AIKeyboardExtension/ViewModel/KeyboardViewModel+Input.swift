@@ -57,9 +57,29 @@ extension KeyboardViewModel {
         }
     }
 
+    // MARK: - 光标移动
+
+    /// 左右移动光标（空格键横向滑动）。
+    ///
+    /// - Parameter offset: 正数向右、负数向左，单位是**字符**。
+    ///
+    /// 为什么用 `adjustTextPosition(byCharacterOffset:)` 而不是自己算 `selectedTextRange`：
+    /// 它是 `UITextDocumentProxy` 提供的官方接口，宿主输入框（UITextField / UITextView /
+    /// 第三方自绘输入框）都按自己的换行与字素簇规则处理，自己算 range 在中文、
+    /// emoji（多码点字素簇）、换行处会错位。
+    ///
+    /// 组字过程中不移动光标：marked text 还在时移动会打断组字，
+    /// 而且此时光标位置由 `setMarkedText` 的 selectedRange 管。
+    func moveCursor(byCharacterOffset offset: Int) {
+        guard offset != 0 else { return }
+        guard composing.isEmpty else { return }
+        proxy?.adjustTextPosition(byCharacterOffset: offset)
+        // 移完光标刷新上下文：AI 面板的「当前输入框内容」要跟着变。
+        reloadContextPreview()
+    }
+
     /// Shift 循环：off → on → locked → off。
-    func handleShift() {
-        switch shiftState {
+    func handleShift() {        switch shiftState {
         case .off:
             shiftState = .on
         case .on:
