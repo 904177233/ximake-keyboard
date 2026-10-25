@@ -73,7 +73,11 @@ _user32.GetClassNameW.restype = ctypes.c_int
 _user32.GetClassNameW.argtypes = [wt.HWND, ctypes.c_wchar_p, ctypes.c_int]
 
 _user32.SendMessageW.restype = ctypes.c_ssize_t
-_user32.SendMessageW.argtypes = [wt.HWND, ctypes.c_uint, ctypes.c_wchar_p, ctypes.c_wchar_p]
+# SendMessageW 的 wParam 是整数、lParam 才可能是字符串指针，
+# 统一声明成 c_size_t / c_void_p，由调用点自己 ctypes.cast 出指针。
+# （早前把 wParam 也声明成 c_wchar_p，导致 WM_SETTEXT 传 0 时抛
+#   TypeError: int object cannot be interpreted as ctypes.c_wchar_p）
+_user32.SendMessageW.argtypes = [wt.HWND, ctypes.c_uint, ctypes.c_size_t, ctypes.c_void_p]
 
 _EnumWindowsProc = ctypes.WINFUNCTYPE(ctypes.c_bool, wt.HWND, wt.LPARAM)
 _user32.EnumWindows.argtypes = [_EnumWindowsProc, wt.LPARAM]
@@ -124,11 +128,11 @@ def fill_dialog_and_open(hwnd, path):
     if not edit:
         return "NO_EDIT"
 
-    _user32.SendMessageW(edit, WM_SETTEXT, 0, path)
+    _user32.SendMessageW(edit, WM_SETTEXT, 0, ctypes.cast(ctypes.c_wchar_p(path), ctypes.c_void_p))
 
     # 回读确认
     buf = ctypes.create_unicode_buffer(1024)
-    _user32.SendMessageW(edit, WM_GETTEXT, 1024, ctypes.cast(buf, ctypes.c_wchar_p))
+    _user32.SendMessageW(edit, WM_GETTEXT, 1024, ctypes.cast(buf, ctypes.c_void_p))
     if buf.value.strip().lower() != path.strip().lower():
         return "SETTEXT_FAILED"
 
