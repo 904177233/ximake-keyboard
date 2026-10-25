@@ -223,7 +223,13 @@ final class KeyboardViewController: UIInputViewController {
         }
         model.onDismissKeyboard = { [weak self] in
             guard let self else { return }
-            self.advanceToNextInputMode()
+            // 收起键盘 = 放弃第一响应者，让宿主 App 自己降下键盘。
+            //
+            // v1.6 之前这里调的是 `advanceToNextInputMode()`，语义完全错误：
+            // 那是「切换到下一个输入法」，用户点「收起」会被强制换到别的键盘
+            // （docs/09 §4 第 5 条审计时记下的缺陷）。`dismissKeyboard()` 才是
+            // `UIInputViewController` 提供的「收起」动作。
+            self.dismissKeyboard()
         }
         model.onHeightChangeNeeded = { [weak self] in
             guard let self else { return }
