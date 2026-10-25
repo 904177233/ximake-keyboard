@@ -115,15 +115,11 @@ final class ConnectionTester: ObservableObject {
                     state = .idle
                     return
                 }
-                // 收到过思维链却因「正文为空」抛错 → 仍然算连通（同上理由）。
-                if sawReasoning, case AIError.contentRejected = wrapped {
-                    let elapsed = Int(Date().timeIntervalSince(startedAt) * 1000)
-                    state = .success(
-                        sample: "（这是推理模型，探活只收到思维链，正文需在聊天框里发长一点的问题才会出现）",
-                        latencyMs: elapsed
-                    )
-                    return
-                }
+                // 说明：v2.3 之前这里还有一段「收到过思维链但正文为空 → 判成功」的分支，
+                // 依赖流式循环里的 `sawReasoning` 局部变量。改成非流式 `complete()` 之后
+                // 不再有流循环，该变量也就不存在了；而「正文为空」的情况已经由上面
+                // `AIError.contentRejected` 那个分支覆盖（`complete()` 内部会把空正文
+                // 转成 `contentRejected`），所以这段分支直接删除，不保留死代码。
                 state = .failure(
                     message: ErrorPresenter.message(error),
                     suggestion: ErrorPresenter.suggestion(error)
