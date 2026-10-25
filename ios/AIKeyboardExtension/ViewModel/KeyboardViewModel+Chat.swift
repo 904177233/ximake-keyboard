@@ -314,7 +314,11 @@ extension KeyboardViewModel {
                     if delta.isFinal { break }
                 }
                 if Task.isCancelled { return }
-                self.finishChatStream(messageID: placeholderID, receivedAny: receivedAny)
+                self.finishChatStream(
+                    messageID: placeholderID,
+                    receivedAny: receivedAny,
+                    sawReasoning: sawReasoning
+                )
             } catch {
                 if Task.isCancelled { return }
                 let wrapped = AIError.wrap(error)
@@ -343,8 +347,9 @@ extension KeyboardViewModel {
     /// 流式正常结束。
     /// - Parameters:
     ///   - messageID: 消息 ID。
-    ///   - receivedAny: 是否收到过内容。
-    func finishChatStream(messageID: String, receivedAny: Bool) {
+    ///   - receivedAny: 是否收到过正文内容。
+    ///   - sawReasoning: 是否收到过思维链（推理模型的思维链不是正文）。
+    func finishChatStream(messageID: String, receivedAny: Bool, sawReasoning: Bool = false) {
         chatTask = nil
         chatIsBusy = false
         if let index = chatMessages.firstIndex(where: { $0.id == messageID }) {
