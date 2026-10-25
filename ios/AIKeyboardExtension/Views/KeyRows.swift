@@ -109,8 +109,8 @@ struct KeyRowsView: View {
                 accent: accent,
                 returnKeyKind: returnKeyKind,
                 mascot: mascot,
-                onMoveCursor: onMoveCursor,
-                onTap: onTap
+                onTap: onTap,
+                onMoveCursor: onMoveCursor
             )
         }
         .frame(height: KMLayout.keyRowsHeight, alignment: .top)
