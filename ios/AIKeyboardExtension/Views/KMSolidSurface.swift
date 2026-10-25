@@ -28,7 +28,7 @@ struct KMSolidSurface<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        content
+        content()
             .background(Theme.surface)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay {
