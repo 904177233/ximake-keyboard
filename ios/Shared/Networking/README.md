@@ -103,6 +103,12 @@ public enum AIClientFactory {
 >
 > 流式请求的 `Accept` 头会由 `HTTPTransport.makeJSONRequest(accept:)` 设成
 > `text/event-stream`，非流式仍是 `application/json`。
+>
+> **推理模型的 `max_tokens` 会自动兜底到 4096。** 当 `request.maxTokens` 为 `nil`
+> （调用方不指定）且模型名命中推理模型特征（`reasoner` / `-r1` / `o1` / `o3` / `qwq` /
+> `thinking` / 以 `-r` 结尾）时，实际发出的是 `max(config.maxTokens, 4096)` —— 思维链会
+> 先吃掉 token 预算，预算不够时正文一个字都吐不出来。调用方**显式**给了 `maxTokens`
+> 时一律尊重（探活探针只发 `"hi"`，要的就是小预算快返回）。
 
 响应（SSE，每个 `data:` 一行一个 JSON）：
 
@@ -360,11 +366,20 @@ PresetProviders.isImageOnly(id:)       // preset-seedream / preset-wanx → true
 这样 `ConfigSnapshot.imageProviderID` 指向预设时跨设备、跨次启动都稳定；
 用户在编辑器里「另存为自定义」时才生成新 UUID。
 
-### 5.2 忽略 `reasoning_content`
+### 5.2 推理模型的 `reasoning_content`（思维链）
 
-DeepSeek-R1 等推理模型会在 `delta.reasoning_content` 里输出思维链。默认**不展示**
-（`OpenAICompatibleClient(config:apiKey:capturesReasoning:)` 可开启保留），
-避免把「让我想想……」这种内心独白插进用户输入框。
+DeepSeek `deepseek-reasoner` / o1 / o3 / QwQ 等推理模型会**先在 `delta.reasoning_content`
+里长时间输出思维链，之后才开始输出 `content`**。本客户端的处理：
+
+- **始终**解析 `reasoning_content`，通过 `ChatDelta.reasoning` 单独交给上层；
+  **不**拼进 `ChatDelta.text`（否则打字机会把「让我想想……」这种内心独白当答案打在输入框里）；
+- 推理模型的 `max_tokens` 兜底 4096（见 §3.1 的说明），避免预算被思维链吃光、正文为空；
+- 正文为空时按优先级抛 `AIError.contentRejected`：
+  1. `finish_reason == "length"` → 「输出被「最大回复长度」截断了……」；
+  2. 只收到过思维链 → 「这是推理模型，本次回复全部用在思维链上了……」；
+  3. 两者都不是 → 保持原来的「服务商没有返回内容」（不抛错，由 UI 文案兜底）。
+
+UI 侧建议：`ChatDelta.reasoning` 只用于「思考中…」这类状态提示，不要把它当正文展示。
 
 ### 5.3 取消传播
 

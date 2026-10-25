@@ -296,6 +296,7 @@ public enum PromptLibrary {
     // MARK: - AI 对话（design/04 §3）
 
     /// 对话单次回答的 token 上限（中文约 300~400 字，够键盘内对话用）。
+    /// 对话的默认输出上限（512）。v1.3 起真实调用点改传 `nil`（由客户端按模型兜底）。
     public static let chatMaxTokens: Int = 512
 
     /// 对话的系统提示词（`builtin.chat.assistant` 渲染后的成品）。

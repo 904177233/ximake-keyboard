@@ -33,6 +33,9 @@ struct KeyRowsView: View {
     /// 主题主色（回车键用；design/05 §1.1 允许的 4 处主色之一）。
     var accent: Color = Theme.accent
 
+    /// 回车键语义（聊天框=发送、搜索框=搜索、普通框=换行）。
+    var returnKeyKind: KMReturnKeyKind = .newline
+
     var body: some View {
         GeometryReader { proxy in
             let width = proxy.size.width
@@ -105,6 +108,7 @@ struct KeyRowsView: View {
                 isLandscape: isLandscape,
                 height: rowHeight,
                 accent: accent,
+                returnKeyKind: returnKeyKind,
                 mascot: mascot,
                 onTap: onTap
             )
@@ -441,6 +445,24 @@ struct NumberPadView: View {
             }
             .buttonStyle(KMKeyCapStyle(style: .function))
             .accessibilityLabel(Text("字母键盘"))
+
+            // 地球键放在数字页：字母页左下角换成了 123 键（切键盘收进长按），
+            // 这里保留一颗显式的切换键，保证任何时候都能切走（Apple 要求必须提供）。
+            Button(action: {
+                KMHaptics.function()
+                onTap(.globe)
+            }) {
+                KMIconGlyph(symbol: "globe", fallback: "🌐", size: 17, tint: Theme.textPrimary)
+                    .frame(maxWidth: .infinity)
+                    .frame(width: KMLayout.functionKeyWidth, height: height)
+                    .background(
+                        RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous)
+                            .fill(Theme.keyFunctionBackground)
+                    )
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(KMKeyCapStyle(style: .function))
+            .accessibilityLabel(Text("切换键盘"))
 
             KMKeyCap(label: .character("0"), style: .letter, width: nil, height: height,
                      action: { onTap(.character("0")) })

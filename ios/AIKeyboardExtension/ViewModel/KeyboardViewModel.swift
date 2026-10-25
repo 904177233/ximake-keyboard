@@ -91,6 +91,13 @@ public final class KeyboardViewModel: ObservableObject {
     /// 是否展示「请开启完全访问」说明卡。
     @Published public internal(set) var showsFullAccessCard: Bool = false
 
+    /// 回车键语义（跟随宿主输入框的 `returnKeyType`）。
+    ///
+    /// 聊天框 → `.send`（显示「发送」并用主题主色），搜索框 → `.search`，
+    /// 普通多行框 → `.newline`（中性色 + ⏎ 图标）。由 `refreshReturnKeyKind()`
+    /// 在 `activate()` 与宿主输入框切换（`textDidChange`）时刷新。
+    @Published public internal(set) var returnKeyKind: KMReturnKeyKind = .newline
+
     // MARK: - AI 面板
 
     /// 面板文本框内容。
@@ -299,9 +306,16 @@ public final class KeyboardViewModel: ObservableObject {
         hasFullAccess = KMFullAccessProbe.likelyAvailable()
         refreshAvailability()
         reloadContextPreview()
+        refreshReturnKeyKind()
         recordActiveHeartbeat()
         isReady = true
     }
+
+    /// 刷新回车键语义（读宿主输入框的 `returnKeyType`）。
+    ///
+    /// 由 `activate()` 与 `KeyboardViewController.textDidChange(_:)` 调用 —— 切到别的
+    /// 输入框（聊天框 ↔ 搜索框 ↔ 普通文本框）时 `returnKeyType` 会变，键面要跟着变。
+    /// 实现见 `KeyboardViewModel+Text.swift`。
 
     /// 切换模糊音开关（设置页 Toggle 调用）。
     ///
@@ -567,29 +581,6 @@ public final class KeyboardViewModel: ObservableObject {
         showsFullAccessCard = shows
     }
 
-    // MARK: - 文本写入
-
-    /// 直接上屏一段文本（不含组字状态）。
-    /// - Parameter text: 待上屏文本。
-    public func insertText(_ text: String) {
-        guard !text.isEmpty else { return }
-        proxy?.insertText(text)
-        onInsert?(text)
-    }
-
-    /// 清空组字状态并刷新候选。
-    public func clearComposing() {
-        composing = ""
-        candidates = []
-        highlightedCandidateIndex = 0
-        candidatePageIndex = 0
-        proxy?.unmarkText()
-    }
-
-    /// 刷新上下文预览（AI 面板打开时调用）。
-    public func reloadContextPreview() {
-        let context = contextTail
-        panelContextPreview = context
-        showsContextTruncationHint = proxyContext.count > Self.contextCharacterLimit
-    }
+    // 文本写入相关的 `insertText` / `clearComposing` / `reloadContextPreview` 见
+    // `KeyboardViewModel+Text.swift`（本文件已接近 600 行上限，拆出去更易维护）。
 }

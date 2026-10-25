@@ -111,10 +111,13 @@ final class PlaygroundEngine: ObservableObject {
         }
 
         let temperature = resolvedTemplate?.temperature ?? provider.temperature
+        // maxTokens 传 nil：由 `OpenAICompatibleClient.resolvedMaxTokens` 按模型兜底 ——
+        // 推理模型（deepseek-reasoner 等）的思维链会吃掉大量 token，
+        // 写死服务商默认的 1024 会导致正文全空、只看到「服务商没有返回内容」。
         let request = ChatRequest(
             messages: messages,
             temperature: temperature,
-            maxTokens: provider.maxTokens,
+            maxTokens: nil,
             stream: true
         )
         let client = AIClientFactory.makeLLM(config: provider, apiKey: apiKey)

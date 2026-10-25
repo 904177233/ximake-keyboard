@@ -136,12 +136,17 @@ struct PlaygroundView: View {
                             .allowsHitTesting(false)
                     }
 
-                    TextEditor(text: $inputText)
+                    // 用 `TextField(axis: .vertical)` 而不是 `TextEditor`：
+                    // 第三方键盘的 marked text（拼音组字串）在 `TextEditor`（UITextView）里
+                    // 不会随 `insertText` 被替换掉，用户会看到「输入框里同时有 wq 和候选词」、
+                    // 字数比实际多，甚至整段文字不刷新。`TextField` 走 UITextField 路径，
+                    // 对 marked text 的处理与系统键盘一致（iOS 16+ 支持纵向多行）。
+                    TextField("", text: $inputText, axis: .vertical)
                         .font(AppFont.body)
                         .foregroundColor(Theme.textPrimary)
-                        .frame(minHeight: AppMetrics.playgroundInputHeight)
+                        .lineLimit(4...12)
+                        .frame(minHeight: AppMetrics.playgroundInputHeight, alignment: .topLeading)
                         .focused($isInputFocused)
-                        .scrollContentBackgroundHiddenCompat()
                         .onChange(of: inputText) { newValue in
                             if newValue.count > Self.inputLimit {
                                 inputText = String(newValue.prefix(Self.inputLimit))

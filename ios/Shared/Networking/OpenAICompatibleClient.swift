@@ -19,16 +19,21 @@ import Foundation
 /// - Body：`{"model": ..., "messages": [...], "temperature": ..., "max_tokens": ..., "stream": true}`
 /// - 流式响应：`data: {"choices":[{"delta":{"content":"..."},"finish_reason":null}]}`，末尾 `data: [DONE]`
 ///
-/// 关于 `reasoning_content`：DeepSeek Reasoner 等推理模型会在 delta 里附带思维链，
-/// 本客户端默认**忽略**（不拼接进正文），仅当 `capturesReasoning == true` 时以
-/// `ChatDelta.text` 之外的旁路回调收集（供调试页展示）。
+/// 关于 `reasoning_content`：DeepSeek Reasoner / o1 / o3 / QwQ 等推理模型会在 delta 里
+/// 附带思维链，并且**先长时间只吐思维链、之后才吐正文**。本客户端始终把它解析出来，
+/// 通过 `ChatDelta.reasoning` 旁路交给上层（不会拼进 `text`，避免把「内心独白」当答案），
+/// 同时给推理模型的 `max_tokens` 兜底（见 `resolvedMaxTokens`），避免预算全被思维链吃掉、
+/// 正文一个字都不剩。
 public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
 
     /// 服务商配置（不可变，值类型拷贝）。
     private let config: AIProviderConfig
     /// 明文的 API Key。
     private let apiKey: String
-    /// 是否收集推理模型的 `reasoning_content`（默认 false，仅调试用）。
+    /// 是否收集推理模型的 `reasoning_content`。
+    ///
+    /// - Note: 保留此参数只为源码兼容（既有调用方仍在传），行为上**已不再生效**：
+    ///   思维链现在一律解析并转发到 `ChatDelta.reasoning`，由 UI 自行决定是否展示。
     private let capturesReasoning: Bool
     /// 复用的 URLSession。
     private let session: URLSession
@@ -116,7 +121,7 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
             throw AIError.notConfigured
         }
         let temperature = request.temperature ?? config.temperature
-        let maxTokens = request.maxTokens ?? config.maxTokens
+        let maxTokens = resolvedMaxTokens(request)
         var body: [String: Any] = [
             "model": config.model,
             "messages": messages,
@@ -133,6 +138,44 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
         // 而流式侧的 usage 本来就没被使用（见 `runStream` 里的 `_ = usage`），
         // 去掉它对功能零损失，换来的是对所有兼容端点可用。
         return body
+    }
+
+    /// 计算本次请求的 `max_tokens`。
+    ///
+    /// 推理模型（`deepseek-reasoner`、`o1` / `o3`、`QwQ`、`*-thinking` …）会**先**把
+    /// token 预算全部花在思维链（`reasoning_content`）上，思维链收敛之后才开始产出正文。
+    /// 配置里的默认预算（1024）经常连思维链都不够，于是正文一个字都拿不到，
+    /// 用户看到的就是「服务商没有返回内容」—— 明明接口是通的。
+    ///
+    /// 规则：
+    /// - 调用方**显式**给了 `maxTokens` → 原样尊重（探活探针只发 "hi"，要的就是小预算快返回）；
+    /// - 调用方没给、且模型命中推理模型特征 → `max(config.maxTokens, 4096)`，给正文留出预算；
+    /// - 其余情况 → `config.maxTokens`。
+    private func resolvedMaxTokens(_ request: ChatRequest) -> Int {
+        if let explicit = request.maxTokens {
+            return explicit
+        }
+        guard OpenAICompatibleClient.isReasoningModel(config.model) else {
+            return config.maxTokens
+        }
+        return max(config.maxTokens, 4096)
+    }
+
+    /// 模型名是否属于会用 `reasoning_content` 输出思维链的推理模型。
+    ///
+    /// 特征（全部小写匹配）：含 `reasoner` / `qwq` / `thinking`、含 `-r1`、以 `-r` 结尾，
+    /// 或含有独立的 `o1` / `o3` 词（`o1`、`o1-mini`、`o3-mini`）。
+    /// `o1` / `o3` 先按分隔符切词再比对，避免把 `gpt-4o-mini` 这类名字误判进推理分支。
+    static func isReasoningModel(_ model: String) -> Bool {
+        let lower = model.lowercased()
+        if lower.contains("reasoner") || lower.contains("qwq") || lower.contains("thinking") {
+            return true
+        }
+        if lower.contains("-r1") || lower.hasSuffix("-r") {
+            return true
+        }
+        let tokens = lower.split(whereSeparator: { "-/.:_ ".contains($0) })
+        return tokens.contains { $0 == "o1" || $0 == "o3" }
     }
 
     /// 执行流式请求。
@@ -174,15 +217,19 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
 
         var parser = SSEParser()
         var accumulatedFinishReason: String?
-        var didEmitFinal = false
         var didEmitText = false
+        // 本次流里是否收到过思维链（推理模型可能只有思维链、正文为空）。
+        var sawReasoning = false
         let promptTokens = estimatePromptTokens(request)
         // 兜底用：如果服务端根本没按 SSE 返回（有些「OpenAI 兼容」网关会忽略
         // `stream: true`，直接一次性吐一个完整 JSON），这里要把原始字节留下来，
         // 结束时按非流式响应再解析一次。否则用户只会看到「服务商没有返回内容」。
         var rawBuffer = Data()
 
-        for try await line in bytes.lines {
+        // 带标签的循环：收到 `[DONE]` 时跳到循环外，让「正文为空」的判定统一在末尾执行。
+        // 早期版本在这里直接 finish 并 return，于是「推理模型只吐了思维链」被当成正常结束，
+        // 上层只能显示一句「服务商没有返回内容」。
+        streamLoop: for try await line in bytes.lines {
             try Task.checkCancellation()
             rawBuffer.append(Data((line + "\n").utf8))
             if rawBuffer.count > 1024 * 1024 {
@@ -191,18 +238,18 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
             let events = parser.feed(Data((line + "\n").utf8))
             for event in events {
                 if event.isDone {
-                    if !didEmitFinal {
-                        didEmitFinal = true
-                        continuation.yield(ChatDelta(text: "", isFinal: true))
-                    }
-                    continuation.finish()
-                    return
+                    break streamLoop
                 }
                 guard let payload = parseStreamPayload(event.data) else { continue }
                 if payload.finishReason != nil {
                     accumulatedFinishReason = payload.finishReason
                 }
-                // 忽略 reasoning_content（推理模型思维链），仅正文进入流。
+                // 思维链单独走 `ChatDelta.reasoning`：不拼进正文（否则打字机会把「思考过程」
+                // 当答案显示），也不再像以前那样直接丢弃（丢弃的结果就是正文一片空白）。
+                if !payload.reasoning.isEmpty {
+                    sawReasoning = true
+                    continuation.yield(ChatDelta(text: "", isFinal: false, reasoning: payload.reasoning))
+                }
                 if !payload.text.isEmpty {
                     didEmitText = true
                     continuation.yield(ChatDelta(text: payload.text, isFinal: false))
@@ -218,6 +265,10 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
         for event in parser.flush() {
             if event.isDone { break }
             guard let payload = parseStreamPayload(event.data) else { continue }
+            if !payload.reasoning.isEmpty {
+                sawReasoning = true
+                continuation.yield(ChatDelta(text: "", isFinal: false, reasoning: payload.reasoning))
+            }
             if !payload.text.isEmpty {
                 didEmitText = true
                 continuation.yield(ChatDelta(text: payload.text, isFinal: false))
@@ -231,16 +282,51 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
             if trimmed.first == UInt8(ascii: "{") {
                 let payload = try parseCompletion(data: rawBuffer)
                 if !payload.text.isEmpty {
+                    didEmitText = true
                     continuation.yield(ChatDelta(text: payload.text, isFinal: false))
                 }
             }
         }
-        _ = accumulatedFinishReason
+        // 正文为空时给出「用户能照着改」的中文错误，而不是让上层只显示「服务商没有返回内容」。
+        try throwIfNoTextEmitted(
+            sawText: didEmitText,
+            sawReasoning: sawReasoning,
+            finishReason: accumulatedFinishReason
+        )
         _ = promptTokens
-        if !didEmitFinal {
-            continuation.yield(ChatDelta(text: "", isFinal: true))
-        }
+        // 统一在这里补结束标记：`[DONE]` 分支不再自己 yield，避免出现两片 final。
+        continuation.yield(ChatDelta(text: "", isFinal: true))
         continuation.finish()
+    }
+
+    /// 「正文为空」的统一判定（按优先级抛错）。
+    ///
+    /// 推理模型的 token 预算被思维链吃光时，服务端照样返回 200、照样正常结束，
+    /// 只是正文是空串。不在这里说清楚的话，用户只会看到「服务商没有返回内容」，
+    /// 根本想不到是「最大回复长度」太小。
+    ///
+    /// - Parameters:
+    ///   - sawText: 是否已经吐过至少一个正文字符。
+    ///   - sawReasoning: 本次是否收到过思维链。
+    ///   - finishReason: 累计的 `finish_reason`（可能为 nil）。
+    private func throwIfNoTextEmitted(
+        sawText: Bool,
+        sawReasoning: Bool,
+        finishReason: String?
+    ) throws {
+        guard !sawText else { return }
+        if finishReason == "length" {
+            throw AIError.contentRejected(
+                "输出被「最大回复长度」截断了。推理模型的思维链会占用大量 token，"
+                    + "请到「高级参数」把最大回复长度调到 2048 以上。"
+            )
+        }
+        if sawReasoning {
+            throw AIError.contentRejected(
+                "这是推理模型，本次回复全部用在思维链上了，正文没有产出。"
+                    + "请把「最大回复长度」调到 2048 以上，或改用非推理模型（如 deepseek-chat）。"
+            )
+        }
     }
 
     /// 解析单片流式数据。
@@ -264,7 +350,7 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
                 if let content = delta["content"] as? String {
                     payload.text = content
                 }
-                if capturesReasoning, let reasoning = delta["reasoning_content"] as? String {
+                if let reasoning = delta["reasoning_content"] as? String {
                     payload.reasoning = reasoning
                 }
             }
@@ -312,6 +398,14 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
             if finishReason == "content_filter" {
                 throw AIError.contentRejected("模型判定内容不合规")
             }
+            // 非流式响应同样可能「只有思维链、正文为空」（推理模型的预算被思维链吃光），
+            // 复用同一套判定，别让这里退化成一句笼统的「内容被拒绝」。
+            let reasoning = (first["message"] as? [String: Any])?["reasoning_content"] as? String ?? ""
+            try throwIfNoTextEmitted(
+                sawText: false,
+                sawReasoning: !reasoning.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                finishReason: finishReason
+            )
             throw AIError.contentRejected(nil)
         }
         return ChatResult(text: trimmed, usage: usage, finishReason: finishReason)

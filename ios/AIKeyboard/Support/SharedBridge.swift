@@ -277,10 +277,14 @@ enum ConnectivityProbe {
         apiKey: String
     ) -> AsyncThrowingStream<ChatDelta, Error> {
         let client = AIClientFactory.makeLLM(config: config, apiKey: apiKey)
+        // 预算给 64 而不是 8：推理模型（deepseek-reasoner / o1 / QwQ 等）会**先**把
+        // token 花在思维链上，8 个 token 连思维链都开不了头，正文必然是空串，
+        // 探活就会把「模型其实能用」误判成「服务商返回空内容」。
+        // 64 足够推理模型吐出一小段正文，单次成本也只有几十个 token。
         let request = ChatRequest(
             messages: [ChatMessage.user("hi")],
             temperature: 0,
-            maxTokens: 8,
+            maxTokens: 64,
             stream: true
         )
         return client.stream(request)

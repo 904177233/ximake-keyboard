@@ -91,13 +91,13 @@ struct AIBar: View {
 
     // MARK: - 常规形态
 
-    /// 常规 40pt 工具条。
+    /// 常规工具条（高度由父容器决定：v1.3 起与候选条共用 44pt 效用行）。
     private var regularBar: some View {
         ZStack {
             content
             edgeMasks
         }
-        .frame(height: Theme.Sizing.aiBarHeight)
+        .frame(maxHeight: .infinity)
     }
 
     /// 内容（能力胶囊 + 设置胶囊，或禁用提示）。

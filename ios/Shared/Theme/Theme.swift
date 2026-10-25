@@ -206,13 +206,19 @@ public enum Theme {
 
     /// 键盘与组件尺寸（点）。全部来自 design/tokens.json `sizing` 组。
     public enum Sizing {
-        /// 258 —— 竖屏键盘总高度
+        /// 258 —— 竖屏键盘总高度（v1 契约值，`consistency_check` 钉死、docs/02 §5 引用）
+        ///
+        /// v1.3 起候选条与 AI 工具条合并为同一条 44pt 效用行，实际高度由
+        /// `KMLayout.portraitHeight = utilityRowHeight + keyRowsHeight` 算得 **218**；
+        /// 这个令牌保持 v1 契约值不变，避免与 docs/02 §5 的基线冲突。
         public static let keyboardHeightPortrait: CGFloat = 258
-        /// 200 —— 横屏键盘总高度
+        /// 200 —— 横屏键盘总高度（横屏本来就只有一行，未变）
         public static let keyboardHeightLandscape: CGFloat = 200
-        /// 44 —— 候选栏高度
+        /// 44 —— 效用行高度（候选条与 AI 工具条共用同一行，v1.3 起）
         public static let candidateBarHeight: CGFloat = 44
-        /// 40 —— AI 工具条高度
+        /// 44 —— 效用行高度（与 `candidateBarHeight` 同值，语义化别名）
+        public static let utilityRowHeight: CGFloat = 44
+        /// 40 —— AI 面板内部的标题条高度（工具条本身已并入效用行）
         public static let aiBarHeight: CGFloat = 40
         /// 42 —— 单行键帽高度
         public static let keyHeight: CGFloat = 42

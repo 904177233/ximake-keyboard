@@ -127,6 +127,7 @@
 		822E9DA3557E49478A31BBFF /* KeyboardViewModel+Input.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA203EFE5C412122E2444F93 /* KeyboardViewModel+Input.swift */; };
 		5AD3DF228655FF92E814F0BC /* KeyboardViewModel+Panel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86D19954F301A3A0D8A822F7 /* KeyboardViewModel+Panel.swift */; };
 		A6538F030ED1967C6522DF8B /* KeyboardViewModel+Suggest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3271B0BD3AF10E3F10B0441B /* KeyboardViewModel+Suggest.swift */; };
+		24F13AED68A4322375A9CB1B /* KeyboardViewModel+Text.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E2A7FD219C70156C5B37F49 /* KeyboardViewModel+Text.swift */; };
 		4EA9A22956D41A6F9B00D717 /* KeyboardViewModel+Toast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A48BCE3722ADE59F4E84F71 /* KeyboardViewModel+Toast.swift */; };
 		C6EC13D14B1511CE4870FA9E /* KeyboardViewModel+Voice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 825F39925D3B427B62B7A14F /* KeyboardViewModel+Voice.swift */; };
 		A0BA2CCC47382AF688CFA7A4 /* KeyboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1731C048DCE50DCCD05BEC3 /* KeyboardViewModel.swift */; };
@@ -303,6 +304,7 @@
 		EA203EFE5C412122E2444F93 /* KeyboardViewModel+Input.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIKeyboardExtension/ViewModel/KeyboardViewModel+Input.swift"; sourceTree = SOURCE_ROOT; };
 		86D19954F301A3A0D8A822F7 /* KeyboardViewModel+Panel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIKeyboardExtension/ViewModel/KeyboardViewModel+Panel.swift"; sourceTree = SOURCE_ROOT; };
 		3271B0BD3AF10E3F10B0441B /* KeyboardViewModel+Suggest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIKeyboardExtension/ViewModel/KeyboardViewModel+Suggest.swift"; sourceTree = SOURCE_ROOT; };
+		7E2A7FD219C70156C5B37F49 /* KeyboardViewModel+Text.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIKeyboardExtension/ViewModel/KeyboardViewModel+Text.swift"; sourceTree = SOURCE_ROOT; };
 		8A48BCE3722ADE59F4E84F71 /* KeyboardViewModel+Toast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIKeyboardExtension/ViewModel/KeyboardViewModel+Toast.swift"; sourceTree = SOURCE_ROOT; };
 		825F39925D3B427B62B7A14F /* KeyboardViewModel+Voice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIKeyboardExtension/ViewModel/KeyboardViewModel+Voice.swift"; sourceTree = SOURCE_ROOT; };
 		A1731C048DCE50DCCD05BEC3 /* KeyboardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/ViewModel/KeyboardViewModel.swift; sourceTree = SOURCE_ROOT; };
@@ -589,6 +591,7 @@
 				EA203EFE5C412122E2444F93 /* KeyboardViewModel+Input.swift */,
 				86D19954F301A3A0D8A822F7 /* KeyboardViewModel+Panel.swift */,
 				3271B0BD3AF10E3F10B0441B /* KeyboardViewModel+Suggest.swift */,
+				7E2A7FD219C70156C5B37F49 /* KeyboardViewModel+Text.swift */,
 				8A48BCE3722ADE59F4E84F71 /* KeyboardViewModel+Toast.swift */,
 				825F39925D3B427B62B7A14F /* KeyboardViewModel+Voice.swift */,
 				A1731C048DCE50DCCD05BEC3 /* KeyboardViewModel.swift */,
@@ -1006,6 +1009,7 @@
 				822E9DA3557E49478A31BBFF /* KeyboardViewModel+Input.swift in Sources */,
 				5AD3DF228655FF92E814F0BC /* KeyboardViewModel+Panel.swift in Sources */,
 				A6538F030ED1967C6522DF8B /* KeyboardViewModel+Suggest.swift in Sources */,
+				24F13AED68A4322375A9CB1B /* KeyboardViewModel+Text.swift in Sources */,
 				4EA9A22956D41A6F9B00D717 /* KeyboardViewModel+Toast.swift in Sources */,
 				C6EC13D14B1511CE4870FA9E /* KeyboardViewModel+Voice.swift in Sources */,
 				A0BA2CCC47382AF688CFA7A4 /* KeyboardViewModel.swift in Sources */,

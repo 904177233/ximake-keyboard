@@ -15,11 +15,11 @@
 
 import SwiftUI
 
-/// 某个页面是否需要显示候选栏 + AI 工具条（84pt chrome）。
+/// 某个页面是否需要显示效用行（44pt：候选条 / AI 工具条二选一）。
 /// - Parameter page: 当前页面。
 /// - Returns: 是否显示。
 private func pageShowsChrome(_ page: KeyboardViewModel.Page) -> Bool {
-    // `.aiChat` / `.voice` 都是全场模式：自己的标题条替代了候选栏 + AI 工具条（design/04 §3.2）。
+    // `.aiChat` / `.voice` 都是全场模式：自己的标题条替代了效用行（design/04 §3.2）。
     switch page {
     case .aiChat, .voice:
         return false
@@ -126,16 +126,25 @@ private func chatKnobState(for model: KeyboardViewModel) -> KMChatKnobState {
             )
         }
 
-    // MARK: - 候选栏 + AI 工具条（共用 84pt 玻璃背景）
+    // MARK: - 效用行（候选条 / AI 工具条二选一，共用 44pt）
 
-    /// 候选栏与 AI 工具条。
+    /// 组字中（或存在候选）时效用行显示候选，否则显示 AI 工具条。
+    ///
+    /// 这是 v1.3 的核心交互改造：此前候选栏 44 + 工具条 40 上下叠了两行、常驻 84pt，
+    /// 用户反馈「一直在的时候非常影响正常打字」。现在合并成一行 44pt 交叉淡入淡出，
+    /// 与微信输入法/Fleksy 等主流输入法一致：**打字时是候选，不打字时是工具**。
+    private var showsCandidateRow: Bool {
+        !model.composing.isEmpty || !model.candidates.isEmpty
+    }
+
+    /// 效用行：候选条与 AI 工具条占同一格，按 `showsCandidateRow` 交叉淡入淡出。
     private var chrome: some View {
-        ZStack(alignment: .top) {
+        ZStack {
             KMGlassSurface(level: .bar, cornerRadius: 0, showsHighlight: false) {
-                Color.clear.frame(height: KMLayout.chromeHeight)
+                Color.clear.frame(height: KMLayout.utilityRowHeight)
             }
 
-            VStack(spacing: 0) {
+            if showsCandidateRow {
                 CandidateBar(
                     items: model.currentPageCandidates,
                     highlightedIndex: model.highlightedCandidateIndex,
@@ -154,8 +163,9 @@ private func chatKnobState(for model: KeyboardViewModel) -> KMChatKnobState {
                     onSelectSuggestion: { index in model.insertSuggestion(at: index) },
                     accent: themeAccent
                 )
-                .frame(height: KMLayout.candidateBarHeight)
-
+                .frame(height: KMLayout.utilityRowHeight)
+                .transition(.opacity)
+            } else {
                 AIBar(
                     items: KMAIBarItem.defaults,
                     availability: model.aiAvailability,
@@ -171,10 +181,13 @@ private func chatKnobState(for model: KeyboardViewModel) -> KMChatKnobState {
                     onOpenVoice: { model.openVoiceInput() },
                     accent: themeAccent
                 )
-                .frame(height: KMLayout.aiBarHeight)
+                .frame(height: KMLayout.utilityRowHeight)
+                .transition(.opacity)
             }
         }
-        .frame(height: KMLayout.chromeHeight)
+        .frame(height: KMLayout.utilityRowHeight)
+        .clipped()
+        .animation(Theme.Motion.fastAnimation, value: showsCandidateRow)
     }
 
     // MARK: - 键区（按页面切换）
@@ -190,7 +203,8 @@ private func chatKnobState(for model: KeyboardViewModel) -> KMChatKnobState {
                 isLandscape: model.isLandscape,
                 onTap: { key in model.tap(key) },
                 mascot: mascotConfig,
-                accent: themeAccent
+                accent: themeAccent,
+                returnKeyKind: model.returnKeyKind
             )
         case .numbers:
             NumberPadView(onTap: { key in model.tap(key) })

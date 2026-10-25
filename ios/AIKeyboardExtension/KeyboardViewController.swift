@@ -149,6 +149,8 @@ final class KeyboardViewController: UIInputViewController {
         super.textDidChange(textInput)
         model.proxy = textDocumentProxy
         model.reloadContextPreview()
+        // 切输入框时 returnKeyType 会变（聊天框=发送、搜索框=搜索），回车键要跟着变。
+        model.refreshReturnKeyKind()
         // 上下文变化是 AI 联想的触发时机 B（design/04 §4.4）。
         model.scheduleSuggestions()
     }

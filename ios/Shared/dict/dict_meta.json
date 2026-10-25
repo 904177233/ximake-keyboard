@@ -1,9 +1,9 @@
 {
-  "count": 33160,
+  "count": 33238,
   "files": {
     "base_dict.tsv": {
-      "bytes": 825646,
-      "sha256": "4eb3333c95b72e2a63da7856eba66eacef8ee1839a40b4c4ad6da759dda302ab"
+      "bytes": 827870,
+      "sha256": "6715be2b50a5fc4a267db7c39f23573f3ff1d6bd6b19f5cf53afc1d4747f21ab"
     },
     "phrases.tsv": {
       "bytes": 21827,
@@ -12,7 +12,7 @@
   },
   "flags": {
     "bless": 344,
-    "chat": 1761,
+    "chat": 1839,
     "core": 31628,
     "emoji": 415,
     "idiom": 120,
@@ -41,6 +41,11 @@
     {
       "license": "项目内使用",
       "name": "phrase_pairs.py",
+      "url": "本项目原创"
+    },
+    {
+      "license": "项目内使用",
+      "name": "chat_priority.py",
       "url": "本项目原创"
     }
   ],

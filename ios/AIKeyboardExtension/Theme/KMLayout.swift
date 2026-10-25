@@ -66,17 +66,28 @@ enum KMLayout {
         letterRowHeight * CGFloat(Theme.Sizing.keyboardRowCount)
         + keyGap * CGFloat(Theme.Sizing.keyboardRowCount - 1)
 
-    /// 候选栏高度。
+    /// 候选栏高度（单行效用行，v1.3 起与 AI 工具条共用）。
     static let candidateBarHeight: CGFloat = Theme.Sizing.candidateBarHeight
 
-    /// AI 工具条高度。
-    static let aiBarHeight: CGFloat = Theme.Sizing.aiBarHeight
+    /// 效用行高度 44 —— 候选条与 AI 工具条共用**同一行**，二选一显示。
+    ///
+    /// v1.3 交互改造（用户反馈「候选词状态栏一直都在，非常影响正常打字」）：
+    /// 组字中显示候选，未组字显示 AI 工具，交叉淡入淡出，不再上下叠两行。
+    static let utilityRowHeight: CGFloat = Theme.Sizing.utilityRowHeight
 
-    /// 候选栏 + AI 工具条共用的连续玻璃背景高度（规范 §8 ④：先铺 84 再放两行）。
-    static let chromeHeight: CGFloat = candidateBarHeight + aiBarHeight
+    /// AI 工具条高度（= 效用行高度，保留名字兼容旧调用点）。
+    static let aiBarHeight: CGFloat = utilityRowHeight
 
-    /// 键盘基础高度（竖屏 258 = 44 + 40 + 174）。
-    static let portraitHeight: CGFloat = Theme.Sizing.keyboardHeightPortrait
+    /// 效用行高度（旧名 `chromeHeight` 保留，语义已从「候选栏 + 工具条 84」变为「一行 44」）。
+    static let chromeHeight: CGFloat = utilityRowHeight
+
+    /// 键盘基础高度（竖屏 **218** = 44 效用行 + 174 键区）。
+    ///
+    /// v1.3 起由「效用行 44 + 键区 174」两段算出，而不是直接取
+    /// `Theme.Sizing.keyboardHeightPortrait` —— 后者是 v1 的 258（44 候选栏 + 40 工具条 + 174），
+    /// 仍被 `consistency_check` 的 REQUIRED_SIZING 与 docs/02 §5 钉死为契约值，不能改；
+    /// 实际布局按合并后的一行算，比 v1 省 40pt（还给宿主 App）。
+    static let portraitHeight: CGFloat = utilityRowHeight + keyRowsHeight
 
     /// 键盘基础高度（横屏 200 = 44 + 4 × 34.5 + 3 × 6）。
     static let landscapeHeight: CGFloat = Theme.Sizing.keyboardHeightLandscape
@@ -197,8 +208,11 @@ enum KMLayout {
     /// 32 —— 最新 AI 消息操作行高度。
     static let aiChatActionHeight: CGFloat = 32  // TOKEN: sizing.aiChatActionHeight
 
-    /// 180 —— 对话面板展开增量（= resultExtraHeight，不新增高度令牌）。
-    static let aiChatExtraHeight: CGFloat = Theme.Sizing.resultExtraHeight
+    /// 220 —— 对话面板展开增量。
+    ///
+    /// 对话页隐藏 44pt 效用行，四段分区固定 `40 + 180 + 44 + 174 = 438`；
+    /// 竖屏基础高 v1.3 起为 218（不再含 84pt 双行 chrome），故增量 = 438 − 218 = 220。
+    static let aiChatExtraHeight: CGFloat = 220  // TOKEN: 派生值 438 − portraitHeight
 
     /// 30 —— 联想胶囊高度。
     static let sugChipHeight: CGFloat = Theme.Sizing.aiChipHeight

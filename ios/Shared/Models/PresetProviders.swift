@@ -273,6 +273,90 @@ public enum PresetProviders {
         chatPresetTemplates + imagePresetTemplates
     }
 
+    // MARK: - 常用模型（设置页「模型」输入框的候选）
+
+    /// 某个协议类型下已知可用的模型名（供设置页做「常用模型」快捷选择，仍允许用户自由输入）。
+    ///
+    /// 注意：`ProviderKind` 只区分**协议**、不区分厂商 —— DeepSeek / 通义千问 / Kimi /
+    /// 智谱 GLM / 火山方舟 / OpenRouter / OpenAI 全都走 `.openAICompatible`。
+    /// 因此 `.openAICompatible` 返回的是「所有厂商的并集」（去重、顺序固定）；
+    /// 想按厂商给精确清单，请用 `knownModels(forBaseURL:)`（设置页拿到的是用户填的
+    /// baseURL，用它更准）；认不出厂商时返回空数组，UI 退化成纯自由输入即可。
+    ///
+    /// - Parameter kind: 协议类型。
+    /// - Returns: 模型名列表；未知协议返回空数组。
+    public static func knownModels(for kind: ProviderKind) -> [String] {
+        switch kind {
+        case .openAICompatible:
+            var seen = Set<String>()
+            return chatVendorModels.flatMap { $0 }.filter { seen.insert($0).inserted }
+        case .anthropic, .gemini, .custom:
+            return []
+        }
+    }
+
+    /// 按 baseURL 的域名推断厂商，返回该厂商已知可用的模型名。
+    ///
+    /// 只收录**确认存在**的模型名（宁可少写，也不给用户一个点一下就 404 的候选）。
+    /// 用户仍然可以手输任意模型名（例如刚发布的版本），这里只是候选。
+    ///
+    /// - Parameter baseURL: 服务商根地址，如 `https://api.deepseek.com/v1`。
+    /// - Returns: 该厂商的常用模型名；认不出厂商时返回空数组。
+    public static func knownModels(forBaseURL baseURL: String) -> [String] {
+        let lower = baseURL.lowercased()
+        if lower.contains("deepseek") {
+            return deepSeekModels
+        }
+        if lower.contains("dashscope") || lower.contains("aliyuncs") {
+            return qwenModels
+        }
+        if lower.contains("moonshot") || lower.contains("kimi") {
+            return kimiModels
+        }
+        if lower.contains("bigmodel") || lower.contains("zhipu") {
+            return glmModels
+        }
+        if lower.contains("openrouter") {
+            return openRouterModels
+        }
+        if lower.contains("api.openai.com") {
+            return openAIModels
+        }
+        return []
+    }
+
+    /// DeepSeek（官方 OpenAI 兼容端点）。
+    private static let deepSeekModels = ["deepseek-chat", "deepseek-reasoner"]
+
+    /// OpenAI 官方。
+    private static let openAIModels = ["gpt-4o-mini", "gpt-4o", "o3-mini"]
+
+    /// 通义千问（DashScope 兼容模式）。
+    private static let qwenModels = ["qwen-plus", "qwen-max", "qwen-turbo", "qvq-max"]
+
+    /// Kimi（Moonshot）。
+    private static let kimiModels = ["kimi-latest", "moonshot-v1-8k"]
+
+    /// 智谱 GLM。
+    private static let glmModels = ["glm-4-plus", "glm-4-flash", "glm-z1-air"]
+
+    /// OpenRouter（模型名带 `厂商/` 前缀）。
+    private static let openRouterModels = [
+        "openai/gpt-4o-mini",
+        "anthropic/claude-sonnet-4",
+        "deepseek/deepseek-chat"
+    ]
+
+    /// 各厂商模型表的合集，供 `.openAICompatible`（不分厂商）取并集。
+    private static let chatVendorModels: [[String]] = [
+        deepSeekModels,
+        openAIModels,
+        qwenModels,
+        kimiModels,
+        glmModels,
+        openRouterModels
+    ]
+
     // MARK: - 快捷工厂（UI 直接用）
 
     /// 全部**可对话**预设转成的 `[AIProviderConfig]`（每次调用返回新副本，可直接编辑）。

@@ -275,12 +275,13 @@ extension KeyboardViewModel {
         lastProviderName = provider.name
         let userText = chatMessages.last(where: { $0.role == .user })?.text ?? ""
         // 请求构造统一走共享层：system 人设来自 `builtin.chat.assistant`，
-        // 温度取模板 0.7，maxTokens 默认 512（`PromptLibrary.chatMaxTokens`）。
+        // 温度取模板 0.7；maxTokens 传 nil 让客户端按模型兜底
+        // （推理模型的思维链会吃掉大量 token，写死 512 会导致正文全空）。
         let request = PromptLibrary.chatRequest(
             text: userText,
             context: proxy?.documentContextBeforeInput ?? "",
             history: makeChatHistory(excluding: userText),
-            maxTokens: PromptLibrary.chatMaxTokens
+            maxTokens: nil
         )
         let client = AIClientFactory.makeLLM(config: provider, apiKey: apiKey)
         let placeholderID = appendAssistantPlaceholder()

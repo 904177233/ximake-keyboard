@@ -433,3 +433,64 @@ public struct KMChatMessage: Identifiable, Equatable, Sendable {
     }
 }
 
+// MARK: - 回车键语义
+
+/// 回车键的语义（跟随宿主输入框的 `returnKeyType`）。
+///
+/// **为什么需要它**：v1.2 的回车键永远是「⏎ 换行」且用主题主色，用户反馈
+/// 「这个回车居然也被占用」「完全没有必要，不适合阻挡发送」—— 在聊天类
+/// App 里右下角那颗键本该是**发送**，键盘不该抢走它。v1.3 起按宿主输入框
+/// 声明的 `returnKeyType` 变身：搜索框显示「搜索」、聊天框显示「发送」，
+/// 只有这些「提交型」语义才用主题主色；普通文本框仍是中性的「换行」。
+public enum KMReturnKeyKind: Equatable, Sendable {
+
+    /// 换行（普通多行输入框）。
+    case newline
+
+    /// 发送（聊天类输入框）。
+    case send
+
+    /// 搜索。
+    case search
+
+    /// 前往（地址栏）。
+    case go
+
+    /// 完成（表单最后一个字段）。
+    case done
+
+    /// 下一个（表单中间字段）。
+    case next
+
+    /// 其它（继续 / 加入 / 紧急呼叫等），统一按中性「换行」处理。
+    case other
+
+    /// 键面上显示的文字；`nil` 表示用 ⏎ 图标（只有纯换行态用图标）。
+    public var title: String? {
+        switch self {
+        case .newline: return nil
+        case .send: return "发送"
+        case .search: return "搜索"
+        case .go: return "前往"
+        case .done: return "完成"
+        case .next: return "下一个"
+        case .other: return nil
+        }
+    }
+
+    /// 是否用主题主色（只有「提交型」语义才配得上主色，换行态保持中性）。
+    public var isPrimary: Bool {
+        switch self {
+        case .send, .search, .go, .done:
+            return true
+        case .newline, .next, .other:
+            return false
+        }
+    }
+
+    /// 无障碍朗读文案。
+    public var accessibilityTitle: String {
+        title ?? "换行"
+    }
+}
+
