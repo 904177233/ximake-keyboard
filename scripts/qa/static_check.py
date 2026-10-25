@@ -63,6 +63,7 @@ Data Date DateFormatter ISO8601DateFormatter DateComponents JSONEncoder JSONDeco
 JSONSerialization PropertyListEncoder PropertyListDecoder PropertyListSerialization
 UserDefaults UUID Notification NotificationCenter NotificationCenterObservable
 Bundle FileManager ProcessInfo Thread Timer TimerPublisher RunLoop
+CryptoKit SHA256 SHA256Digest HKDF SymmetricKey
 DispatchQueue DispatchGroup DispatchSemaphore DispatchTime DispatchQueueMain DispatchWorkItem
 Operation OperationQueue BlockOperation
 Locale Calendar TimeZone NumberFormatter Formatter DateFormatter Measurement Unit

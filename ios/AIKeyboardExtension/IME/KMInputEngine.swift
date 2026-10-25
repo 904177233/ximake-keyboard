@@ -51,10 +51,20 @@ final class KMInputEngine: @unchecked Sendable {
         kitStorage = kit
     }
 
+    /// 重建内核（在线词库包安装完成后调用）。
+    ///
+    /// 词库是一个单例门面持有的**内存快照**：在线词库包下载并落盘之后，
+    /// 内存里还是旧词表，必须丢掉 `IMEKit` 重新加载才会生效。
+    /// 重建代价约 40–60ms（3.3 万条），且只在「确实更新了一个新版本」时发生，
+    /// 用户下一次唤起键盘才会感知到。
+    func reload() {
+        kitStorage = nil
+        prepare(clipboardEnabled: clipboardEnabled)
+    }
+
     /// 当前内核是否已完成初始化。
     var isReady: Bool {
-        kitStorage != nil
-    }
+        kitStorage != nil    }
 
     /// 内部内核（未初始化时先按默认参数预热）。
     private var kit: IMEKit {

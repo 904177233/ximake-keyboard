@@ -25,6 +25,7 @@ struct AppearanceView: View {
                 imageSizeSection
                 appearanceSection
                 themeSection
+                dictionarySection
             }
             .padding(.horizontal, AppMetrics.pageInset)
             .padding(.bottom, Theme.Spacing.xxl + AppMetrics.pageInset)
@@ -167,6 +168,40 @@ struct AppearanceView: View {
             }
         }
     }
+    // MARK: - 词库
+
+    /// 在线词库包入口：显示来源与版本，进去可手动检查更新 / 回滚。
+    private var dictionarySection: some View {
+        VStack(alignment: .leading, spacing: AppMetrics.blockGap) {
+            SectionHeader(
+                title: "词库",
+                footnote: "在线词库包只更新词表，不上传你输入的任何内容"
+            )
+
+            ListGroup {
+                NavigationLink {
+                    DictionaryPackView()
+                } label: {
+                    SettingsRow(
+                        icon: IconSpec(symbol: "character.book.closed.fill", tint: Theme.accent),
+                        title: "在线词库包",
+                        subtitle: dictionarySubtitle,
+                        accessory: .chevron
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+        }
+    }
+
+    /// 词库小标题：已安装在线包显示版本，否则显示内置条数。
+    private var dictionarySubtitle: String {
+        if let info = DictionaryPackStore.shared.installedInfo {
+            return "在线 v\(info.version) · \(info.entryCount) 条"
+        }
+        return "内置 · \(appState.dictionaryWordCount) 条"
+    }
+
     // MARK: - 主题与形象
 
     /// 主题与小形象入口：显示当前主题名，进去可切换 6 套双色主题、导入自定义形象。

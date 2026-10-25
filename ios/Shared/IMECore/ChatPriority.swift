@@ -93,8 +93,13 @@ public struct ChatPriorityTable {
     }
 
     /// `chat_priority.tsv` 的候选路径（去重后按优先级返回）。
+    ///
+    /// 与词库同款优先级：**在线词库包（用户目录）排最前**，其次安装包内置。
     private static func candidateURLs() -> [URL] {
         var urls: [URL] = []
+        if let userPath = DictionaryPackStore.shared.userChatPriorityPath {
+            urls.append(URL(fileURLWithPath: userPath))
+        }
         let subdirectories: [String?] = ["dict", "Resources/dict", nil]
         for bundle in searchBundles() {
             for subdirectory in subdirectories {

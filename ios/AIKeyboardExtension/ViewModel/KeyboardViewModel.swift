@@ -309,6 +309,7 @@ public final class KeyboardViewModel: ObservableObject {
         refreshReturnKeyKind()
         recordActiveHeartbeat()
         isReady = true
+        scheduleDictionaryPackCheck()
     }
 
     /// 刷新回车键语义（读宿主输入框的 `returnKeyType`）。

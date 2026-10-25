@@ -332,9 +332,20 @@ public final class PinyinDictionary {
     /// 覆盖三种打包方式：①`dict/` folder reference -> `dict/base_dict.tsv`（**当前布局**）
     /// ②旧布局 `Resources/dict/`（仅兼容保留）③TSV 直接进 Copy Bundle Resources -> 根目录。
     ///
+    /// **顺序很关键**：用户目录（在线词库包）排在最前面，它有就优先用它的；
+    /// 没有就自动回落到安装包内置词库 —— 这就是「在线词库包」的实现接入点。
+    /// 见 `DictionaryPackStore.userDictionaryPath`。
+    ///
     /// - Returns: 候选 URL 数组（按优先级）。
     private static func candidateURLs() -> [URL] {
         var urls: [URL] = []
+
+        // ① 在线词库包（用户目录）。免费签名没有 App Group，所以这份只能由
+        //    「键盘扩展自己」下载得到；宿主 App 里下载的那份扩展读不到。
+        if let userPath = DictionaryPackStore.shared.userDictionaryPath {
+            urls.append(URL(fileURLWithPath: userPath))
+        }
+
         let subdirectories: [String?] = ["dict", "Resources/dict", nil]
 
         for bundle in searchBundles() {

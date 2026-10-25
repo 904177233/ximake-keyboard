@@ -1,0 +1,26 @@
+{
+  "manifestVersion": 1,
+  "packVersion": "1.1.0",
+  "generatedAt": "2026-10-25T01:00:00Z",
+  "entryCount": 33239,
+  "files": [
+    {
+      "name": "base_dict.tsv",
+      "url": "base_dict.tsv",
+      "sha256": "a8258bd776a9486132dfb8b8dbe4b2a1dc94adf0be23182fe8af1f012c7f7c43",
+      "bytes": 827895
+    },
+    {
+      "name": "chat_priority.tsv",
+      "url": "chat_priority.tsv",
+      "sha256": "165bcd6120d306402c8c759380bf41974366d20e8da0f382cbc57edb6d06ce30",
+      "bytes": 4043
+    },
+    {
+      "name": "dict_meta.json",
+      "url": "dict_meta.json",
+      "sha256": "40cb77ba0d49444e8ddec9d0151fd4d6b0c9594e13d61b2f522c94d2d34bd910",
+      "bytes": 1185
+    }
+  ]
+}
