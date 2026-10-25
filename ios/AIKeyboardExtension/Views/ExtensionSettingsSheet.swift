@@ -19,14 +19,18 @@ struct ExtensionSettingsSheet: View {
     @ObservedObject var model: KeyboardViewModel
 
     /// 设置操作弹层（Provider 选择 / 语气选择 / 配置同步）。
-    @State private var activeSheet: ActiveSheet?
+    /// 当前弹层。
+    ///
+    /// 不用 `private`：`providerPicker` 拆在 `ExtensionSettingsSheet+Provider.swift`，
+    /// 而 Swift 的 `private` 是**文件级**可见性，跨文件的同类型 extension 读不到。
+    @State var activeSheet: ActiveSheet?
 
     /// 正在编辑的服务商（非 nil 时弹出编辑页）。
     ///
     /// 用独立状态而不是塞进 `ActiveSheet` 枚举：`ActiveSheet` 是 `String` 枚举、
     /// 要带一个 `AIProviderConfig` 负载就得改成关联值，改完 `rawValue`/`Identifiable`
     /// 全要跟着变；单独一个 `@State` 最省事且不影响已有三个弹层。
-    @State private var editingProvider: AIProviderConfig?
+    @State var editingProvider: AIProviderConfig?
 
     var body: some View {
         VStack(spacing: 0) {
