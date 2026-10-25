@@ -35,7 +35,7 @@ def describe(dictionary, word: str) -> str:
 
 def main(argv: list[str]) -> int:
     rows = sim.load_entries()
-    dictionary = sim.SimulatedDictionary(rows)
+    dictionary = sim.SimulatedDictionary(rows, sim.load_chat_priority())
     engine = sim.SimulatedEngine(dictionary)
 
     if "--words" in argv:

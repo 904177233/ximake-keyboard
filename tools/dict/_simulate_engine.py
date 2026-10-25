@@ -25,10 +25,19 @@ from syllable_table import SYLLABLES  # noqa: E402
 
 DICT_PATH = os.path.join(ROOT, "ios", "Shared", "dict", "base_dict.tsv")
 PHRASE_PATH = os.path.join(ROOT, "ios", "Shared", "dict", "phrases.tsv")
+CHAT_PATH = os.path.join(ROOT, "ios", "Shared", "dict", "chat_priority.tsv")
 
 MAX_TILE_LENGTH = 24
 PREFIX_KEY_LIMIT = 40
 MAX_INITIALS_QUERY_LENGTH = 6
+
+# ---- 简拼（首字母）候选策略：必须与 Swift `PinyinEngine+Initials.swift` 同值 ----
+INITIALS_KEY_LIMIT = 12            # 最多展开 12 个全拼键
+INITIALS_ENTRY_LIMIT = 12          # 每个键先取 12 条再筛
+INITIALS_PER_KEY = 2               # 同一个全拼键最多给 2 条
+INITIALS_SAME_STRUCTURE = 2        # 同「首字 + 长度」结构最多 2 条
+INITIALS_STRUCTURE_PENALTY = 0.12  # 同结构第 2 条候选的扣分
+INITIALS_FIRST_PAGE = 5            # 第一页 chat 兜底窗口
 
 # ---- 模糊音常量（对应 `ios/Shared/IMECore/FuzzyPinyin.swift`）----
 
@@ -115,8 +124,9 @@ def segment_min(pinyin: str):
 class SimulatedDictionary:
     """对应 `PinyinDictionary`。"""
 
-    def __init__(self, rows):
+    def __init__(self, rows, chat_priority=None):
         self.rows = rows
+        self.chat_priority = chat_priority or {}
         self.by_pinyin = {}
         for pinyin, word, frequency, flags in rows:
             self.by_pinyin.setdefault(pinyin, []).append((word, frequency, flags))
@@ -125,6 +135,7 @@ class SimulatedDictionary:
         for pinyin, word, frequency, flags in rows:
             self.text_frequency.setdefault(word, frequency)
         self.initials = {}
+        seen_keys = set()
         for pinyin, word, frequency, flags in rows:
             if not is_pure_cjk(word):
                 continue
@@ -132,6 +143,10 @@ class SimulatedDictionary:
             if not segments:
                 continue
             key = "".join(item[0] for item in segments)
+            # 与 Swift `buildInitialsIndex` 一致的 (首字母串, 全拼) 去重
+            if (key, pinyin) in seen_keys:
+                continue
+            seen_keys.add((key, pinyin))
             self.initials.setdefault(key, []).append(pinyin)
         for key in self.initials:
             self.initials[key].sort(key=lambda item: (-(self.by_pinyin[item][0][1]), item))
@@ -391,7 +406,7 @@ class SimulatedEngine:
             return "punctuation"
         return "word"
 
-    def _insert(self, pool, text, pinyin, frequency, base, kind):
+    def _insert(self, pool, text, pinyin, frequency, base, kind, chat_multiplier=1.0):
         if not text:
             return
         current = pool.get(text)
@@ -402,7 +417,11 @@ class SimulatedEngine:
                 "frequency": frequency,
                 "base": base,
                 "kind": kind,
+                "chat": chat_multiplier,
             }
+        elif chat_multiplier > current["chat"]:
+            # 同一个词从别的路径进来时取更高的聊天权重（对应 Swift `insert` 的 max 合并）
+            current["chat"] = chat_multiplier
 
     def _append_dictionary(self, pool, query):
         for word, frequency, flags in self.dict.exact_entries(query, 40):
@@ -414,15 +433,59 @@ class SimulatedEngine:
             for word, frequency, flags in self.dict.exact_entries(key, 2):
                 self._insert(pool, word, key, frequency, 1.0 * coverage, self.kind(word, flags))
 
+    def chat_multiplier(self, word):
+        """聊天权重乘子：`1 + chatPriority`，只有简拼路径使用。"""
+        return 1.0 + self.dict.chat_priority.get(word, 0.0)
+
+    def _chat_rank(self, word, frequency):
+        """简拼路径的排序值：与最终得分同形（词频分 + 首槽 base）× 聊天乘子。"""
+        return (self.log_score(frequency) + 0.6) * self.chat_multiplier(word)
+
     def _append_initials(self, pool, query):
         low, high = self.dict.initials_length_range
         if not (low <= len(query) <= high) or len(query) > MAX_INITIALS_QUERY_LENGTH:
             return
-        for offset, key in enumerate(self.dict.pinyin_keys_initials(query, 24)):
-            if offset >= 12:
-                break
-            for word, frequency, flags in self.dict.exact_entries(key, 1):
-                self._insert(pool, word, key, frequency, 0.6 - offset * 0.05, self.kind(word, flags))
+        buckets = []
+        for key in self.dict.pinyin_keys_initials(query, INITIALS_KEY_LIMIT):
+            entries = self.dict.exact_entries(key, INITIALS_ENTRY_LIMIT)
+            if not entries:
+                continue
+            ranked = sorted(
+                (
+                    (word, frequency, flags, self._chat_rank(word, frequency))
+                    for word, frequency, flags in entries
+                ),
+                key=lambda item: (-item[3], item[0]),
+            )
+            buckets.append((key, ranked))
+        # 键之间也按「聊天权重 × 词频」排，避免整屏被语料高频的书面词占满
+        buckets.sort(key=lambda item: (-item[1][0][3], item[0]))
+
+        structure_count = {}
+        for offset, (key, ranked) in enumerate(buckets):
+            used = 0
+            for word, frequency, flags, _ in ranked:
+                if used >= INITIALS_PER_KEY:
+                    break
+                structure = (word[0], len(word))
+                seen = structure_count.get(structure, 0)
+                if seen >= INITIALS_SAME_STRUCTURE:
+                    continue
+                structure_count[structure] = seen + 1
+                base = 0.6 - offset * 0.05
+                if seen:
+                    # 同「首字 + 长度」的第 2 条：保留但压一档，避免整屏同构词
+                    base -= INITIALS_STRUCTURE_PENALTY
+                used += 1
+                self._insert(
+                    pool,
+                    word,
+                    key,
+                    frequency,
+                    base,
+                    self.kind(word, flags),
+                    self.chat_multiplier(word),
+                )
 
     def _append_composed(self, pool, query):
         if len(query) < 2:
@@ -551,12 +614,29 @@ class SimulatedEngine:
                 + info["base"]
                 - max(0, len(text) - 1) * 0.35
             )
+            # 聊天权重只作用于简拼路径：全拼/精确命中的 base 里没有带乘子
+            score *= info.get("chat", 1.0)
             results.append((score, len(text), info["pinyin"], text, info["kind"]))
         results.sort(key=lambda item: (-item[0], item[1], item[2], item[3]))
+        results = self._promote_chat(results, query)
         return [
             {"text": item[3], "pinyin": item[2], "score": item[0], "kind": item[4]}
             for item in results[:limit]
         ]
+
+    def _promote_chat(self, results, query):
+        """第一页兜底：若前 5 条没有任何聊天词，把最优的那条提到第 5 位。"""
+        low, high = self.dict.initials_length_range
+        if not (low <= len(query) <= high) or len(query) > MAX_INITIALS_QUERY_LENGTH:
+            return results
+        if any(self.dict.chat_priority.get(item[3], 0.0) > 0 for item in results[:INITIALS_FIRST_PAGE]):
+            return results
+        for index in range(INITIALS_FIRST_PAGE, len(results)):
+            if self.dict.chat_priority.get(results[index][3], 0.0) > 0:
+                target = min(INITIALS_FIRST_PAGE - 1, len(results) - 1)
+                results.insert(target, results.pop(index))
+                break
+        return results
 
     def selection_index(self, raw):
         stripped = self.strip_trailing_selection(raw)
@@ -583,6 +663,27 @@ def load_phrases():
     return rows
 
 
+def load_chat_priority():
+    """读聊天权重表（`词 <TAB> 权重`）。文件缺失时返回空表，与 Swift 一样静默降级。"""
+    table = {}
+    if not os.path.exists(CHAT_PATH):
+        return table
+    with io.open(CHAT_PATH, encoding="utf-8", newline="") as handle:
+        for line in handle:
+            line = line.rstrip("\n").rstrip("\r")
+            if not line or line.startswith("#"):
+                continue
+            fields = line.split("\t")
+            if len(fields) < 2:
+                continue
+            try:
+                weight = float(fields[1])
+            except ValueError:
+                continue
+            table[fields[0]] = weight
+    return table
+
+
 def check(label, actual, expected):
     """打印一条断言结果。"""
     if isinstance(expected, bool):
@@ -596,7 +697,8 @@ def check(label, actual, expected):
 
 def main():
     rows = load_entries()
-    dictionary = SimulatedDictionary(rows)
+    chat_priority = load_chat_priority()
+    dictionary = SimulatedDictionary(rows, chat_priority)
     engine = SimulatedEngine(dictionary)
     phrases = load_phrases()
     passed = 0
@@ -733,6 +835,28 @@ def main():
         ["中国", "种国", "仲国"])
     run('candidates("nihaoo") 仍返回候选（模糊不污染）',
         len(engine.candidates("nihaoo", fuzzy_rules=fuzzy_rules)) > 0, True)
+
+    print("-" * 78)
+    print("[7] 简拼聊天优先（chat_priority.tsv + 首字母多样性）")
+    run("聊天权重表条数 >= 200", len(chat_priority) >= 200, True)
+    run("乘子(我去) == 1 + 3.0", engine.chat_multiplier("我去"), 4.0)
+    run("乘子(完全) == 1.0（不在表里）", engine.chat_multiplier("完全"), 1.0)
+    wq = [c["text"] for c in engine.candidates("wq")]
+    run('candidates("wq")[0]', wq[0], "我去")
+    run('candidates("wq") 中 我去 排在 完全 之前', wq.index("我去") < wq.index("完全"), True)
+    run('candidates("wq") 前 5 至少 1 条聊天词',
+        any(text in chat_priority for text in wq[:5]), True)
+    run('candidates("wq") 前 5 无同「首字 + 长度」重复',
+        len({(text[0], len(text)) for text in wq[:5]}) == len(wq[:5]), True)
+    run('candidates("wq") 候选数 >= 8（多样性规则没把候选栏饿死）', len(wq) >= 8, True)
+    run('candidates("nh")[0]', engine.candidates("nh")[0]["text"], "你好")
+    run('candidates("nh") 前 4 无同「首字 + 长度」重复',
+        len({(c["text"][0], len(c["text"])) for c in engine.candidates("nh")[:4]}), 4)
+    run('全拼路径不吃乘子：candidates("nihao")[0]', engine.candidates("nihao")[0]["text"], "你好")
+    run('candidates("zg") 仍为 中国', engine.candidates("zg")[0]["text"], "中国")
+    run("聊天表词条在词库里都能查到",
+        sum(1 for word in chat_priority if dictionary.frequency(word) > 0) >= len(chat_priority) - 5,
+        True)
 
     print("=" * 78)
     print(f"结果：{passed} / {total} 通过")

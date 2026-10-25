@@ -321,13 +321,13 @@ public enum PromptLibrary {
     ///   - history: **本轮之前**的对话轮次（按时间正序，可含 system / user / assistant）。
     ///     若调用方把本轮用户消息也塞进了 `history`（末尾已与 `text` 渲染结果相同），
     ///     这里会自动跳过追加，避免出现两条一样的 user 消息。
-    ///   - maxTokens: 单次回答上限，默认 `chatMaxTokens`(512)。
+    ///   - maxTokens: 回答上限；`nil`（默认）交给客户端按模型兜底（推理模型抬到 4096）。
     /// - Returns: `stream: true` 的 `ChatRequest`；`messages` = `[system] + history + [user]`。
     public static func chatRequest(
         text: String,
         context: String = "",
         history: [ChatMessage] = [],
-        maxTokens: Int = PromptLibrary.chatMaxTokens
+        maxTokens: Int? = nil
     ) -> ChatRequest {
         let template = BuiltInPrompts.chatAssistant
         let system = template.renderSystemPrompt(
