@@ -74,6 +74,23 @@
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>用于把 AI 生成的图片保存到你的相册。墨语只会在你点「保存到相册」时写入，不会读取你的照片。</string>
 
+
+	<!-- ATS（App Transport Security）例外。
+	     为什么需要：设置页允许用户填**任意** baseURL，包括自建中转常见的
+	     `http://192.168.1.10:11434/v1`（Ollama/LM Studio/自建反代）。iOS 默认
+	     禁止明文 HTTP，被拦时的表现是 `network` 错误、提示里只有「无法联网」，
+	     用户会以为「API 配置好还是用不了」（真实用户反馈过）。
+	     取舍：本 App 不上架 App Store（免费签名自签安装），所以用
+	     `NSAllowsArbitraryLoads` 换「任意地址都能用」；如果将来上架，应改为
+	     `NSExceptionDomains` 白名单 + 强制 https。 -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+
 	<key>UIStatusBarStyle</key>
 	<string>UIStatusBarStyleDefault</string>
 

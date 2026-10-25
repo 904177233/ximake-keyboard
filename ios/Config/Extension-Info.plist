@@ -75,6 +75,23 @@
 
 	<!-- 语音输入相关权限描述（iOS 26+ 键盘扩展可能可用麦克风，docs/08 §5.1 / docs/09 §1）。
 	     仅在用户触发语音输入时系统才弹对应授权，未触发不会弹。 -->
+
+	<!-- ATS（App Transport Security）例外。
+	     为什么需要：设置页允许用户填**任意** baseURL，包括自建中转常见的
+	     `http://192.168.1.10:11434/v1`（Ollama/LM Studio/自建反代）。iOS 默认
+	     禁止明文 HTTP，被拦时的表现是 `network` 错误、提示里只有「无法联网」，
+	     用户会以为「API 配置好还是用不了」（真实用户反馈过）。
+	     取舍：本 App 不上架 App Store（免费签名自签安装），所以用
+	     `NSAllowsArbitraryLoads` 换「任意地址都能用」；如果将来上架，应改为
+	     `NSExceptionDomains` 白名单 + 强制 https。 -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+
 	<key>NSMicrophoneUsageDescription</key>
 	<string>墨语需要麦克风权限，这样你可以直接对着键盘说话，把说的话变成文字。</string>
 
