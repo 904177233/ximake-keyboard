@@ -277,14 +277,15 @@ enum ConnectivityProbe {
         apiKey: String
     ) -> AsyncThrowingStream<ChatDelta, Error> {
         let client = AIClientFactory.makeLLM(config: config, apiKey: apiKey)
-        // 预算给 64 而不是 8：推理模型（deepseek-reasoner / o1 / QwQ 等）会**先**把
-        // token 花在思维链上，8 个 token 连思维链都开不了头，正文必然是空串，
-        // 探活就会把「模型其实能用」误判成「服务商返回空内容」。
-        // 64 足够推理模型吐出一小段正文，单次成本也只有几十个 token。
+        // 预算给 256 而不是 8 或 64：推理模型（deepseek-reasoner / o1 / QwQ 等）会**先**
+        // 把 token 全花在思维链上。实测 deepseek-reasoner 对 "hi" 的思维链本身就要
+        // 一百多个 token，给 64 时正文还没开始就撞上 max_tokens，客户端按「正文为空」
+        // 抛 contentRejected，用户看到的是红色「测试失败」——但他其实只是配了个推理模型。
+        // 256 够它吐出一小段正文，单次成本仍只有几百个 token 的零头。
         let request = ChatRequest(
             messages: [ChatMessage.user("hi")],
             temperature: 0,
-            maxTokens: 64,
+            maxTokens: 256,
             stream: true
         )
         return client.stream(request)

@@ -66,13 +66,25 @@ final class ConnectionTester: ObservableObject {
         state = .testing
         let startedAt = Date()
 
+        // 探活的目的只有一个：**证明「地址 + Key + 模型名」这三项能换回模型的响应**。
+        // 不是测「模型能不能好好回答问题」。所以只要能收到任何一段模型输出
+        // （正文 text 或思维链 reasoning）就算连通。
+        //
+        // 这条区分是用户反馈「API 配置好还是用不了，提示错误」的直接原因之一：
+        // deepseek-reasoner 这类推理模型对 "hi" 会先吐一大段思维链，探活预算不够时
+        // 正文为空，旧逻辑会抛 contentRejected 并显示成红色失败——用户以为 Key 配错了，
+        // 其实完全正常。
         Task {
             var buffer = ""
+            var sawReasoning = false
             do {
                 let stream = ConnectivityProbe.makeHelloStream(config: provider, apiKey: apiKey)
                 for try await delta in stream {
                     if !delta.text.isEmpty {
                         buffer += delta.text
+                    }
+                    if let reasoning = delta.reasoning, !reasoning.isEmpty {
+                        sawReasoning = true
                     }
                     if delta.isFinal {
                         break
@@ -82,14 +94,30 @@ final class ConnectionTester: ObservableObject {
                 guard currentTaskID == taskID else { return }
                 let sample = buffer.trimmingCharacters(in: .whitespacesAndNewlines)
                 if sample.isEmpty {
-                    state = .success(sample: "（服务商返回空内容）", latencyMs: elapsed)
+                    // 正文空但收到过思维链 → 模型确实活着，这是推理模型的正常表现。
+                    state = .success(
+                        sample: sawReasoning
+                            ? "（这是推理模型，探活只收到思维链，正文需在聊天框里发长一点的问题才会出现）"
+                            : "（服务商返回空内容）",
+                        latencyMs: elapsed
+                    )
                 } else {
                     state = .success(sample: Self.truncated(sample), latencyMs: elapsed)
                 }
             } catch {
                 guard currentTaskID == taskID else { return }
-                if case AIError.cancelled = AIError.wrap(error) {
+                let wrapped = AIError.wrap(error)
+                if case AIError.cancelled = wrapped {
                     state = .idle
+                    return
+                }
+                // 收到过思维链却因「正文为空」抛错 → 仍然算连通（同上理由）。
+                if sawReasoning, case AIError.contentRejected = wrapped {
+                    let elapsed = Int(Date().timeIntervalSince(startedAt) * 1000)
+                    state = .success(
+                        sample: "（这是推理模型，探活只收到思维链，正文需在聊天框里发长一点的问题才会出现）",
+                        latencyMs: elapsed
+                    )
                     return
                 }
                 state = .failure(

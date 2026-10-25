@@ -353,6 +353,11 @@ public enum KMChatPhase: Equatable, Sendable {
     case thinking
     /// 正在流式输出（末尾光标）。
     case streaming
+    /// 正在推理：推理模型（deepseek-reasoner 等）先吐思维链、正文还没开始。
+    ///
+    /// 与 `.thinking` 分开是为了给用户不同的文案：`.thinking` 可能是网络慢，
+    /// `.reasoning` 说明模型活着且在思考，用户不应该以为卡死而取消掉。
+    case reasoning
     /// 请求失败（显示错误气泡 + 重试）。
     case failed
     /// 生图进行中（显示进度环 + 已等待秒数）。
@@ -363,10 +368,22 @@ public enum KMChatPhase: Equatable, Sendable {
     /// 是否有请求在飞（决定发送按钮形态与输入行可用性）。
     public var isBusy: Bool {
         switch self {
-        case .thinking, .streaming, .imageGenerating:
+        case .thinking, .reasoning, .streaming, .imageGenerating:
             return true
         case .idle, .failed, .cancelled:
             return false
+        }
+    }
+
+    /// 给用户看的状态文案（气泡上方的提示）。
+    public var statusText: String? {
+        switch self {
+        case .thinking:
+            return "正在思考"
+        case .reasoning:
+            return "正在推理（推理模型会先思考再回答，可能需要十几秒）"
+        case .streaming, .idle, .failed, .cancelled, .imageGenerating:
+            return nil
         }
     }
 }

@@ -291,6 +291,7 @@ extension KeyboardViewModel {
         chatTask = Task { [weak self] in
             guard let self else { return }
             var receivedAny = false
+            var sawReasoning = false
             do {
                 for try await delta in client.stream(request) {
                     if Task.isCancelled { return }
@@ -300,6 +301,15 @@ extension KeyboardViewModel {
                             self.chatPhase = .streaming
                         }
                         self.appendChatDelta(delta.text, messageID: placeholderID)
+                    } else if let reasoning = delta.reasoning, !reasoning.isEmpty, !receivedAny {
+                        // 推理模型（deepseek-reasoner 等）会先吐几十秒思维链、
+                        // 正文一个字都没有。旧代码这段被完全忽略，界面就停在
+                        // 「正在思考」上一动不动，用户以为卡死了（也是「API 配好
+                        // 还是用不了」的一种表现）。这里把阶段切到「正在推理」。
+                        if !sawReasoning {
+                            sawReasoning = true
+                            self.chatPhase = .reasoning
+                        }
                     }
                     if delta.isFinal { break }
                 }
@@ -340,12 +350,18 @@ extension KeyboardViewModel {
         if let index = chatMessages.firstIndex(where: { $0.id == messageID }) {
             chatMessages[index].isStreaming = false
             if !receivedAny {
-                chatMessages[index].text = "模型没有返回内容，可以换个说法再试。"
+                // 推理模型把预算全烧在思维链上时，流会正常结束但正文为空。
+                // 这不是「服务商坏了」，说法要能让用户自己解决。
+                chatMessages[index].text = sawReasoning
+                    ? "这次回复的预算全部用在思维链上了，没有产出正文。\n把「最大回复长度」调到 2048 以上，或换成非推理模型（如 deepseek-chat）再试。"
+                    : "模型没有返回内容，可以换个说法再试。"
                 chatMessages[index].errorDetail = KMAIErrorDetail(
-                    title: "模型没有返回内容",
-                    recovery: "可以换个说法再试，或检查服务商是否支持该模型。",
+                    title: sawReasoning ? "正文被思维链吃完了" : "模型没有返回内容",
+                    recovery: sawReasoning
+                        ? "推理模型会先用掉大量 token 思考。要么调大最大回复长度，要么换成非推理模型。"
+                        : "可以换个说法再试，或检查服务商是否支持该模型。",
                     isRetryable: true,
-                    suggestsSettings: false,
+                    suggestsSettings: sawReasoning,
                     isOffline: false
                 )
                 chatPhase = .failed

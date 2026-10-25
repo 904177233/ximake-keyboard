@@ -140,7 +140,7 @@ struct ChatPanelView: View {
     /// 状态点颜色。
     private var statusDotColor: Color {
         switch model.chatPhase {
-        case .thinking, .streaming, .imageGenerating:
+        case .thinking, .reasoning, .streaming, .imageGenerating:
             return Theme.warning
         case .failed:
             return Theme.danger
@@ -154,6 +154,8 @@ struct ChatPanelView: View {
         switch model.chatPhase {
         case .thinking, .streaming:
             return "正在回答"
+        case .reasoning:
+            return "正在推理"
         case .imageGenerating:
             return "正在生成图片"
         case .failed:
