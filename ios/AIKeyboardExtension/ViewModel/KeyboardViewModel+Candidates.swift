@@ -42,7 +42,7 @@ extension KeyboardViewModel {
     /// 空格选首选是国产输入法（微信/搜狗/百度/Gboard）的通用约定：
     /// 打出拼音后按空格 = 直接上屏第一个候选，这是最高频的一次交互。
     /// 组字中却没有候选（例如只打了非法拼音）时仍然补一个空格，不做静默吞键。
-    private func handleSpace() {
+    func handleSpace() {
         if !composing.isEmpty, !currentPageCandidates.isEmpty {
             selectCandidate(at: 0)
             return

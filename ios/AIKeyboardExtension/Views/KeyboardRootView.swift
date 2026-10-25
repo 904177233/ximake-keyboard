@@ -159,10 +159,10 @@ private func chatKnobState(for model: KeyboardViewModel) -> KMChatKnobState {
                     suggestions: model.suggestionChips,
                     onSelect: { index in model.selectCandidate(at: index) },
                     onLongPress: { index in model.longPressCandidate(at: index) },
-                    onHighlight: { index in model.highlightCandidate(at: index) },
                     onTogglePage: { delta in model.turnCandidatePage(delta) },
                     onChatKnobTap: { model.openAIChat() },
                     onSelectSuggestion: { index in model.insertSuggestion(at: index) },
+                    onHighlight: { index in model.highlightCandidate(at: index) },
                     accent: themeAccent
                 )
                 .frame(height: KMLayout.utilityRowHeight)
