@@ -42,13 +42,9 @@ struct AboutView: View {
     private var heroCard: some View {
         VStack(spacing: AppMetrics.blockGap) {
             RoundedRectangle(cornerRadius: AppMetrics.appIconShowcaseRadius, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [Theme.accent, Theme.accent.opacity(0.72)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                // v2：**不用渐变**。这里是 App 图标的衬托底，图标本身已有层次，
+                // 再加一层对角渐变会让「图标 + 底」两层都在渐变，视觉打架。
+                .fill(Theme.accentSoft)
                 .frame(width: AppMetrics.appIconShowcase, height: AppMetrics.appIconShowcase)
                 .overlay(
                     IconGlyph(

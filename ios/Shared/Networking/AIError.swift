@@ -66,10 +66,15 @@ public enum AIError: LocalizedError, Equatable, Sendable {
         case .decoding:
             return "返回数据格式无法识别"
         case let .contentRejected(reason):
+            // v2：**不要把 reason 拼在「内容被拒绝：」后面**。
+            // `contentRejected` 现在被复用为「正文为空」的兜底错误（推理模型把
+            // token 预算全烧在思维链上、finish_reason=length 等），那些 reason
+            // 讲的是长度/token 问题，前面加「内容被拒绝：」会让人以为说了敏感话。
+            // 直接透传 reason，没有 reason 时才用通用文案。
             if let reason, !reason.isEmpty {
-                return "内容被拒绝：\(reason)"
+                return reason
             }
-            return "内容被服务端拒绝"
+            return "服务端没有返回内容"
         case .cancelled:
             return "已取消"
         case .unknown:
@@ -102,7 +107,13 @@ public enum AIError: LocalizedError, Equatable, Sendable {
             return "网络较慢，稍后重试；或在 设置 › AI 服务 里把超时时间调大。"
         case .decoding:
             return "该服务商的返回格式可能不兼容，试试把协议类型改成「OpenAI 兼容」或换一家服务商。"
-        case .contentRejected:
+        case let .contentRejected(reason):
+            // 只有当 reason 为空（真正的「被拒绝但没给理由」）才给敏感话题建议；
+            // 有 reason 时说明原因已经写在 errorDescription 里，再补一句固定的
+            // 「涉及敏感话题」只会误导（用户遇到的是 token 预算问题）。
+            if let reason, !reason.isEmpty {
+                return nil
+            }
             return "换个说法或缩短内容后再试；涉及敏感话题时模型会拒绝回答。"
         case .cancelled:
             return "已停止本次生成，可以重新点击 AI 按钮。"

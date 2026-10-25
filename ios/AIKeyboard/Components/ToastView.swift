@@ -33,11 +33,10 @@ struct ToastView: View {
             Spacer(minLength: 0)
         }
         .padding(AppMetrics.cardPadding)
-        .background(
-            GlassSurface(level: .bar, cornerRadius: AppMetrics.cardRadius, showHighlight: false) {
-                Theme.surface.opacity(0.35)
-            }
-        )
+        // v2：**不用玻璃材质**（design/06 §1.8）。Toast 是键盘上方的一条提示，
+        // 背后是宿主 App 的任意内容；毛玻璃在浅色界面下几乎看不出糊了什么，
+        // 反而把文字对比度拉低。改成实色卡片 + 一条发丝描边，读得清也够轻。
+        .background(Theme.surface)
         .overlay(
             RoundedRectangle(cornerRadius: AppMetrics.cardRadius, style: .continuous)
                 .strokeBorder(tint.opacity(0.35), lineWidth: AppMetrics.hairline * 2)

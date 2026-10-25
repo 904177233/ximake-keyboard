@@ -16,7 +16,6 @@
 		BB350F09DDD0A041AC38FE13 /* EmptyState.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC3EA80587F108C0C293D61C /* EmptyState.swift */; };
 		35236E9DCAD8D2C774C2D09C /* ErrorBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1219BE677E93AB0116938349 /* ErrorBanner.swift */; };
 		75F93B89528324BF39FDBB16 /* FormFieldRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = F06227A4EDD57566EB347FE5 /* FormFieldRow.swift */; };
-		7A794D202A726FBD6E0D4551 /* GlassSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7A3C4636F991086B8C124A6 /* GlassSurface.swift */; };
 		54A22144DCA25BAC245C62F7 /* Haptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = D608B40D9AB412482272EA3F /* Haptics.swift */; };
 		EB1F34B2307456239961B50A /* IconGlyph.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92E2916BCC86B5DBB5D6555E /* IconGlyph.swift */; };
 		4E3CB7121725CC9AA9D94787 /* PillChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4235179AF50CACD0FED8FF7E /* PillChip.swift */; };
@@ -252,7 +251,6 @@
 		CC3EA80587F108C0C293D61C /* EmptyState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboard/Components/EmptyState.swift; sourceTree = SOURCE_ROOT; };
 		1219BE677E93AB0116938349 /* ErrorBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboard/Components/ErrorBanner.swift; sourceTree = SOURCE_ROOT; };
 		F06227A4EDD57566EB347FE5 /* FormFieldRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboard/Components/FormFieldRow.swift; sourceTree = SOURCE_ROOT; };
-		D7A3C4636F991086B8C124A6 /* GlassSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboard/Components/GlassSurface.swift; sourceTree = SOURCE_ROOT; };
 		D608B40D9AB412482272EA3F /* Haptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboard/Components/Haptics.swift; sourceTree = SOURCE_ROOT; };
 		92E2916BCC86B5DBB5D6555E /* IconGlyph.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboard/Components/IconGlyph.swift; sourceTree = SOURCE_ROOT; };
 		4235179AF50CACD0FED8FF7E /* PillChip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboard/Components/PillChip.swift; sourceTree = SOURCE_ROOT; };
@@ -465,7 +463,6 @@
 				CC3EA80587F108C0C293D61C /* EmptyState.swift */,
 				1219BE677E93AB0116938349 /* ErrorBanner.swift */,
 				F06227A4EDD57566EB347FE5 /* FormFieldRow.swift */,
-				D7A3C4636F991086B8C124A6 /* GlassSurface.swift */,
 				D608B40D9AB412482272EA3F /* Haptics.swift */,
 				92E2916BCC86B5DBB5D6555E /* IconGlyph.swift */,
 				4235179AF50CACD0FED8FF7E /* PillChip.swift */,
@@ -918,7 +915,6 @@
 				BB350F09DDD0A041AC38FE13 /* EmptyState.swift in Sources */,
 				35236E9DCAD8D2C774C2D09C /* ErrorBanner.swift in Sources */,
 				75F93B89528324BF39FDBB16 /* FormFieldRow.swift in Sources */,
-				7A794D202A726FBD6E0D4551 /* GlassSurface.swift in Sources */,
 				54A22144DCA25BAC245C62F7 /* Haptics.swift in Sources */,
 				EB1F34B2307456239961B50A /* IconGlyph.swift in Sources */,
 				4E3CB7121725CC9AA9D94787 /* PillChip.swift in Sources */,

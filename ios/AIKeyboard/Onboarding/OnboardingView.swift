@@ -217,13 +217,9 @@ private struct OnboardingStepContent: View {
 
             ZStack {
                 RoundedRectangle(cornerRadius: AppMetrics.onboardingIconRadius, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [AppColor.accentWash, AppColor.highlightBottom],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    // v2：**不用渐变**（design/06 §1.8）。图标底是 56pt 小方块，
+                    // 从浅到深的对角渐变在小面积上只是一团糊，改成一个实色淡底 + 发丝环。
+                    .fill(AppColor.accentWash)
                     .overlay(
                         RoundedRectangle(
                             cornerRadius: AppMetrics.onboardingIconRadius,

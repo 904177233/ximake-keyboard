@@ -72,11 +72,10 @@ struct SurfaceCard<Content: View>: View {
     /// 背景层。
     @ViewBuilder
     private var backgroundLayer: some View {
-        if style == .glass {
-            GlassSurface(level: .card, cornerRadius: cornerRadius, content: { Color.clear })
-        } else {
-            Theme.surface
-        }
+        // v2：`.glass` 样式保留枚举值（调用点不改），但**实际渲染退化为实色卡片**。
+        // 理由：design/06 §1.8 把「键盘内禁止材质」扩到了整个 App 的卡片层级，
+        // 因为 App 里 90% 的玻璃卡片背后是纯色背景，糊出来只是让底色发灰。
+        Theme.surface
     }
 
     /// 圆角形状（统一 continuous，禁止 iOS 17 的 `.rect(cornerRadius:)`）。

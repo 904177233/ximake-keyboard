@@ -321,6 +321,12 @@ struct ProviderEditorView: View {
                             }
                             .padding(.vertical, AppMetrics.hairGap)
                         }
+
+                        // 说清楚「这是候选不是限制」——否则用户会以为选不了别的模型
+                        // （用户原话「模型不能选择 v4.1 吗」）。
+                        Text("上面是常用模型，也可以直接在上面输入任意模型名。")
+                            .font(AppFont.caption)
+                            .foregroundColor(Theme.textTertiary)
                     }
                 }
             }
@@ -329,8 +335,16 @@ struct ProviderEditorView: View {
 
     /// 当前预设的可选模型。
     private var currentPresetModels: [ModelRef]? {
-        guard let id = selectedPresetID, let preset = PresetProviders.preset(id: id) else { return nil }
-        return preset.availableModels
+        // ① 选了预设 → 用预设自带的模型清单（带中文说明，最好的体验）。
+        if let id = selectedPresetID, let preset = PresetProviders.preset(id: id) {
+            return preset.availableModels
+        }
+        // ② 没选预设（用户手填了 baseURL / 用的是自定义中转）→ 按域名兜底。
+        //    之前这里直接返回 nil，于是手填 DeepSeek 地址的用户看不到任何模型候选，
+        //    只能凭记忆手打 model id（用户原话「模型不能选择 v4.1 吗」）。
+        let known = PresetProviders.knownModels(forBaseURL: draft.baseURL)
+        guard !known.isEmpty else { return nil }
+        return known.map { ModelRef(title: $0, modelID: $0) }
     }
 
     // MARK: - 高级参数
