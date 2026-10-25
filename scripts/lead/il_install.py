@@ -36,6 +36,7 @@
 
 
 import argparse
+import pathlib
 import asyncio
 import ctypes
 import ctypes.wintypes as wt
@@ -233,6 +234,13 @@ def main():
     ap.add_argument("--timeout", type=int, default=900)
     ap.add_argument("--skip-import", action="store_true")
     args = ap.parse_args()
+    # 文件对话框由 iloader 进程自己解析，相对路径会落到它的工作目录下，
+    # 于是「导入」看似成功、实际装的还是它上次缓存的旧 IPA。这里统一转绝对路径。
+    args.ipa = str(pathlib.Path(args.ipa).resolve(strict=False))
+    if not pathlib.Path(args.ipa).is_file():
+        print("RESULT: IPA_NOT_FOUND", args.ipa, flush=True)
+        return 5
+    print("IPA:", args.ipa, flush=True)
 
     n = wait_for_device(args.wait_device)
     print("USBMUX_COUNT:", n, flush=True)
