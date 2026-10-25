@@ -64,6 +64,12 @@ env:
   XCODEPROJ: ios/AIKeyboard.xcodeproj
   BUILD_DIR: build
   CONFIGURATION: ${{ github.event.inputs.configuration || 'Release' }}
+  # 版本号：Marketing 版本手工维护（改这里），Build 号用 CI 的 run 序号自动递增。
+  # 之前所有构建都写死 `1.0.0 build 1`，导致装到手机上根本无法区分是哪一版 ——
+  # 用户反馈「好像没更新」，我在设备侧和包里都拿不到版本证据。现在改为：
+  #   设置 › 通用 › iPhone 储存空间 › 墨语 → 版本 1.5.0，构建号 = run 序号
+  MARKETING_VERSION: 1.5.0
+  BUILD_NUMBER: ${{ github.run_number }}
 
 jobs:
   build-unsigned-ipa:
@@ -256,6 +262,8 @@ jobs:
             CODE_SIGN_ENTITLEMENTS="" \
             DEVELOPMENT_TEAM="" \
             ENABLE_BITCODE=NO \
+            MARKETING_VERSION="${MARKETING_VERSION}" \
+            CURRENT_PROJECT_VERSION="${BUILD_NUMBER}" \
             archive 2>&1 | tee "${ARCHIVE_LOG}"
           XCODEBUILD_STATUS=${PIPESTATUS[0]}
           set -e
