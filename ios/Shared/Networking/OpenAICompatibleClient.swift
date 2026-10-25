@@ -439,7 +439,22 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
     }
 
     /// 解析非流式响应体。
+    ///
+    /// **同时接受两种形态**（v2.4 起）：
+    /// 1. 标准非流式 JSON：`{"choices":[{"message":{"content":"..."}}]}`
+    /// 2. **SSE 流式分片**：`data: {"choices":[{"delta":{"content":"..."}}]}\n\n…`
+    ///
+    /// 为什么要接受第 2 种：请求里虽然写了 `stream: false`，但**很多中转/网关会忽略
+    /// 这个字段、仍然按流式回**（实测某网关：即使 `stream:false`，返回体依然是
+    /// `object: "chat.completion.chunk"` 的 `data:` 分片）。旧实现只按整段 JSON 解析，
+    /// 于是「HTTP 200、正文一个字都取不到」，用户看到的就是
+    /// 「服务商返回了 200，但没有解析出任何正文」。
+    /// 对这种网关，正确做法是把分片拼起来当成完整回复。
     private func parseCompletion(data: Data) throws -> ChatResult {
+        // ── 形态 2：SSE 分片（先判，因为它的 body 不是单个 JSON 对象）──
+        if let sseResult = OpenAICompatibleClient.parseSSEBodyAsCompletion(data) {
+            return sseResult
+        }
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw AIError.decoding("返回内容不是合法 JSON：\(HTTPTransport.extractPlainText(from: data) ?? "")")
         }
@@ -483,6 +498,77 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
                 rawSnippet: HTTPTransport.extractPlainText(from: data)
             )
             throw AIError.contentRejected(nil)
+        }
+        return ChatResult(text: trimmed, usage: usage, finishReason: finishReason)
+    }
+
+    /// 把「本该是非流式、实际返回 SSE 分片」的响应体拼成一次完整回复。
+    ///
+    /// **触发场景**：请求里写了 `stream: false`，但部分中转站 / 网关无视该字段，
+    /// 仍按流式回 `data: {"choices":[{"delta":{"content":"…"}}]}\n\n` 的分片序列
+    /// （响应 json 里 `object` 是 `chat.completion.chunk`）。旧实现只按整段 JSON 解析，
+    /// 于是「HTTP 200、正文一个字都取不到」。
+    ///
+    /// 判定与解析都用现有的 `SSEParser`，不另写一套：
+    /// - 判定：body 里出现 `data:` 且首块能解析出 `choices`（避免误吞普通 JSON）
+    /// - 拼接：逐片取 `choices[0].delta.content` 累加；顺带收 `reasoning_content` 与 `finish_reason`
+    ///
+    /// - Returns: 拼好的 `ChatResult`；**不是 SSE 形态**时返回 `nil`，交回调用方走原有 JSON 分支。
+    private static func parseSSEBodyAsCompletion(_ data: Data) -> ChatResult? {
+        let plain = String(decoding: data, as: UTF8.self)
+        // 快速排除：既没有 `data:` 也没有 `[DONE]` 的一定不是 SSE。
+        guard plain.contains("data:") else { return nil }
+
+        var parser = SSEParser()
+        var events = parser.feed(data)
+        events.append(contentsOf: parser.flush())
+
+        var text = ""
+        var reasoning = ""
+        var finishReason: String?
+        var usage: TokenUsage?
+        var sawAnyChoice = false
+
+        for event in events {
+            let payload = event.data.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !payload.isEmpty, payload != "[DONE]" else { continue }
+            guard let jsonData = payload.data(using: .utf8),
+                  let root = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
+                continue
+            }
+            if let usageDictionary = root["usage"] as? [String: Any] {
+                usage = OpenAICompatibleClient.parseUsage(usageDictionary)
+            }
+            guard let choices = root["choices"] as? [[String: Any]], let first = choices.first else {
+                continue
+            }
+            sawAnyChoice = true
+            // 流式分片走 `delta`；也兼容个别网关在流里塞 `message` 的写法。
+            let container = (first["delta"] as? [String: Any]) ?? (first["message"] as? [String: Any])
+            if let content = container?["content"] as? String {
+                text += content
+            }
+            if let chain = container?["reasoning_content"] as? String {
+                reasoning += chain
+            }
+            if let reason = first["finish_reason"] as? String, !reason.isEmpty {
+                finishReason = reason
+            }
+        }
+
+        // 一块 choices 都没解析出来 → 不是我们认识的 SSE，交回原路径报「非合法 JSON」。
+        guard sawAnyChoice else { return nil }
+
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            if finishReason == "content_filter" {
+                return nil
+            }
+            // 只有思维链、没有正文：把情况说清楚（推理模型把预算全花在思维链上）。
+            if !reasoning.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return nil
+            }
+            return nil
         }
         return ChatResult(text: trimmed, usage: usage, finishReason: finishReason)
     }
