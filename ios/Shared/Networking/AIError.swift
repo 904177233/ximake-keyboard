@@ -77,7 +77,13 @@ public enum AIError: LocalizedError, Equatable, Sendable {
             return "服务端没有返回内容"
         case .cancelled:
             return "已取消"
-        case .unknown:
+        case let .unknown(message):
+            // v2.3：**把 message 透出来**。之前这里固定返回「发生了未知错误」，
+            // 把调用方精心构造的那句话（比如「模型没有返回内容」）整个丢掉了，
+            // 用户只看到一句无信息量的「未知错误」，根本没法判断该改什么。
+            if !message.isEmpty {
+                return message
+            }
             return "发生了未知错误"
         }
     }

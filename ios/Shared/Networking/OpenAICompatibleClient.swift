@@ -93,7 +93,41 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
             body: body
         )
         let (data, _) = try await HTTPTransport.send(urlRequest, session: session)
-        return try parseCompletion(data: data)
+        do {
+            return try parseCompletion(data: data)
+        } catch {
+            throw decorate(error, url: url)
+        }
+    }
+
+    /// 给错误补上「实际请求到哪、用的是哪个模型」。
+    ///
+    /// 「配置好却报错」绝大多数是 baseURL 或模型名写错，而错误文案里原本只有
+    /// 服务端那一句话，用户根本不知道客户端到底把请求发去了哪。
+    /// 这里把**解析后的完整 URL + 模型名**追加进去，一次就能看出问题。
+    ///
+    /// 只装饰「排查类」错误（服务端报错 / 解析失败 / 正文为空 / 未知），
+    /// 鉴权、限流、超时、网络这些文案本身已经足够明确，不再加噪。
+    private func decorate(_ error: Error, url: URL?) -> AIError {
+        let wrapped = AIError.wrap(error)
+        let detail: String = {
+            var parts: [String] = []
+            if let url { parts.append("请求地址 \(url.absoluteString)") }
+            parts.append("模型 \(config.model.isEmpty ? "（空）" : config.model)")
+            return "\n（诊断：\(parts.joined(separator: " · "))）"
+        }()
+        switch wrapped {
+        case let .server(code, message):
+            return .server(code: code, message: (message ?? "") + detail)
+        case let .decoding(text):
+            return .decoding(text + detail)
+        case let .contentRejected(reason):
+            return .contentRejected((reason ?? "") + detail)
+        case let .unknown(text):
+            return .unknown(text + detail)
+        default:
+            return wrapped
+        }
     }
 
     // MARK: - 内部实现
@@ -301,10 +335,15 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
             }
         }
         // 正文为空时给出「用户能照着改」的中文错误，而不是让上层只显示「服务商没有返回内容」。
+        //
+        // v2.3：把**原始响应片段**一起带上。用户报「测试连接返回空内容」时，
+        // 之前只有一句笼统文案，完全看不出服务端到底回了什么（是空 body、
+        // 是 HTML 错误页、还是字段名不一样）。带片段后一次就能定位。
         try throwIfNoTextEmitted(
             sawText: didEmitText,
             sawReasoning: sawReasoning,
-            finishReason: accumulatedFinishReason
+            finishReason: accumulatedFinishReason,
+            rawSnippet: HTTPTransport.extractPlainText(from: rawBuffer)
         )
         _ = promptTokens
         // 统一在这里补结束标记：`[DONE]` 分支不再自己 yield，避免出现两片 final。
@@ -322,24 +361,45 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
     ///   - sawText: 是否已经吐过至少一个正文字符。
     ///   - sawReasoning: 本次是否收到过思维链。
     ///   - finishReason: 累计的 `finish_reason`（可能为 nil）。
+    ///   - rawSnippet: 原始响应片段；非空时拼进错误里，方便一眼看出服务端到底回了什么。
     private func throwIfNoTextEmitted(
         sawText: Bool,
         sawReasoning: Bool,
-        finishReason: String?
+        finishReason: String?,
+        rawSnippet: String? = nil
     ) throws {
         guard !sawText else { return }
+        // 把原始响应压成一行短片段，最多 160 字。这是排查「返回空内容」最快的手段：
+        // 空 body、HTML 错误页、字段名对不上，三种情况片段一眼就能区分。
+        let snippet: String = {
+            guard let rawSnippet else { return "" }
+            let oneLine = rawSnippet
+                .replacingOccurrences(of: "\r", with: " ")
+                .replacingOccurrences(of: "\n", with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !oneLine.isEmpty else { return "" }
+            return "\n服务端原始响应：" + String(oneLine.prefix(160))
+        }()
         if finishReason == "length" {
             throw AIError.contentRejected(
                 "输出被「最大回复长度」截断了。推理模型的思维链会占用大量 token，"
-                    + "请到「高级参数」把最大回复长度调到 2048 以上。"
+                    + "请到「高级参数」把最大回复长度调到 2048 以上。" + snippet
             )
         }
         if sawReasoning {
             throw AIError.contentRejected(
                 "这是推理模型，本次回复全部用在思维链上了，正文没有产出。"
                     + "请把「最大回复长度」调到 2048 以上，或改用非推理模型（如 deepseek-chat）。"
+                    + snippet
             )
         }
+        // 既没有正文也没有思维链：多半是「200 但内容不合格」——例如服务端只回了
+        // `{"error":...}`、回了 HTML、或字段名不是 choices/delta.content。
+        // 只有拿到原始片段，用户（和开发者）才知道下一步该改什么。
+        if !snippet.isEmpty {
+            throw AIError.contentRejected("服务商返回了 200，但没有解析出任何正文。" + snippet)
+        }
+        throw AIError.contentRejected("服务商返回了空响应（HTTP 200，body 为空）。")
     }
 
     /// 解析单片流式数据。
@@ -417,7 +477,10 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
             try throwIfNoTextEmitted(
                 sawText: false,
                 sawReasoning: !reasoning.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                finishReason: finishReason
+                finishReason: finishReason,
+                // 把整段响应体带上（`extractPlainText` 内部已截到 200 字）。
+                // 「200 但正文为空」时，用户与开发者全靠这段才知道服务端到底回了什么。
+                rawSnippet: HTTPTransport.extractPlainText(from: data)
             )
             throw AIError.contentRejected(nil)
         }

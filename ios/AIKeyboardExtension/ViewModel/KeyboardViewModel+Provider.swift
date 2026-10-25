@@ -133,8 +133,15 @@ extension KeyboardViewModel {
     /// 用给定的草稿配置发一次「hi」探活，返回中文结果文案。
     ///
     /// 为什么不复用宿主 App 的 `ConnectivityProbe`：它编译在 App target 里，
-    /// 键盘扩展 target 看不到（两个 target 只共享 `ios/Shared`）。
+    /// 键盘扩展 target 看不到（两个 target 都只共享 `ios/Shared`）。
     /// 这里直接用 Shared 层的 `AIClientFactory` + `ChatRequest`，逻辑同源。
+    ///
+    /// **v2.3 改动**：探活改走**非流式** `complete()`，不再走 SSE。
+    /// 原来用 `stream: true` 时，只要服务端返回的 SSE 格式有一点点偏差
+    /// （字段名不同、`data:` 前有 BOM、网关改成了 chunked JSON），
+    /// 解析就会一个正文字符都拿不到，用户看到的是「连通，但服务商返回空内容」——
+    /// 明明配对了却像没配好。探活的目的只是「地址+Key+模型名能不能换回模型响应」，
+    /// 用非流式一次拿完整 JSON 最稳，也不受流解析实现影响。
     ///
     /// - Parameters:
     ///   - config: 待测试的服务商配置（草稿，未保存也能测）。
@@ -145,39 +152,34 @@ extension KeyboardViewModel {
         apiKey: String
     ) async -> (failed: Bool, message: String) {
         let started = Date()
-        var buffer = ""
-        var sawReasoning = false
         let request = ChatRequest(
             messages: [ChatMessage.user("hi")],
             temperature: 0,
-            // 256 而不是 8：推理模型（deepseek-reasoner 等）对 "hi" 的思维链本身就要
-            // 一百多个 token，给太小会让正文还没开始就撞上 max_tokens，
-            // 客户端按「正文为空」报错，用户会以为 Key 配错了。
-            maxTokens: 256,
-            stream: true
+            // 1024 而不是 256：推理模型（deepseek-reasoner 等）对 "hi" 的思维链
+            // 本身就要一百多 token，给太小会让正文还没开始就撞上上限。
+            maxTokens: 1024,
+            stream: false
         )
         do {
             let client = AIClientFactory.makeLLM(config: config, apiKey: apiKey)
-            let stream = client.stream(request)
-            for try await delta in stream {
-                if !delta.text.isEmpty { buffer += delta.text }
-                if let reasoning = delta.reasoning, !reasoning.isEmpty { sawReasoning = true }
-                if delta.isFinal { break }
-            }
+            let result = try await client.complete(request)
             let ms = Int(Date().timeIntervalSince(started) * 1000)
-            let sample = buffer.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !sample.isEmpty {
-                return (false, "连通（\(ms) ms）：\(String(sample.prefix(40)))")
+            let sample = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !sample.isEmpty else {
+                // 拿到 200 但正文为空：`complete()` 内部已按「有无思维链 / finish_reason」
+                // 抛出可读原因，走到这里说明确实回了空串。
+                return (false, "连通（\(ms) ms），但服务端正文为空。地址与 Key 是对的，"
+                    + "换一个模型名试试（例如把推理模型换成 deepseek-chat）。")
             }
-            if sawReasoning {
-                // 推理模型的正常表现：探活能看到思维链，正文要在聊天里长问才出。
-                return (false, "连通（\(ms) ms）。这是推理模型，探活只收到思维链，聊天时会正常出正文。")
-            }
-            return (false, "连通（\(ms) ms），但服务商返回空内容。")
+            let oneLine = sample
+                .replacingOccurrences(of: "\n", with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return (false, "连通（\(ms) ms）：\(String(oneLine.prefix(40)))")
         } catch {
             let wrapped = AIError.wrap(error)
-            if sawReasoning, case AIError.contentRejected = wrapped {
-                return (false, "连通。这是推理模型，探活只收到思维链。")
+            if case AIError.contentRejected = wrapped {
+                // 「正文为空」不是配置错误：地址、Key、模型名都已经验收通过了。
+                return (false, "连通。\(wrapped.errorDescription ?? "")")
             }
             return (true, wrapped.errorDescription ?? "测试失败：\(error.localizedDescription)")
         }

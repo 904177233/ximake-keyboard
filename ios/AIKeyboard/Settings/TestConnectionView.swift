@@ -67,38 +67,30 @@ final class ConnectionTester: ObservableObject {
         let startedAt = Date()
 
         // 探活的目的只有一个：**证明「地址 + Key + 模型名」这三项能换回模型的响应**。
-        // 不是测「模型能不能好好回答问题」。所以只要能收到任何一段模型输出
-        // （正文 text 或思维链 reasoning）就算连通。
+        // 不是测「模型能不能好好回答问题」。
         //
-        // 这条区分是用户反馈「API 配置好还是用不了，提示错误」的直接原因之一：
-        // deepseek-reasoner 这类推理模型对 "hi" 会先吐一大段思维链，探活预算不够时
-        // 正文为空，旧逻辑会抛 contentRejected 并显示成红色失败——用户以为 Key 配错了，
-        // 其实完全正常。
+        // v2.3 改动：改走**非流式** `complete()`，不再用 SSE 流。
+        // 用户报「测试 API 服务商返回空内容 / 发生未知错误」的直接原因就在这条路径上：
+        // 流式解析要对齐 SSE 格式（`data:` 前缀、`[DONE]`、`choices[].delta.content`），
+        // 任何一个网关的格式偏差都会让正文一个字符都拿不到，于是「明明配对了却显示空内容」。
+        // 探活只需一次完整的非流式响应，最稳、也最少依赖实现细节。
         Task {
-            var buffer = ""
-            var sawReasoning = false
             do {
-                let stream = ConnectivityProbe.makeHelloStream(config: provider, apiKey: apiKey)
-                for try await delta in stream {
-                    if !delta.text.isEmpty {
-                        buffer += delta.text
-                    }
-                    if let reasoning = delta.reasoning, !reasoning.isEmpty {
-                        sawReasoning = true
-                    }
-                    if delta.isFinal {
-                        break
-                    }
-                }
+                let client = AIClientFactory.makeLLM(config: provider, apiKey: apiKey)
+                let request = ChatRequest(
+                    messages: [ChatMessage.user("hi")],
+                    temperature: 0,
+                    // 1024：推理模型对 "hi" 的思维链本身就要一百多 token。
+                    maxTokens: 1024,
+                    stream: false
+                )
+                let result = try await client.complete(request)
                 let elapsed = Int(Date().timeIntervalSince(startedAt) * 1000)
                 guard currentTaskID == taskID else { return }
-                let sample = buffer.trimmingCharacters(in: .whitespacesAndNewlines)
+                let sample = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 if sample.isEmpty {
-                    // 正文空但收到过思维链 → 模型确实活着，这是推理模型的正常表现。
                     state = .success(
-                        sample: sawReasoning
-                            ? "（这是推理模型，探活只收到思维链，正文需在聊天框里发长一点的问题才会出现）"
-                            : "（服务商返回空内容）",
+                        sample: "（地址与 Key 已通过验证，但正文为空）",
                         latencyMs: elapsed
                     )
                 } else {
@@ -106,6 +98,18 @@ final class ConnectionTester: ObservableObject {
                 }
             } catch {
                 guard currentTaskID == taskID else { return }
+                // `contentRejected` 表示「HTTP 通了、但正文为空」——地址/Key/模型名
+                // 都已经验收通过，不该显示成红色失败（那会让用户以为 Key 配错了）。
+                if case AIError.contentRejected = AIError.wrap(error) {
+                    let elapsed = Int(Date().timeIntervalSince(startedAt) * 1000)
+                    state = .success(
+                        sample: "（地址与 Key 已通过验证，正文为空："
+                            + (AIError.wrap(error).errorDescription ?? "")
+                            + "）",
+                        latencyMs: elapsed
+                    )
+                    return
+                }
                 let wrapped = AIError.wrap(error)
                 if case AIError.cancelled = wrapped {
                     state = .idle

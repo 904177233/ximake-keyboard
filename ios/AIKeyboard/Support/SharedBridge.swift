@@ -272,23 +272,46 @@ enum ConnectivityProbe {
     }
 
     /// 构造一条「hi」探活流（不落任何状态，由调用方消费）。
+    ///
+    /// **v2.3 改动**：内部改走**非流式** `complete()`，再把完整正文包成一片
+    /// `ChatDelta(text:isFinal:true)` 吐出来。对外签名不变，所以 3 个调用点
+    /// （`TestConnectionView`、`ProviderListView`、`DiagnosticsChecklist` 两处）零改动。
+    ///
+    /// 为什么不再走真流式：用户报「测试 API 服务商返回空内容 / 发生未知错误」，
+    /// 根因就在这条路径上 —— SSE 解析要求服务端严格按
+    /// `data: {"choices":[{"delta":{"content":...}}]}` 回，任何一个网关的格式偏差
+    /// （字段名不同、多包一层、`data:` 前带 BOM、干脆忽略 `stream:true` 回完整 JSON）
+    /// 都会让正文字符一个都拿不到，于是「明明配对了却显示空内容」。
+    /// 探活只需证明「地址 + Key + 模型名」能换回模型响应，一次完整响应最稳。
+    ///
+    /// 预算给 1024 而不是 8/64/256：推理模型（deepseek-reasoner / o1 / QwQ 等）会
+    /// **先**把 token 全花在思维链上，实测对 "hi" 的思维链本身就要一百多 token，
+    /// 给太小会让正文还没开始就撞上限。
     static func makeHelloStream(
         config: AIProviderConfig,
         apiKey: String
     ) -> AsyncThrowingStream<ChatDelta, Error> {
-        let client = AIClientFactory.makeLLM(config: config, apiKey: apiKey)
-        // 预算给 256 而不是 8 或 64：推理模型（deepseek-reasoner / o1 / QwQ 等）会**先**
-        // 把 token 全花在思维链上。实测 deepseek-reasoner 对 "hi" 的思维链本身就要
-        // 一百多个 token，给 64 时正文还没开始就撞上 max_tokens，客户端按「正文为空」
-        // 抛 contentRejected，用户看到的是红色「测试失败」——但他其实只是配了个推理模型。
-        // 256 够它吐出一小段正文，单次成本仍只有几百个 token 的零头。
-        let request = ChatRequest(
-            messages: [ChatMessage.user("hi")],
-            temperature: 0,
-            maxTokens: 256,
-            stream: true
-        )
-        return client.stream(request)
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    let client = AIClientFactory.makeLLM(config: config, apiKey: apiKey)
+                    let request = ChatRequest(
+                        messages: [ChatMessage.user("hi")],
+                        temperature: 0,
+                        maxTokens: 1024,
+                        stream: false
+                    )
+                    let result = try await client.complete(request)
+                    // 正文可能为空（推理模型把预算烧在思维链上）——此时不抛错，
+                    // 交给调用方按「连通但正文为空」展示，而不是红色失败。
+                    continuation.yield(ChatDelta(text: result.text, isFinal: true))
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
     }
 
     /// 发起一次真实生图请求（供试验场 / 诊断页使用）。
