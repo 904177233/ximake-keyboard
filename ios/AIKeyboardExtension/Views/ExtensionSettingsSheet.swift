@@ -49,6 +49,8 @@ struct ExtensionSettingsSheet: View {
                     syncRow
                     divider
                     dictionaryRow
+                    divider
+                    versionRow
                 }
             }
             .frame(maxHeight: .infinity)
@@ -289,6 +291,38 @@ struct ExtensionSettingsSheet: View {
         .padding(.horizontal, Theme.Spacing.xl)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text("词库来源，\(dictionarySummaryText)"))
+    }
+
+    /// 版本水印行。
+    ///
+    /// 为什么需要这一行：iOS 会缓存键盘扩展进程，App 升级后键盘可能仍在跑旧代码，
+    /// 而此前所有构建的 `CFBundleShortVersionString` 都写死 1.0.0、`CFBundleVersion`
+    /// 都是 1 —— 用户和开发者都无法判断「键盘上跑的到底是哪一版」。
+    /// 现在 CI 用 run 序号填 build 号，这里把它显示出来，一眼可对。
+    private var versionRow: some View {
+        HStack(spacing: 0) {
+            Text("键盘版本")
+                .font(Theme.fontBody)
+                .foregroundColor(Theme.textPrimary)
+            Spacer(minLength: Theme.Spacing.md)
+            Text(Self.versionText)
+                .font(Theme.fontCaption)
+                .foregroundColor(Theme.textSecondary)
+                .monospacedDigit()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: KMLayout.settingsRowHeight)
+        .padding(.horizontal, Theme.Spacing.xl)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text("键盘版本，\(Self.versionText)"))
+    }
+
+    /// 形如 `1.5.0 (24)`。扩展的 `Bundle.main` 就是 appex 自己，取到的是扩展的版本号。
+    static var versionText: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return "\(version) (\(build))"
     }
 
     /// 词库摘要文案：兜底词库时前置警示符号；尚未加载时给占位文案。
