@@ -7,6 +7,7 @@
 //  使用方：SettingsView / KeyboardHomeView。
 //
 
+import Speech
 import SwiftUI
 
 /// 语气与外观设置页。
@@ -25,6 +26,7 @@ struct AppearanceView: View {
                 imageSizeSection
                 appearanceSection
                 themeSection
+                voiceSection
                 dictionarySection
             }
             .padding(.horizontal, AppMetrics.pageInset)
@@ -200,6 +202,48 @@ struct AppearanceView: View {
             return "在线 v\(info.version) · \(info.entryCount) 条"
         }
         return "内置 · \(appState.dictionaryInfo?.wordCount ?? 0) 条"
+    }
+
+    // MARK: - 语音输入
+
+    /// 语音输入权限入口。
+    ///
+    /// 权限必须在这里申请，不能在键盘扩展里申请 —— 扩展弹系统权限框会让键盘
+    /// 失去第一响应者被收起（用户看到的现象是「一点语音就切到别的输入法」）。
+    private var voiceSection: some View {
+        VStack(alignment: .leading, spacing: AppMetrics.blockGap) {
+            SectionHeader(
+                title: "语音输入",
+                footnote: "键盘里的麦克风按钮要用这两项权限；在键盘里点它不会弹窗"
+            )
+
+            ListGroup {
+                NavigationLink {
+                    VoiceSettingsView()
+                } label: {
+                    SettingsRow(
+                        icon: IconSpec(symbol: "mic.fill", tint: Theme.accent),
+                        title: "语音权限",
+                        subtitle: voiceSubtitle,
+                        accessory: .chevron
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+        }
+    }
+
+    /// 语音权限副标题：两项都给了才显示可用。
+    private var voiceSubtitle: String {
+        let mic = VoiceSettingsView.readMicGranted()
+        let speech = SFSpeechRecognizer.authorizationStatus() == .authorized
+        if mic && speech {
+            return "已授权 · 键盘内可直接说话"
+        }
+        if mic || speech {
+            return "还差一项授权"
+        }
+        return "未授权"
     }
 
     // MARK: - 主题与形象

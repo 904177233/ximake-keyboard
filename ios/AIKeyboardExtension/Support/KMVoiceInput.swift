@@ -112,14 +112,49 @@ public final class KMVoiceInput: ObservableObject {
         return recognizer.isAvailable || SFSpeechRecognizer.authorizationStatus() == .notDetermined
     }
 
+    /// 当前是否已经拿到麦克风 + 语音识别两项授权（**只读检查，绝不弹窗**）。
+    ///
+    /// v1.4 架构修正（用户反馈「语音输入一点击就会切到别的输入法」）：
+    /// 键盘扩展里调 `requestAuthorization` / `requestRecordPermission` 会弹系统权限框，
+    /// **而弹出系统框会让键盘失去第一响应者、被系统收起，从而切回上一个输入法**。
+    /// 所以权限只能由宿主 App 申请；扩展这里只读状态，没授权就给出引导文案。
+    public var isAuthorized: Bool {
+        guard SFSpeechRecognizer.authorizationStatus() == .authorized else { return false }
+        return Self.isMicrophoneAuthorized
+    }
+
+    /// 麦克风授权状态（只读，不触发弹窗）。
+    public static var isMicrophoneAuthorized: Bool {
+        if #available(iOS 17.0, *) {
+            return AVAudioApplication.shared.recordPermission == .granted
+        }
+        return AVAudioSession.sharedInstance().recordPermission == .granted
+    }
+
+    /// 麦克风授权状态（原始枚举字符串，用于把「未决定」和「已拒绝」区分开给不同文案）。
+    public var authorizationHint: String {
+        switch SFSpeechRecognizer.authorizationStatus() {
+        case .authorized:
+            return Self.isMicrophoneAuthorized ? "" : "还没有允许麦克风"
+        case .notDetermined:
+            return "还没有授权语音识别"
+        case .denied, .restricted:
+            return "语音识别权限被拒绝"
+        @unknown default:
+            return "语音权限状态未知"
+        }
+    }
+
     // MARK: 公开动作
 
-    /// 开始录音（先申请权限）。
+    /// 开始录音（**不申请权限**，只检查已有授权）。
+    ///
+    /// 没授权时直接进 `.failed`，由 UI 引导用户去「墨语」App 里开权限 ——
+    /// 在扩展里弹权限框会把键盘顶掉，这条路径必须彻底删掉。
     public func start() {
         guard !state.isActive else { return }
         resetInternalState()
         partialText = ""
-        state = .requestingPermission
 
         guard isPlatformSupported, recognizer != nil else {
             state = .failed(
@@ -129,17 +164,15 @@ public final class KMVoiceInput: ObservableObject {
             return
         }
 
-        requestPermissions { [weak self] granted in
-            guard let self else { return }
-            guard granted else {
-                self.state = .failed(
-                    reason: "没有麦克风或语音识别权限。请到系统「设置 › 墨语」里允许，或在宿主 App 内使用语音",
-                    isPlatformUnsupported: false
-                )
-                return
-            }
-            self.beginRecording()
+        guard isAuthorized else {
+            state = .failed(
+                reason: "请先打开「墨语」App › 设置 › 语音输入，允许麦克风与语音识别，再回到键盘使用",
+                isPlatformUnsupported: false
+            )
+            return
         }
+
+        beginRecording()
     }
 
     /// 停止录音并等待最终转写结果。
@@ -174,31 +207,9 @@ public final class KMVoiceInput: ObservableObject {
 
     // MARK: 权限
 
-    /// 依次申请麦克风与语音识别权限。
-    private func requestPermissions(_ completion: @escaping (Bool) -> Void) {
-        requestMicrophonePermission { micGranted in
-            guard micGranted else {
-                completion(false)
-                return
-            }
-            SFSpeechRecognizer.requestAuthorization { status in
-                DispatchQueue.main.async { completion(status == .authorized) }
-            }
-        }
-    }
-
-    /// 申请麦克风权限（iOS 17+ 走新 API，iOS 16 走旧 API）。
-    private func requestMicrophonePermission(_ completion: @escaping (Bool) -> Void) {
-        if #available(iOS 17.0, *) {
-            AVAudioApplication.requestRecordPermission { granted in
-                DispatchQueue.main.async { completion(granted) }
-            }
-        } else {
-            AVAudioSession.sharedInstance().requestRecordPermission { granted in
-                DispatchQueue.main.async { completion(granted) }
-            }
-        }
-    }
+    // 说明：扩展内**不再**有任何 `request*Permission` 调用。
+    // 键盘扩展弹系统权限框会让键盘失去第一响应者并被收起（用户看到的
+    // 「点语音就切到别的输入法」就是它），授权统一由宿主 App 发起。
 
     // MARK: 录音
 

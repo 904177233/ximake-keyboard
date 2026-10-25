@@ -181,6 +181,7 @@ SYSTEM = set(
     task_info task_vm_info MACH_TASK_BASIC_INFO_COUNT
     AVFoundation Speech AVAudioSession AVAudioEngine AVAudioApplication SFSpeechRecognizer
     SFSpeechAudioBufferRecognitionRequest SFSpeechRecognitionTask SFSpeechRecognitionResult
+    SFSpeechRecognizerAuthorizationStatus SFSpeechRecognitionRequest SFSpeechRecognitionTaskDelegate
     AVAudioPCMBuffer AVAudioFormat AVAudioNodeTapBlock
     """.split()
 )

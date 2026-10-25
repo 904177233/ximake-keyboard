@@ -70,29 +70,37 @@ struct KeyRowsBottomRow: View {
     ///
     /// 右下角的位置原本放的是地球键。用户反馈「为什么要有这个，而没有数字键」——
     /// 主流输入法（微信、搜狗、Gboard）左下角都是 `123`，切键盘收进长按里。
+    ///
+    /// v1.4 修真实 bug（用户反馈「数字键盘完全没有用」）：上一版是 `Button` +
+    /// `.highPriorityGesture(LongPressGesture)`，而 **highPriorityGesture 会抢走
+    /// Button 的 tap** —— 结果只有长按 0.45s 有效，点按永远收不到 `.pageNumbers`。
+    /// 这里改成不用 Button、自己用 `LongPressGesture.exclusively(before: TapGesture)`
+    /// 组合：先等长按，松手够快就判定为点按。两条路径都显式发事件，不再互相抢。
     private var numberKey: some View {
-        Button(action: {
-            KMHaptics.function()
-            onTap(.pageNumbers)
-        }) {
+        ZStack {
+            RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous)
+                .fill(Theme.keyFunctionBackground)
             Text("123")
                 .font(Theme.fontCaption)
                 .foregroundColor(Theme.textPrimary)
-                .frame(maxWidth: .infinity)
-                .frame(width: KMLayout.functionKeyWidth, height: height)
-                .background(
-                    RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous)
-                        .fill(Theme.keyFunctionBackground)
-                )
-                .contentShape(Rectangle())
         }
-        .buttonStyle(KMKeyCapStyle(style: .function))
-        .highPriorityGesture(
-            LongPressGesture(minimumDuration: 0.45).onEnded { _ in
-                KMHaptics.function()
-                onTap(.globe)
-            }
+        .frame(width: KMLayout.functionKeyWidth, height: height)
+        .contentShape(Rectangle())
+        .gesture(
+            LongPressGesture(minimumDuration: 0.45)
+                .onEnded { _ in
+                    KMHaptics.function()
+                    onTap(.globe)
+                }
+                .exclusively(
+                    before: TapGesture().onEnded {
+                        KMHaptics.function()
+                        onTap(.pageNumbers)
+                    }
+                )
         )
+        .accessibilityElement()
+        .accessibilityAddTraits(.isButton)
         .accessibilityLabel(Text("数字与符号"))
         .accessibilityHint(Text("长按切换输入法"))
         .accessibilityAddTraits(.isKeyboardKey)

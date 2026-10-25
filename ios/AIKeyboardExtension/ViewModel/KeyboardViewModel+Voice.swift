@@ -19,15 +19,28 @@ extension KeyboardViewModel {
 
     /// 当前能否进入语音输入页。
     ///
-    /// 三个条件同时满足才为 true：
+    /// 四个条件同时满足才为 true：
     /// ①系统/设备支持语音识别（模拟器、部分地区会返回 false）；
-    /// ②有完全访问（`aiAvailability != .noFullAccess`）——没有完全访问时
+    /// ②**已经拿到麦克风 + 语音识别授权** —— 扩展里绝不能自己弹权限框
+    ///   （弹框会让键盘失去第一响应者被收起，用户看到的就是「点语音就切到别的输入法」），
+    ///   所以没授权时这里直接返回 false，由 UI 引导去宿主 App 开；
+    /// ③有完全访问（`aiAvailability != .noFullAccess`）——没有完全访问时
     ///   扩展连网络都发不出去，转写必然失败，不如不给入口；
-    /// ③当前不在忙碌态（正在生成 AI 内容时先别抢麦克风与注意力）。
+    /// ④当前不在忙碌态（正在生成 AI 内容时先别抢麦克风与注意力）。
     public var canUseVoiceInput: Bool {
         guard KMVoiceInput.shared.isPlatformSupported else { return false }
+        guard KMVoiceInput.shared.isAuthorized else { return false }
         if aiAvailability == .noFullAccess { return false }
         return aiAvailability != .busy
+    }
+
+    /// 语音入口是否应该显示（只要平台支持就显示，点了再给引导文案）。
+    ///
+    /// 与 `canUseVoiceInput` 分开：没授权时仍然显示麦克风按钮，
+    /// 否则用户永远不知道有这个功能，也无从知道要去哪里开权限。
+    public var showsVoiceEntry: Bool {
+        guard KMVoiceInput.shared.isPlatformSupported else { return false }
+        return aiAvailability != .noFullAccess
     }
 
     // MARK: - 进出语音页
@@ -36,13 +49,24 @@ extension KeyboardViewModel {
     ///
     /// 不可用时只给中文引导，**不切页面**（与 `openAIChat()` 的策略一致）。
     public func openVoiceInput() {
-        guard canUseVoiceInput else {
-            if aiAvailability == .noFullAccess {
-                KMHaptics.warning()
-                showsFullAccessCard = true
-            } else {
-                showToast("当前环境不支持键盘内语音，可以到「墨语」App 里用语音")
-            }
+        if aiAvailability == .noFullAccess {
+            KMHaptics.warning()
+            showsFullAccessCard = true
+            return
+        }
+        guard KMVoiceInput.shared.isPlatformSupported else {
+            showToast("当前系统不支持键盘内语音，可以到「墨语」App 里用语音")
+            return
+        }
+        guard KMVoiceInput.shared.isAuthorized else {
+            KMHaptics.warning()
+            let hint = KMVoiceInput.shared.authorizationHint
+            let suffix = hint.isEmpty ? "" : "（\(hint)）"
+            showToast("请先到「墨语」App › 语音输入 里允许麦克风与语音识别\(suffix)")
+            return
+        }
+        guard aiAvailability != .busy else {
+            showToast("正在生成内容，稍等一下再用语音")
             return
         }
         KMHaptics.function()

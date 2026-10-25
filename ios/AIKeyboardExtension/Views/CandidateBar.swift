@@ -64,6 +64,13 @@ struct CandidateBar: View {
     /// 点击联想胶囊（参数为下标）。
     var onSelectSuggestion: ((Int) -> Void)?
 
+    /// 滑动候选时的高亮跟随（参数为本页内下标）。
+    ///
+    /// v1.4 用户反馈「候选词可以滑动选取」：国产输入法（微信/搜狗）在候选条上
+    /// 横向滑动会移动高亮，松手即上屏。这里把「滑动」拆成两步回调：
+    /// 滑动中不断 `onHighlight`（视觉高亮跟随手指），松手才 `onSelect`（真正上屏）。
+    var onHighlight: ((Int) -> Void)?
+
     /// 主题主色（design/05 §1.1：候选栏首选字背景是 4 处主色之一）。
     var accent: Color = Theme.accent
 
@@ -140,6 +147,44 @@ struct CandidateBar: View {
         }
         .accessibilityElement(children: .contain)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .simultaneousGesture(swipeSelectionGesture)
+    }
+
+    /// 横向滑动选词：滑过一个个候选，松手上屏。
+    ///
+    /// 步长按 56pt 估算（候选项最小宽 48 + 项间距 20 的一半），
+    /// 比精确测宽稳：候选宽度随字数变化，测宽需要 `GeometryReader` 布局回调，
+    /// 在键盘里每帧回调的代价不值得。用户实际体验是「滑一点换一个」。
+    private var swipeSelectionGesture: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .onChanged { value in
+                guard items.count > 1 else { return }
+                if swipeStartIndex < 0 {
+                    swipeStartIndex = highlightedIndex
+                }
+                let target = swipeTarget(for: value)
+                guard target != highlightedIndex else { return }
+                onHighlight?(target)
+            }
+            .onEnded { value in
+                let target = swipeTarget(for: value)
+                let start = swipeStartIndex
+                swipeStartIndex = -1
+                // 只有真的滑动过（换过格）才上屏，否则交给候选自身的 tap 处理。
+                guard items.count > 1, start >= 0, target != start else { return }
+                onSelect(target)
+            }
+    }
+
+    /// 手势起点下标（`-1` 表示当前没有进行中的滑动）。
+    @State private var swipeStartIndex: Int = -1
+
+    /// 按当前位移算出目标下标（夹在本页范围内）。
+    private func swipeTarget(for value: DragGesture.Value) -> Int {
+        let start = swipeStartIndex < 0 ? highlightedIndex : swipeStartIndex
+        let step: CGFloat = 56
+        let offset = Int((value.translation.width / step).rounded())
+        return min(max(start + offset, 0), max(items.count - 1, 0))
     }
 
     /// 单个候选。

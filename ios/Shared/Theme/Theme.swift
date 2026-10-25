@@ -235,8 +235,8 @@ public enum Theme {
 
         /// 4 —— 字母区行数
         public static let keyboardRowCount: Int = 4
-        /// 39 —— 字母行高
-        public static let letterRowHeight: CGFloat = 39
+        /// 46 —— 字母行高（v1.4 由 39 提高：用户反馈「导航栏砍了之后键盘高度太低了」）
+        public static let letterRowHeight: CGFloat = 46
         /// 34.5 —— 横屏字母行间距
         public static let letterRowPitchLandscape: CGFloat = 34.5
         /// 33 —— 字母键宽

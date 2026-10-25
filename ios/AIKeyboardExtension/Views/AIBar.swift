@@ -10,6 +10,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 /// AI 工具条中的一个能力胶囊。
 struct KMAIBarItem: Identifiable, Equatable {
@@ -100,7 +101,7 @@ struct AIBar: View {
         .frame(maxHeight: .infinity)
     }
 
-    /// 内容（能力胶囊 + 设置胶囊，或禁用提示）。
+    /// 内容（圆形图标按钮 + 设置 / 语音）。
     @ViewBuilder
     private var content: some View {
         if let reason = disabledReason {
@@ -108,20 +109,17 @@ struct AIBar: View {
                 HStack(spacing: Theme.Sizing.aiChipGap) {
                     Button(action: onDisabledTap) {
                         HStack(spacing: Theme.Spacing.sm) {
+                            iconButtonGlyph(symbol: "lock.fill", fallback: "🔒", tint: Theme.textSecondary, size: 11)
                             Text(reason.message)
                                 .font(Theme.fontChip)
                                 .foregroundColor(Theme.textSecondary)
                                 .lineLimit(1)
-                            KMIconGlyph(symbol: "chevron.right", fallback: "›", size: 11, tint: Theme.textTertiary)
+                            iconButtonGlyph(symbol: "chevron.right", fallback: "›", tint: Theme.textTertiary, size: 11)
                         }
                         .padding(.horizontal, Theme.Spacing.lg)
                         .frame(height: Theme.Sizing.aiChipHeight)
                         .frame(minHeight: Theme.Sizing.minTapTarget)
                         .background(Theme.chipBackground)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous)
-                                .strokeBorder(Theme.chipBorder, lineWidth: Theme.MaterialToken.strokeWidth)
-                        )
                         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous))
                         .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous))
                     }
@@ -133,33 +131,30 @@ struct AIBar: View {
             .opacity(0.55)
         } else {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: Theme.Sizing.aiChipGap) {
+                HStack(spacing: Theme.Spacing.sm) {
                     ForEach(items) { item in
-                        KMPillChip(
-                            title: item.title,
-                            emoji: item.emoji,
-                            style: .tool,
-                            size: .regular,
+                        iconButton(
+                            symbol: item.feature.systemImage,
+                            fallback: "•",
+                            accessibility: item.title,
                             isSelected: activeFeature == item.feature,
                             isEnabled: isBusy == false,
                             action: { onSelect(item.feature) }
                         )
                     }
-                    KMPillChip(
-                        title: "设置",
-                        emoji: "⚙️",
-                        style: .tool,
-                        size: .regular,
+                    iconButton(
+                        symbol: "gearshape",
+                        fallback: "⚙",
+                        accessibility: "设置",
                         isSelected: false,
                         isEnabled: true,
                         action: onOpenSettings
                     )
                     if showsVoice {
-                        KMPillChip(
-                            title: "语音",
-                            emoji: "🎙️",
-                            style: .tool,
-                            size: .regular,
+                        iconButton(
+                            symbol: "mic",
+                            fallback: "🎤",
+                            accessibility: "语音输入",
                             isSelected: false,
                             isEnabled: isBusy == false,
                             action: onOpenVoice
@@ -167,7 +162,63 @@ struct AIBar: View {
                     }
                 }
                 .padding(.horizontal, Theme.Sizing.aiBarInset)
+                .frame(height: Theme.Sizing.aiChipHeight + Theme.Spacing.md)
             }
+        }
+    }
+
+    /// 圆形图标按钮（**只画图标，不放 emoji、不放文字**）。
+    ///
+    /// v1.4 修用户反馈「导航栏的图标依旧丑，居然省事到用 emoji，变成圆形图标，节省空间」：
+    /// - 图形用 SF Symbol（矢量，跟随 Dynamic Type 与字重），无 SF Symbol 时退回文本字符兜底；
+    /// - 容器恒为 32pt 圆，命中区扩到 44pt；
+    /// - 未选中 = 无底色的图标；选中 = `accentSoft` 底 + 主色图标（主色只在这个位置出现）；
+    /// - 按下用 `KMPressableStyle` 做 0.94 缩放，时长走 `Theme.Motion.fastAnimation`。
+    private func iconButton(
+        symbol: String,
+        fallback: String,
+        accessibility: String,
+        isSelected: Bool,
+        isEnabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: {
+            guard isEnabled else { return }
+            KMHaptics.chip()
+            action()
+        }) {
+            ZStack {
+                Circle()
+                    .fill(isSelected ? Theme.accentSoft : Color.clear)
+                iconButtonGlyph(
+                    symbol: symbol,
+                    fallback: fallback,
+                    tint: isSelected ? Theme.accent : Theme.textSecondary,
+                    size: 15
+                )
+            }
+            .frame(width: Theme.Sizing.aiChipHeight, height: Theme.Sizing.aiChipHeight)
+            .frame(minWidth: Theme.Sizing.minTapTarget, minHeight: Theme.Sizing.minTapTarget)
+            .contentShape(Rectangle())
+            .opacity(isEnabled ? 1 : 0.35)
+        }
+        .buttonStyle(KMPressableStyle(scale: 0.94, pressedOpacity: 0.9))
+        .accessibilityLabel(Text(accessibility))
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .animation(Theme.Motion.fastAnimation, value: isSelected)
+    }
+
+    /// 图标字形：优先 SF Symbol，取不到时退回字符兜底。
+    @ViewBuilder
+    private func iconButtonGlyph(symbol: String, fallback: String, tint: Color, size: CGFloat) -> some View {
+        if UIImage(systemName: symbol) != nil {
+            Image(systemName: symbol)
+                .font(.system(size: size, weight: .semibold))
+                .foregroundColor(tint)
+        } else {
+            Text(fallback)
+                .font(.system(size: size, weight: .semibold))
+                .foregroundColor(tint)
         }
     }
 

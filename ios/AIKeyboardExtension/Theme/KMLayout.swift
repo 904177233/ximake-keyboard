@@ -46,14 +46,18 @@ enum KMLayout {
 
     // MARK: - 纵向
 
-    /// 键帽视觉高度 39。
+    /// 键帽视觉高度（v1.4 起 46，见 `Theme.Sizing.letterRowHeight`）。
     static let letterRowHeight: CGFloat = Theme.Sizing.letterRowHeight
 
-    /// 最小命中高度 44（视觉 39 + 上下各 2.5 的透明命中区）。
+    /// 最小命中高度 44（视觉 46 ≥ 44，命中区不再需要外扩）。
     static let keyHitHeight: CGFloat = Theme.Sizing.minTapTarget
 
-    /// 单行上下各外扩的命中区高度（44 − 39) / 2 = 2.5。
-    static let rowHitOverflow: CGFloat = (keyHitHeight - letterRowHeight) / 2
+    /// 单行上下各外扩的命中区高度。
+    ///
+    /// v1.4 行高从 39 提到 46 后，(46 − 44) / 2 = **−1**，即视觉高度已经超过
+    /// 44pt 的触控红线，不再需要向上下借命中区。这里用 `max(0, …)` 兜成 0，
+    /// 避免负值把相邻两行的命中区各自内缩 1pt（会让行间出现 2pt 死区）。
+    static let rowHitOverflow: CGFloat = max(0, (keyHitHeight - letterRowHeight) / 2)
 
     /// 字母行行距（43.5 ≈ 39 + 6），仅横屏使用 34.5。
     static let rowPitch: CGFloat = letterRowHeight + keyGap
@@ -61,7 +65,7 @@ enum KMLayout {
     /// 横屏行高 34.5（Theme 提供）。
     static let landscapeRowHeight: CGFloat = Theme.Sizing.letterRowPitchLandscape
 
-    /// 键区总高 174 = 4 × 39 + 3 × 6。
+    /// 键区总高（v1.4 = 4 × 46 + 3 × 6 = **202**）。
     static let keyRowsHeight: CGFloat =
         letterRowHeight * CGFloat(Theme.Sizing.keyboardRowCount)
         + keyGap * CGFloat(Theme.Sizing.keyboardRowCount - 1)
@@ -81,12 +85,13 @@ enum KMLayout {
     /// 效用行高度（旧名 `chromeHeight` 保留，语义已从「候选栏 + 工具条 84」变为「一行 44」）。
     static let chromeHeight: CGFloat = utilityRowHeight
 
-    /// 键盘基础高度（竖屏 **218** = 44 效用行 + 174 键区）。
+    /// 键盘基础高度（竖屏 **246** = 44 效用行 + 202 键区）。
     ///
-    /// v1.3 起由「效用行 44 + 键区 174」两段算出，而不是直接取
+    /// v1.3 起由「效用行 44 + 键区」两段算出，而不是直接取
     /// `Theme.Sizing.keyboardHeightPortrait` —— 后者是 v1 的 258（44 候选栏 + 40 工具条 + 174），
     /// 仍被 `consistency_check` 的 REQUIRED_SIZING 与 docs/02 §5 钉死为契约值，不能改；
-    /// 实际布局按合并后的一行算，比 v1 省 40pt（还给宿主 App）。
+    /// v1.4 用户反馈「高度太低了」，把行高 39 → 46，键区回到 202，总高 **246**
+    /// （比 v1 的 258 略矮，但比 v1.3 的 218 高了 28pt）。
     static let portraitHeight: CGFloat = utilityRowHeight + keyRowsHeight
 
     /// 键盘基础高度（横屏 200 = 44 + 4 × 34.5 + 3 × 6）。
@@ -212,7 +217,7 @@ enum KMLayout {
     ///
     /// 对话页隐藏 44pt 效用行，四段分区固定 `40 + 180 + 44 + 174 = 438`；
     /// 竖屏基础高 v1.3 起为 218（不再含 84pt 双行 chrome），故增量 = 438 − 218 = 220。
-    static let aiChatExtraHeight: CGFloat = 220  // TOKEN: 派生值 438 − portraitHeight
+    static let aiChatExtraHeight: CGFloat = 220  // TOKEN: 派生值 = 顶栏 40 + 消息 180 + 输入 44 − 效用行 44
 
     /// 30 —— 联想胶囊高度。
     static let sugChipHeight: CGFloat = Theme.Sizing.aiChipHeight
