@@ -30,9 +30,6 @@ struct KeyRowsView: View {
     /// 空格横向滑动时移动光标（参数为字符偏移，正数向右）。
     var onMoveCursor: (Int) -> Void = { _ in }
 
-    /// 底行最右的小形象配置（`nil` 表示不显示，空格键自动回弹到 194 设计宽）。
-    var mascot: KMMascotConfig? = nil
-
     /// 主题主色（回车键用；design/05 §1.1 允许的 4 处主色之一）。
     var accent: Color = Theme.accent
 
@@ -108,7 +105,6 @@ struct KeyRowsView: View {
                 height: rowHeight,
                 accent: accent,
                 returnKeyKind: returnKeyKind,
-                mascot: mascot,
                 onTap: onTap,
                 onMoveCursor: onMoveCursor
             )
@@ -163,10 +159,10 @@ struct KeyRowsView: View {
             }) {
                 VStack(spacing: 0) {
                     Text("26键")
-                        .font(.system(size: 15, weight: .medium))  // TOKEN: typography.body.size = 15
+                        .font(Theme.fontBody)
                         .foregroundColor(Theme.textSecondary)
                     Text("QWERTY")
-                        .font(.system(size: 10, weight: .regular))  // TOKEN: typography.caption.size ≈ 10
+                        .font(Theme.fontCaption)  // design/06 §1.4：caption 12pt 是键盘最小字级，禁止 10pt
                         .foregroundColor(Theme.textTertiary)
                 }
                 .frame(maxWidth: .infinity)

@@ -213,11 +213,21 @@ enum KMLayout {
     /// 32 —— 最新 AI 消息操作行高度。
     static let aiChatActionHeight: CGFloat = 32  // TOKEN: sizing.aiChatActionHeight
 
-    /// 220 —— 对话面板展开增量。
+    /// 对话面板展开增量（派生，不写死）。
     ///
-    /// 对话页隐藏 44pt 效用行，四段分区固定 `40 + 180 + 44 + 174 = 438`；
-    /// 竖屏基础高 v1.3 起为 218（不再含 84pt 双行 chrome），故增量 = 438 − 218 = 220。
-    static let aiChatExtraHeight: CGFloat = 220  // TOKEN: 派生值 = 顶栏 40 + 消息 180 + 输入 44 − 效用行 44
+    /// 对话页隐藏 44pt 效用行，四段分区固定 `顶栏 + 消息 + 输入 + 键区`；
+    /// 竖屏基础高是 `utilityRowHeight + keyRowsHeight`，所以增量恒等于
+    /// `顶栏 + 消息 + 输入 − 效用行`。写成派生式之后，改行高不会再把对话页撑爆。
+    static let aiChatExtraHeight: CGFloat =
+        aiChatTopBarHeight + aiChatMessageHeight + aiChatInputHeight - utilityRowHeight
+
+    /// 300 —— 键盘内设置页增量。
+    ///
+    /// v1 直接用 `aiPanelExtraHeight`(168)，而设置页有 11 行 × 44 = 484pt，
+    /// 连标题都在 168 里面 → 用户看到「设置页被裁切，下面内容看不见」。
+    /// 11 行需要 484 + 标题 52 = 536，但整屏不能那么高（会盖住输入框），
+    /// 折中给 264：一屏可见约 5 行，其余靠滚动；同时保证滚动区域确实有可滚的高度。
+    static let settingsExtraHeight: CGFloat = 264  // TOKEN: 派生值（11 行 × 44 + 标题 52，取一屏可视上限）
 
     /// 30 —— 联想胶囊高度。
     static let sugChipHeight: CGFloat = Theme.Sizing.aiChipHeight
@@ -351,7 +361,7 @@ enum KMLayout {
         case .result:
             height += resultExtraHeight
         case .settings:
-            height += aiPanelExtraHeight
+            height += settingsExtraHeight
         case .aiChat, .voice:
             // 语音页与对话页同高 438（复用 aiChatExtraHeight，不新增高度令牌）。
             height += aiChatExtraHeight

@@ -2,14 +2,19 @@
 //  KeyRowsBottomRow.swift
 //  AIKeyboardExtension
 //
-//  字母页第 4 行（123 / 空格 / 🙂 / 回车 / 可选小形象角落格）。
+//  字母页第 4 行（123 / 空格 / 🙂 / 回车）。
 //
-//  为什么单独成文件：这一行既有「宽度分配」（有小形象时空格要让位给角落格，
-//  但要吸收 382 与 384 之间那 2pt 的取整差），又有主题主色（回车键在「发送/搜索」
+//  为什么单独成文件：这一行既有「宽度分配」，又有主题主色（回车键在「发送/搜索」
 //  语义下才用主色），逻辑比上面三行复杂，单独放更好维护。
 //
-//  设计依据：design/键盘布局规范.md §2.4（底行尺寸）、
-//            design/05-主题与小形象规范.md §3.2（小形象角落格尺寸）。
+//  设计依据：design/06-界面重构规范v2.md §4.1–§4.5、§2.5（底行精确 384）。
+//
+//  v2 改动（design/06 §4.5）：**删除小形象角落格**。理由四条：
+//  ① 空格被挤到 156pt，比主流输入法（微信 194+）窄 20%，是「不好用」的直接来源；
+//  ② 30pt 格低于 44pt 命中区，是「看得见点不着」；
+//  ③ v1 底行 382 ≠ 内容宽 384，靠空格弹性吸收 2pt，网格最后一行守不住；
+//  ④ 用户五个红圈没有一个指向它，却点名要「数字键」和「别占回车」。
+//  现在底行精确闭合：42 + 194 + 42 + 88 + 6 × 3 = 384。小形象迁到设置页顶部展示。
 //
 //  v1.3 两处用户反馈驱动的改动：
 //  ① 「为什么要有这个（🌐），而没有数字键」→ 左下角改为 **123** 键（点按切数字页、
@@ -25,11 +30,11 @@ import SwiftUI
 
 /// 字母页第 4 行。
 ///
-/// 布局：`[123 42] [空格 弹性] [🙂 42] [⏎ 88] ( [形象格 30/26] )`，间距 `KMLayout.keyGap`。
+/// 布局：`[123 42] [空格 194] [🙂 42] [⏎ 88]`，三个 `KMLayout.keyGap(6)` 间距。
 ///
-/// 尺寸说明：`42 + 42 + 156 + 88 + 30 + 6 × 4 = 382`，比内容宽 384 少 2pt，
-/// 因此空格键始终是弹性宽度，由它吸收这 2pt（390pt 屏上实际 158pt），
-/// 这样行尾不会出现缝隙，形象格与右边距也能对齐。
+/// 尺寸说明（design/06 §2.5，精确闭合，零弹性）：`42 + 194 + 42 + 88 + 6 × 3 = 384`
+/// —— 与 390pt 屏的键区内容宽 384 完全相等，行尾不会出现缝隙，也不需要靠空格吸收取整差。
+/// 空格仍是 `maxWidth: .infinity`（横屏 200 时键区更窄，需要它吸收差值）。
 struct KeyRowsBottomRow: View {
 
     /// 是否横屏（形象格与图标尺寸不同）。
@@ -44,9 +49,6 @@ struct KeyRowsBottomRow: View {
     /// 回车键语义（聊天框=发送、搜索框=搜索、普通框=换行）。
     var returnKeyKind: KMReturnKeyKind = .newline
 
-    /// 小形象配置（`nil` 表示不显示）。
-    var mascot: KMMascotConfig? = nil
-
     /// 按键回调。
     let onTap: (KeyboardKey) -> Void
 
@@ -59,9 +61,6 @@ struct KeyRowsBottomRow: View {
             spaceKey
             emojiKey
             returnKey
-            if let mascot {
-                mascotCornerCell(mascot)
-            }
         }
         .frame(height: height)
         .accessibilityElement(children: .contain)
@@ -174,26 +173,6 @@ struct KeyRowsBottomRow: View {
         .buttonStyle(KMKeyCapStyle(style: returnKeyKind.isPrimary ? .accent : .function))
         .accessibilityLabel(Text(returnKeyKind.accessibilityTitle))
         .accessibilityAddTraits(.isKeyboardKey)
-    }
-
-    // MARK: - 小形象角落格
-
-    /// 小形象角落格（参与 HStack 布局，绝不浮在回车键上）。
-    /// - Parameter config: 小形象配置。
-    private func mascotCornerCell(_ config: KMMascotConfig) -> some View {
-        KMMascotView(
-            size: isLandscape ? KMLayout.mascotVisualSizeLandscape : KMLayout.mascotVisualSize,
-            symbol: config.symbol,
-            isBusy: config.isBusy,
-            accent: config.accent
-        )
-        .frame(
-            width: isLandscape ? KMLayout.mascotCornerWidthLandscape : KMLayout.mascotCornerWidth,
-            height: height
-        )
-        .padding(.trailing, KMLayout.mascotTrailingInset)
-        .padding(.leading, KMLayout.mascotReturnSpacing)
-        .accessibilityHidden(true)
     }
 
     // MARK: - 复用键构建

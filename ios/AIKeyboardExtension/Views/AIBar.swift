@@ -93,12 +93,13 @@ struct AIBar: View {
     // MARK: - 常规形态
 
     /// 常规工具条（高度由父容器决定：v1.3 起与候选条共用 44pt 效用行）。
+    ///
+    /// design/06 §1.8：键盘内禁止任何 `LinearGradient`。v1 用左右 24pt 渐隐遮罩提示
+    /// 「还能横向滚动」，代价是效用行两端出现两条白雾——在纯色 44pt 条上非常脏。
+    /// 现在靠 `aiBarInset` 的内边距 + 图标之间的固定间距表达可滚动性，不加任何渐变。
     private var regularBar: some View {
-        ZStack {
-            content
-            edgeMasks
-        }
-        .frame(maxHeight: .infinity)
+        content
+            .frame(maxHeight: .infinity)
     }
 
     /// 内容（圆形图标按钮 + 设置 / 语音）。
@@ -188,7 +189,10 @@ struct AIBar: View {
             action()
         }) {
             ZStack {
-                RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous)
+                // v2.1：**正圆**（用户原话「变成圆形图标，节省空间」）。
+                // 容器 32pt 圆 + 44pt 命中区，比圆角矩形更接近 iOS 系统工具的观感，
+                // 也避免了 6pt 圆角在 32pt 方块上「说圆不圆、说方不方」的暧昧。
+                Circle()
                     .fill(isSelected ? Theme.accentSoft : Color.clear)
                 iconButtonGlyph(
                     symbol: symbol,
@@ -219,29 +223,6 @@ struct AIBar: View {
             Text(fallback)
                 .font(.system(size: size, weight: .semibold))
                 .foregroundColor(tint)
-        }
-    }
-
-    /// 左右边缘渐隐遮罩（24pt，颜色取实际背景色）。
-    private var edgeMasks: some View {
-        HStack(spacing: 0) {
-            LinearGradient(
-                colors: [Theme.candidateBar, Theme.candidateBar.opacity(0)],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            .frame(width: Theme.Sizing.aiBarFadeWidth)
-            .allowsHitTesting(false)
-
-            Spacer(minLength: 0)
-
-            LinearGradient(
-                colors: [Theme.candidateBar.opacity(0), Theme.candidateBar],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            .frame(width: Theme.Sizing.aiBarFadeWidth)
-            .allowsHitTesting(false)
         }
     }
 

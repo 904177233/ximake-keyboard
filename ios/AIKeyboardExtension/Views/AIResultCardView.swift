@@ -42,7 +42,7 @@ struct AIResultCardView: View {
 
     /// 玻璃卡片（header 28 + body 92 + actions 44）。
     private var card: some View {
-        KMGlassSurface(level: .bar, cornerRadius: Theme.Radius.card, showsHighlight: true) {
+        KMSolidSurface(cornerRadius: Theme.Radius.card) {
             VStack(spacing: 0) {
                 header
                     .frame(height: KMLayout.resultHeaderHeight)

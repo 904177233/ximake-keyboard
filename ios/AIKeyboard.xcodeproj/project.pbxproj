@@ -148,11 +148,11 @@
 		7E1A0C72556988BD9D944AF8 /* ExtensionSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12983310AC92388EAFDE4ADA /* ExtensionSettingsSheet.swift */; };
 		BB6CABEAAD7D51F6EC28720F /* KMAIComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11EBB572EA57EA047E16ADBD /* KMAIComponents.swift */; };
 		073102085E33A275EFD505BD /* KMChatKnob.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41230B9FA85DB9D42A0F776B /* KMChatKnob.swift */; };
-		A498A71A75073B2ADF5A2E66 /* KMGlassSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAD292A7BD8BD1F539F37977 /* KMGlassSurface.swift */; };
 		FE9480BFE89E059FE46FEE55 /* KMIconGlyph.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2503427F7FC2E9DD297B98E8 /* KMIconGlyph.swift */; };
 		1271C25D1EAD7C5B6BF8BBFC /* KMMascot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B7346A14865A6E3DDF517EC /* KMMascot.swift */; };
 		AF6589A88475D29C3B7DAB21 /* KMPillChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6698C26038CA495F041999A /* KMPillChip.swift */; };
 		3188F3E0021FD9DD87CEB7C1 /* KMPressKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8878990BF0819FD25DFD502E /* KMPressKey.swift */; };
+		662DF56FEB51C67A233643D2 /* KMSolidSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3658D0049B020B3E033980E /* KMSolidSurface.swift */; };
 		7FA02F33E5CC637643888C3A /* KMSuggestionChips.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0122C4D787343C7E2E8FC88 /* KMSuggestionChips.swift */; };
 		728C1A18409D8AB6C561B0FA /* KMThemePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6858E83EA18AD3B0883A418B /* KMThemePicker.swift */; };
 		A8BC966094D6C35A94BB17BD /* KMVoicePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DC8A1A62DD767EC0B258431 /* KMVoicePanel.swift */; };
@@ -333,11 +333,11 @@
 		12983310AC92388EAFDE4ADA /* ExtensionSettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Views/ExtensionSettingsSheet.swift; sourceTree = SOURCE_ROOT; };
 		11EBB572EA57EA047E16ADBD /* KMAIComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Views/KMAIComponents.swift; sourceTree = SOURCE_ROOT; };
 		41230B9FA85DB9D42A0F776B /* KMChatKnob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Views/KMChatKnob.swift; sourceTree = SOURCE_ROOT; };
-		AAD292A7BD8BD1F539F37977 /* KMGlassSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Views/KMGlassSurface.swift; sourceTree = SOURCE_ROOT; };
 		2503427F7FC2E9DD297B98E8 /* KMIconGlyph.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Views/KMIconGlyph.swift; sourceTree = SOURCE_ROOT; };
 		4B7346A14865A6E3DDF517EC /* KMMascot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Views/KMMascot.swift; sourceTree = SOURCE_ROOT; };
 		B6698C26038CA495F041999A /* KMPillChip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Views/KMPillChip.swift; sourceTree = SOURCE_ROOT; };
 		8878990BF0819FD25DFD502E /* KMPressKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Views/KMPressKey.swift; sourceTree = SOURCE_ROOT; };
+		A3658D0049B020B3E033980E /* KMSolidSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Views/KMSolidSurface.swift; sourceTree = SOURCE_ROOT; };
 		A0122C4D787343C7E2E8FC88 /* KMSuggestionChips.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Views/KMSuggestionChips.swift; sourceTree = SOURCE_ROOT; };
 		6858E83EA18AD3B0883A418B /* KMThemePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Views/KMThemePicker.swift; sourceTree = SOURCE_ROOT; };
 		9DC8A1A62DD767EC0B258431 /* KMVoicePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Views/KMVoicePanel.swift; sourceTree = SOURCE_ROOT; };
@@ -635,11 +635,11 @@
 				12983310AC92388EAFDE4ADA /* ExtensionSettingsSheet.swift */,
 				11EBB572EA57EA047E16ADBD /* KMAIComponents.swift */,
 				41230B9FA85DB9D42A0F776B /* KMChatKnob.swift */,
-				AAD292A7BD8BD1F539F37977 /* KMGlassSurface.swift */,
 				2503427F7FC2E9DD297B98E8 /* KMIconGlyph.swift */,
 				4B7346A14865A6E3DDF517EC /* KMMascot.swift */,
 				B6698C26038CA495F041999A /* KMPillChip.swift */,
 				8878990BF0819FD25DFD502E /* KMPressKey.swift */,
+				A3658D0049B020B3E033980E /* KMSolidSurface.swift */,
 				A0122C4D787343C7E2E8FC88 /* KMSuggestionChips.swift */,
 				6858E83EA18AD3B0883A418B /* KMThemePicker.swift */,
 				9DC8A1A62DD767EC0B258431 /* KMVoicePanel.swift */,
@@ -1057,11 +1057,11 @@
 				7E1A0C72556988BD9D944AF8 /* ExtensionSettingsSheet.swift in Sources */,
 				BB6CABEAAD7D51F6EC28720F /* KMAIComponents.swift in Sources */,
 				073102085E33A275EFD505BD /* KMChatKnob.swift in Sources */,
-				A498A71A75073B2ADF5A2E66 /* KMGlassSurface.swift in Sources */,
 				FE9480BFE89E059FE46FEE55 /* KMIconGlyph.swift in Sources */,
 				1271C25D1EAD7C5B6BF8BBFC /* KMMascot.swift in Sources */,
 				AF6589A88475D29C3B7DAB21 /* KMPillChip.swift in Sources */,
 				3188F3E0021FD9DD87CEB7C1 /* KMPressKey.swift in Sources */,
+				662DF56FEB51C67A233643D2 /* KMSolidSurface.swift in Sources */,
 				7FA02F33E5CC637643888C3A /* KMSuggestionChips.swift in Sources */,
 				728C1A18409D8AB6C561B0FA /* KMThemePicker.swift in Sources */,
 				A8BC966094D6C35A94BB17BD /* KMVoicePanel.swift in Sources */,

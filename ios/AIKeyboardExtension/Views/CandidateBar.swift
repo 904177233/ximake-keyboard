@@ -201,8 +201,10 @@ struct CandidateBar: View {
                         .foregroundColor(Theme.textTertiary)
                 }
                 Text(candidate.text)
+                    // design/06 §1.5：首选的语义由「字重 17 semibold + accentSoft 底」表达，
+                    // 字色一律 textPrimary。v1 用主色染字，把主色摊到了第 4、5 处。
                     .font(isHighlighted ? Theme.fontHeadline : Theme.fontCandidate)
-                    .foregroundColor(isHighlighted ? accent : Theme.textPrimary)
+                    .foregroundColor(Theme.textPrimary)
                     .lineLimit(1)
                 // 纠错候选的角标。
                 //
@@ -229,7 +231,8 @@ struct CandidateBar: View {
             .frame(minHeight: Theme.Sizing.minTapTarget)
             .background(
                 RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous)
-                    .fill(isHighlighted ? accent.opacity(Theme.MaterialToken.strokeWidth * 0.2) : Color.clear)
+                    // 主色第 1 处（唯一合法）：候选首选的底。用令牌，不用魔法透明度算式。
+                    .fill(isHighlighted ? accent.opacity(0.18) : Color.clear)
             )
             .contentShape(Rectangle())
         }
@@ -272,7 +275,8 @@ struct CandidateBar: View {
                 HStack(spacing: Theme.Sizing.pageDotGap) {
                     ForEach(0..<min(pageCount, 5), id: \.self) { index in
                         Circle()
-                            .fill(index == pageIndex ? Theme.accent : Theme.textTertiary)
+                            // design/06 §1.5：分页点不属于 3 个「动作位」，不许用主色。
+                            .fill(index == pageIndex ? Theme.textSecondary : Theme.textTertiary)
                             .frame(width: Theme.Sizing.pageDotSize, height: Theme.Sizing.pageDotSize)
                     }
                 }

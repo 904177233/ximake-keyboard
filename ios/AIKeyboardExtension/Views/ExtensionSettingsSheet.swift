@@ -55,7 +55,10 @@ struct ExtensionSettingsSheet: View {
             }
             .frame(maxHeight: .infinity)
         }
-        .frame(height: KMLayout.aiPanelExtraHeight)
+        // v2.1：**不再写死 `.frame(height: 168)`**。v1 的写法把 52pt 标题也算进 168，
+        // 于是 11 行设置项只剩 116pt —— 用户看到的就是「设置页被裁切」。
+        // 现在高度完全由 `KMLayout.keyboardHeight(page: .settings)` 决定，本视图填满即可。
+        .frame(maxHeight: .infinity)
         .background(Theme.keyboardBackground)
         .overlay(alignment: .bottom) {
             Rectangle()

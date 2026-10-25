@@ -158,8 +158,9 @@ struct KMKeyCap: View {
             RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous)
                 .fill(Theme.keyBackground)
         case .ai:
+            // design/06 §1.5：主色只允许 3 处。键帽不是「动作位」，用功能键底色。
             RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous)
-                .fill(Theme.accentSoft)
+                .fill(Theme.keyFunctionBackground)
         }
     }
 

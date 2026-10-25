@@ -58,12 +58,6 @@ private func chatKnobState(for model: KeyboardViewModel) -> KMChatKnobState {
         /// 的手动刷新：设置页改完主题后调用 `applyTheme()` 让视图重算。
         @State private var theme: AppTheme = ThemeStore.shared.currentTheme
 
-        /// 小形象是否显示（设置页「小形象」开关）。
-        @State private var showsMascot: Bool = KMMascotSettings.isEnabled
-
-        /// 当前小形象符号（设置页横排选择）。
-        @State private var mascotSymbol: KMMascotSymbol = KMMascotSettings.symbol
-
         /// 创建根视图。
         /// - Parameter model: 键盘状态机。
         init(model: KeyboardViewModel) {
@@ -106,8 +100,6 @@ private func chatKnobState(for model: KeyboardViewModel) -> KMChatKnobState {
         /// 从 `ThemeStore` 与本地开关重新读取主题、小形象设置。
         private func reloadThemeState() {
             theme = ThemeStore.shared.currentTheme
-            showsMascot = KMMascotSettings.isEnabled
-            mascotSymbol = KMMascotSettings.symbol
         }
 
         /// 主题主色（design/05 §1.1 允许出现在 4 处：候选栏首选字背景 / AI 工具条选中胶囊 / 对话旋钮 / 回车键）。
@@ -115,16 +107,6 @@ private func chatKnobState(for model: KeyboardViewModel) -> KMChatKnobState {
             theme.accent
         }
 
-        /// 底行小形象配置（未开启时返回 nil，空格键自动回弹到 194 设计宽）。
-        private var mascotConfig: KMMascotConfig? {
-            guard showsMascot else { return nil }
-            return KMMascotConfig(
-                symbol: mascotSymbol,
-                isBusy: model.aiAvailability == .busy || model.chatPhase.isBusy,
-                usesCustomImage: ThemeStore.shared.hasCustomMascot,
-                accent: themeAccent
-            )
-        }
 
     // MARK: - 效用行（候选条 / AI 工具条二选一，共用 44pt）
 
@@ -251,7 +233,6 @@ private func chatKnobState(for model: KeyboardViewModel) -> KMChatKnobState {
             isLandscape: model.isLandscape,
             onTap: { key in model.tap(key) },
             onMoveCursor: { offset in model.moveCursor(byCharacterOffset: offset) },
-            mascot: mascotConfig,
             accent: themeAccent,
             returnKeyKind: model.returnKeyKind
         )
