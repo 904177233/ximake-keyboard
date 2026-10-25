@@ -54,7 +54,7 @@ public struct AIProviderConfig: Identifiable, Codable, Equatable, Sendable {
         model: String = "",
         imageModel: String? = nil,
         temperature: Double = 0.7,
-        maxTokens: Int = 1024,
+        maxTokens: Int = 2048,
         timeout: TimeInterval = 30,
         extraHeaders: [String: String] = [:],
         supportsVision: Bool = false,
@@ -93,7 +93,7 @@ public struct AIProviderConfig: Identifiable, Codable, Equatable, Sendable {
         let decodedTemperature = (try? container.decodeIfPresent(Double.self, forKey: .temperature)) ?? nil
         self.temperature = AIProviderConfig.clampTemperature(decodedTemperature ?? 0.7)
         self.maxTokens = AIProviderConfig.clampMaxTokens(
-            (try? container.decodeIfPresent(Int.self, forKey: .maxTokens)) ?? nil ?? 1024
+            (try? container.decodeIfPresent(Int.self, forKey: .maxTokens)) ?? nil ?? 2048
         )
         let decodedTimeout = (try? container.decodeIfPresent(Double.self, forKey: .timeout)) ?? nil
         self.timeout = (decodedTimeout ?? 30) > 0 ? (decodedTimeout ?? 30) : 30

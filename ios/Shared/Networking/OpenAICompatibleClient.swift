@@ -164,9 +164,14 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
             return explicit
         }
         guard OpenAICompatibleClient.isReasoningModel(config.model) else {
-            return config.maxTokens
+            // v2.2 修用户反馈「回复还是服务商没有返回内容…你把 token 限制设置高一点，
+            // 万一有人有长对话需求怎么办」：非推理模型也保底 2048。
+            // 用户把「最大回复长度」调得很小时才用他的值，否则统一按 2048 起。
+            return max(config.maxTokens, 2048)
         }
-        return max(config.maxTokens, 4096)
+        // 推理模型的思维链本身就要吃掉 1–2k token，4096 在多轮长对话里仍会
+        // 让正文被截断，抬到 8192。
+        return max(config.maxTokens, 8192)
     }
 
     /// 模型名是否属于会用 `reasoning_content` 输出思维链的推理模型。

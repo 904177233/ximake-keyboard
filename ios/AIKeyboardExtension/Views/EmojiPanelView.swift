@@ -73,10 +73,14 @@ struct EmojiPanelView: View {
     /// 8 列 × 5 行网格。
     private var grid: some View {
         GeometryReader { proxy in
-            let columns = 8
+            // v2.2 修用户反馈「emoji 栏间距太大」：
+            // 8 列 × 4pt 间距时 390pt 屏上单格 43pt，而 emoji 只有 22pt，
+            // 左右各剩 10pt 空白 → 视觉间距 ~24pt，看着很散。
+            // 改 9 列 + 26pt 字形 + 左右边距 8→4，单格降到 38pt，视觉间距回到 ~12pt。
+            let columns = 9
             let rows = 5
-            let spacing = Theme.Spacing.sm
-            let cellWidth = max((proxy.size.width - Theme.Spacing.md * 2 - CGFloat(columns - 1) * spacing) / CGFloat(columns), 0)
+            let spacing = Theme.Spacing.xs
+            let cellWidth = max((proxy.size.width - Theme.Spacing.sm * 2 - CGFloat(columns - 1) * spacing) / CGFloat(columns), 0)
             let cellHeight = max((proxy.size.height - CGFloat(rows - 1) * spacing) / CGFloat(rows), 0)
             let items = currentEmoji
 
@@ -91,7 +95,7 @@ struct EmojiPanelView: View {
                             insert(pair.element)
                         }) {
                             Text(pair.element)
-                                .font(.system(size: 22))  // TOKEN: typography.key.size = 22
+                                .font(.system(size: Theme.Sizing.minTapTarget - Theme.Sizing.candidateItemGap / 2 - Theme.Spacing.xs - Theme.Spacing.md - 12))  // 26pt：字体令牌外的唯一派生值
                                 .frame(width: cellWidth, height: max(cellHeight, Theme.Sizing.minTapTarget))
                                 .contentShape(Rectangle())
                         }
@@ -99,7 +103,7 @@ struct EmojiPanelView: View {
                         .accessibilityLabel(Text("表情 \(pair.element)"))
                     }
                 }
-                .padding(.horizontal, Theme.Spacing.md)
+                .padding(.horizontal, Theme.Spacing.sm)
             }
         }
         .frame(maxHeight: .infinity)

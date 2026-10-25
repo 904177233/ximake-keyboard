@@ -58,6 +58,12 @@ struct KeyRowsBottomRow: View {
     var body: some View {
         HStack(spacing: KMLayout.keyGap) {
             numberKey
+            // v2.2 修用户反馈「现在不能切到英文输入法」：
+            // v1.7 把左下角 🌐 换成 123（切键盘收进长按），但长按门槛 0.42s
+            // 对普通用户等于不存在。Apple 的 HIG 也要求键盘必须有一颗
+            // 可见的全局键（`needsInputModeSwitchKey` 为真时不提供会被审核挑）。
+            // 这里把 🌐 加回来，压在 123 与空格之间，宽度同为 42。
+            globeKey
             spaceKey
             emojiKey
             returnKey
@@ -124,6 +130,22 @@ struct KeyRowsBottomRow: View {
                     RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous)
                         .fill(Theme.keyBackground)
                 )
+        }
+    }
+
+    /// 地球键：切到下一个输入法（系统级）。
+    ///
+    /// 长按可以列出全部已启用键盘（`handleInputModeList` 是系统默认行为，
+    /// SwiftUI 里通过 `UIInputViewController` 的 `handleInputModeList(from:with:)`
+    /// 提供，这里用最简的「点一下切下一个」，语义与 iOS 原生一致）。
+    private var globeKey: some View {
+        functionKey(
+            icon: "globe",
+            fallback: "🌐",
+            width: KMLayout.functionKeyWidth,
+            accessibility: "切换键盘"
+        ) {
+            onTap(.globe)
         }
     }
 

@@ -44,6 +44,15 @@ public final class KeyboardViewModel: ObservableObject {
     /// 候选列表（由 `IMECore` 生成）。
     @Published public internal(set) var candidates: [IMECandidate] = []
 
+    /// 候选栏是否被用户手动收起（v2.2）。
+    ///
+    /// 用户反馈「候选词选完没有关闭候选词能力，会导致没有办法使用输入法功能，
+    /// 以及 ai 使用」—— 上屏一个词后 `refreshPredictions()` 会立刻把联想词塞进
+    /// `candidates`，于是效用行一直停在候选态，AI 工具条（润色/扩写/翻译/生图/
+    /// 设置/麦克风）永远露不出来。加一个显式的收起按钮：收起后效用行回到工具条，
+    /// 只要用户再打字（`handleCharacter`）就自动恢复候选态。
+    @Published public internal(set) var isCandidateBarCollapsed: Bool = false
+
     /// 高亮候选下标（候选栏首项高亮）。
     @Published public internal(set) var highlightedCandidateIndex: Int = 0
 
@@ -259,6 +268,16 @@ public final class KeyboardViewModel: ObservableObject {
     /// 上下文最多取多少字（超出时提示「仅取最近 200 字」）。
     public static let contextCharacterLimit: Int = 200
 
+    /// 对话草稿的字符上限（v2.2 新增）。
+    ///
+    /// **必须与 `contextCharacterLimit` 分开**：后者是「发给模型的上文截断长度」
+    /// （取宿主前文末句，200 字够用），而这里是「用户能敲进对话框多少字」。
+    /// v2.1 把两者写成同一个常量，导致用户在 AI 对话里输入超过 200 字就被
+    /// `showToast("输入内容已达上限")` 拦住、再也打不进去 —— 用户原话：
+    /// 「长输入的时候就没有联想了，导致不能输入很长的内容」。
+    /// 2000 字与宿主 App 的 AI 试验场保持一致。
+    public static let chatDraftCharacterLimit: Int = 2000
+
     // MARK: - 初始化
 
     /// 创建键盘状态机。
@@ -356,13 +375,18 @@ public final class KeyboardViewModel: ObservableObject {
         if page == .aiChat {
             switch key {
             case let .character(text):
-                appendChatDraft(text)
+                // v2.2 修用户反馈「在墨语 AI 对话中不能输入中文」：
+                // 原来直接 `appendChatDraft(text)`，把字母原样塞进草稿，
+                // 中文用户根本打不出汉字（只能输入英文）。改为复用与宿主
+                // 输入框一致的拼音组字流程：字母进 `composing` → 候选栏出词
+                // → 选词后由 `commitCandidateToChat` 写进 `chatDraft`。
+                handleChatCharacter(text)
                 return
             case .backspace:
-                deleteChatDraftCharacter()
+                handleChatBackspace()
                 return
             case .space:
-                appendChatDraft(" ")
+                handleChatSpace()
                 return
             case .newline:
                 sendChatMessage()

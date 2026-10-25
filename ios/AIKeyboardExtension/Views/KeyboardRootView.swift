@@ -116,7 +116,8 @@ private func chatKnobState(for model: KeyboardViewModel) -> KMChatKnobState {
     /// 用户反馈「一直在的时候非常影响正常打字」。现在合并成一行 44pt 交叉淡入淡出，
     /// 与微信输入法/Fleksy 等主流输入法一致：**打字时是候选，不打字时是工具**。
     private var showsCandidateRow: Bool {
-        !model.composing.isEmpty || !model.candidates.isEmpty
+        guard !model.isCandidateBarCollapsed else { return false }
+        return !model.composing.isEmpty || !model.candidates.isEmpty
     }
 
     /// 效用行：候选条与 AI 工具条占同一格，按 `showsCandidateRow` 交叉淡入淡出。
@@ -145,6 +146,7 @@ private func chatKnobState(for model: KeyboardViewModel) -> KMChatKnobState {
                     onChatKnobTap: { model.openAIChat() },
                     onSelectSuggestion: { index in model.insertSuggestion(at: index) },
                     onHighlight: { index in model.highlightCandidate(at: index) },
+                    onDismiss: { model.collapseCandidateBar() },
                     accent: themeAccent
                 )
                 .frame(height: KMLayout.utilityRowHeight)

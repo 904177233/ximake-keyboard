@@ -343,7 +343,11 @@ struct NumberPadView: View {
             VStack(spacing: KMLayout.keyGap) {
                 numberRow(["1", "2", "3"], trailing: .backspace, width: width, height: rowHeight)
                 numberRow(["4", "5", "6"], trailing: nil, width: width, height: rowHeight)
-                numberRow(["7", "8", "9"], trailing: .newline, width: width, height: rowHeight)
+                // v2.2 修用户反馈「数字键盘有两个回车」：
+                // 第 3 行原本挂了一个 `.newline`，底行 `lastRow` 末尾又有一个，
+                // 一屏出现两个回车键。标准数字键盘只在底行给一个回车，
+                // 第 3 行右侧留空（与 iOS 原生数字键盘一致）。
+                numberRow(["7", "8", "9"], trailing: nil, width: width, height: rowHeight)
                 lastRow(width: width, height: rowHeight)
             }
             .frame(width: width, height: proxy.size.height, alignment: .top)

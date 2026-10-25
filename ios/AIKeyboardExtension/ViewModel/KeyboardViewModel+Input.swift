@@ -19,6 +19,8 @@ extension KeyboardViewModel {
         if shiftState == .on {
             shiftState = .off
         }
+        // v2.2：再次打字说明用户要看候选，自动恢复被收起的候选栏。
+        expandCandidateBar()
         // 字母 → 进入拼音组字；数字 / 符号 / 表情 → 直接上屏。
         if text.count == 1, let scalar = text.unicodeScalars.first,
            CharacterSet.lowercaseLetters.contains(scalar) || CharacterSet.uppercaseLetters.contains(scalar) {
@@ -122,7 +124,23 @@ extension KeyboardViewModel {
 
     /// 上屏后刷新联想候选。
     func refreshPredictions() {
-        let predictions = engine.predictNext(after: lastCommittedText, limit: 6)
+        // v2.2 修用户反馈「选了候选之后没有联想，一直是我、我、我」：
+        // `engine.predictNext` 会把刚上屏的词本身也作为候选返回（它的语义是
+        // 「以 lastCommittedText 为上文预测下一个词」，但词库自联想路径会把
+        // 同词复读出来），于是候选栏永远是「我 我 我」。
+        // 这里做两道清洗：①去掉与刚上屏文本完全相同的；②按 text 去重。
+        var seen = Set<String>()
+        let predictions = engine.predictNext(after: lastCommittedText, limit: 12)
+            .filter { candidate in
+                let text = candidate.text
+                guard !text.isEmpty else { return false }
+                guard text != lastCommittedText else { return false }
+                guard !seen.contains(text) else { return false }
+                seen.insert(text)
+                return true
+            }
+            .prefix(6)
+            .map { $0 }
         guard !predictions.isEmpty else {
             candidates = []
             candidatePageIndex = 0

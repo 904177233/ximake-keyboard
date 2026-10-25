@@ -112,8 +112,8 @@ extension KeyboardViewModel {
     /// - Parameter text: 待追加文本。
     public func appendChatDraft(_ text: String) {
         guard !text.isEmpty else { return }
-        guard chatDraft.count < Self.contextCharacterLimit else {
-            showToast("输入内容已达上限")
+        guard chatDraft.count < Self.chatDraftCharacterLimit else {
+            showToast("已到 \(Self.chatDraftCharacterLimit) 字上限，发送后再继续")
             return
         }
         chatDraft += text

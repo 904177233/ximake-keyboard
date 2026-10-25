@@ -71,6 +71,9 @@ struct CandidateBar: View {
     /// 滑动中不断 `onHighlight`（视觉高亮跟随手指），松手才 `onSelect`（真正上屏）。
     var onHighlight: ((Int) -> Void)?
 
+    /// 收起候选栏（v2.2：让用户能退回 AI 工具条）。
+    var onDismiss: (() -> Void)?
+
     /// 主题主色（design/05 §1.1：候选栏首选字背景是 4 处主色之一）。
     var accent: Color = Theme.accent
 
@@ -79,6 +82,22 @@ struct CandidateBar: View {
             contentArea
             paginationIndicator
                 .frame(width: paginationWidth)
+            if let onDismiss {
+                // v2.2：候选栏右侧的收起按钮。用户反馈「候选词选完没有关闭
+                // 候选词能力」，这颗键让效用行退回 AI 工具条；再打字会自动恢复。
+                Button(action: {
+                    KMHaptics.chip()
+                    onDismiss()
+                }) {
+                    KMIconGlyph(symbol: "chevron.down", fallback: "⌄",
+                                size: 13, tint: Theme.textTertiary)
+                        .frame(width: Theme.Sizing.minTapTarget,
+                               height: Theme.Sizing.minTapTarget)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(KMPressableStyle(scale: 0.92, pressedOpacity: 0.7))
+                .accessibilityLabel(Text("收起候选栏"))
+            }
             if showsChatKnob {
                 // 旋钮与分页点之间的固定间隙（design/04 §2.2：5pt）。
                 Spacer(minLength: 0)
@@ -147,7 +166,13 @@ struct CandidateBar: View {
         }
         .accessibilityElement(children: .contain)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .simultaneousGesture(swipeSelectionGesture)
+        // v2.2 修用户反馈「候选词交互逻辑问题非常严重，不是正常滑动选词」：
+        // 原来的 `simultaneousGesture` 与 `ScrollView` 同时响应，手指一滑
+        // 候选列表在滚、高亮也在跳，最后松手还会上屏一个没看清楚的词。
+        // 现在改为 `highPriorityGesture` 只接管**明显的横滑**（|dx| > 24 且
+        // 横向远大于纵向），其余情况一律让 `ScrollView` 自己滚 ——
+        // 与微信/搜狗一致：轻扫滚动看更多候选，明确横滑才逐格选词。
+        .highPriorityGesture(swipeSelectionGesture)
     }
 
     /// 横向滑动选词：滑过一个个候选，松手上屏。
@@ -156,9 +181,11 @@ struct CandidateBar: View {
     /// 比精确测宽稳：候选宽度随字数变化，测宽需要 `GeometryReader` 布局回调，
     /// 在键盘里每帧回调的代价不值得。用户实际体验是「滑一点换一个」。
     private var swipeSelectionGesture: some Gesture {
-        DragGesture(minimumDistance: 12)
+        DragGesture(minimumDistance: 24)
             .onChanged { value in
                 guard items.count > 1 else { return }
+                // 纵向意图明显时直接放行给 ScrollView（或让父视图处理）。
+                guard abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
                 if swipeStartIndex < 0 {
                     swipeStartIndex = highlightedIndex
                 }
@@ -170,8 +197,10 @@ struct CandidateBar: View {
                 let target = swipeTarget(for: value)
                 let start = swipeStartIndex
                 swipeStartIndex = -1
-                // 只有真的滑动过（换过格）才上屏，否则交给候选自身的 tap 处理。
-                guard items.count > 1, start >= 0, target != start else { return }
+                // 只有「确实横向滑过至少一格」才上屏，否则交给候选自身的 tap
+                // 或 ScrollView 的滚动处理 —— 避免误上屏。
+                guard items.count > 1, start >= 0, target != start,
+                      abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
                 onSelect(target)
             }
     }

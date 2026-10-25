@@ -12,6 +12,19 @@ import Foundation
 
 extension KeyboardViewModel {
 
+    /// 收起候选栏，让效用行回到 AI 工具条（v2.2）。
+    public func collapseCandidateBar() {
+        guard !isCandidateBarCollapsed else { return }
+        isCandidateBarCollapsed = true
+        KMHaptics.chip()
+    }
+
+    /// 恢复候选栏（再次打字时自动调用）。
+    public func expandCandidateBar() {
+        guard isCandidateBarCollapsed else { return }
+        isCandidateBarCollapsed = false
+    }
+
     /// 候选栏滑动时移动高亮（**不上屏**，松手才由 `selectCandidate` 真正上屏）。
     /// - Parameter index: 候选下标（本页内的可见下标）。
     public func highlightCandidate(at index: Int) {
@@ -32,6 +45,8 @@ extension KeyboardViewModel {
         clearComposing()
         refreshPredictions()
         KMHaptics.candidate()
+        // v2.2：上屏后不自动收起 —— 大部分场景用户要接着打字，
+        // 自动收起会让候选栏闪一下。需要工具条时点候选栏右侧的 ✕ 即可。
         // 上屏后启动 AI 联想防抖（design/04 §4.4 触发时机 A）。
         scheduleSuggestions()
     }
