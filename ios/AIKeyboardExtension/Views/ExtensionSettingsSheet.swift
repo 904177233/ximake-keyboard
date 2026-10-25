@@ -21,6 +21,13 @@ struct ExtensionSettingsSheet: View {
     /// 设置操作弹层（Provider 选择 / 语气选择 / 配置同步）。
     @State private var activeSheet: ActiveSheet?
 
+    /// 正在编辑的服务商（非 nil 时弹出编辑页）。
+    ///
+    /// 用独立状态而不是塞进 `ActiveSheet` 枚举：`ActiveSheet` 是 `String` 枚举、
+    /// 要带一个 `AIProviderConfig` 负载就得改成关联值，改完 `rawValue`/`Identifiable`
+    /// 全要跟着变；单独一个 `@State` 最省事且不影响已有三个弹层。
+    @State private var editingProvider: AIProviderConfig?
+
     var body: some View {
         VStack(spacing: 0) {
             KMSheetHeader(
@@ -68,6 +75,17 @@ struct ExtensionSettingsSheet: View {
         .sheet(item: $activeSheet) { sheet in
             sheetContent(sheet)
         }
+        .sheet(item: $editingProvider) { provider in
+            KMProviderEditorSheet(
+                model: model,
+                provider: provider,
+                onSaved: {
+                    editingProvider = nil
+                    model.showToast("已保存「\(provider.name)」")
+                },
+                onClose: { editingProvider = nil }
+            )
+        }
         .accessibilityElement(children: .contain)
     }
 
@@ -78,11 +96,19 @@ struct ExtensionSettingsSheet: View {
         SettingsRowButton(
             emoji: "🌐",
             title: "AI 服务商",
-            detail: model.snapshot.defaultProvider?.name ?? "未配置",
+            detail: providerRowDetail,
             showsDisclosure: true,
             action: { activeSheet = .provider }
         )
-        .accessibilityLabel(Text("AI 服务商，当前 \(model.snapshot.defaultProvider?.name ?? "未配置")"))
+        .accessibilityLabel(Text("AI 服务商，当前 \(providerRowDetail)"))
+    }
+
+    /// 服务商行的副标题：把「缺 Key」直接暴露在设置首页，避免用户以为配好了。
+    private var providerRowDetail: String {
+        guard let provider = model.snapshot.defaultProvider else { return "未配置" }
+        if !provider.isChatConfigured { return "\(provider.name) · 配置不完整" }
+        if !model.hasAPIKey(forProviderID: provider.id) { return "\(provider.name) · 缺 API Key" }
+        return provider.name
     }
 
     /// ②默认语气。
@@ -380,57 +406,6 @@ struct ExtensionSettingsSheet: View {
         case .sync:
             syncPicker
         }
-    }
-
-    /// 服务商选择（只切换默认，不编辑）。
-    private var providerPicker: some View {
-        VStack(spacing: 0) {
-            KMSheetHeader(title: "选择 AI 服务商", subtitle: "编辑请到「墨语」App", onClose: { activeSheet = nil })
-
-            ScrollView {
-                VStack(spacing: 0) {
-                    ForEach(model.snapshot.providers) { provider in
-                        Button(action: {
-                            KMHaptics.chip()
-                            model.setDefaultProvider(provider.id)
-                            activeSheet = nil
-                        }) {
-                            HStack(spacing: Theme.Spacing.md) {
-                                VStack(alignment: .leading, spacing: 0) {
-                                    Text(provider.name)
-                                        .font(Theme.fontBody)
-                                        .foregroundColor(Theme.textPrimary)
-                                    Text(provider.displaySummary)
-                                        .font(Theme.fontCaption)
-                                        .foregroundColor(Theme.textTertiary)
-                                        .lineLimit(1)
-                                }
-                                Spacer(minLength: 0)
-                                if model.snapshot.defaultProviderID == provider.id {
-                                    KMIconGlyph(symbol: "checkmark", fallback: "✓", size: 14, tint: Theme.accent)
-                                }
-                            }
-                            .frame(minHeight: KMLayout.settingsRowHeight)
-                            .padding(.horizontal, Theme.Spacing.xl)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(KMPressableStyle(scale: 0.99))
-                        .accessibilityLabel(Text("服务商 \(provider.name)"))
-                    }
-
-                    if model.snapshot.providers.isEmpty {
-                        KMEmptyState(
-                            systemImage: "exclamationmark.triangle",
-                            fallback: "!",
-                            title: "还没有配置 AI 服务",
-                            message: "打开「墨语」App，在 AI 服务里添加一个服务商"
-                        )
-                    }
-                }
-            }
-        }
-        .padding(.bottom, Theme.Spacing.xl)
-        .presentationDetents([.medium])
     }
 
     /// 语气选择。
