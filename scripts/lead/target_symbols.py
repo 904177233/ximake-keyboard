@@ -177,6 +177,7 @@ SYSTEM = set(
     OSLog Logger OSSignposter OSSignpostID
     Darwin MemoryLayout Thread Comparable CustomStringConvertible Ellipse FillStyle
     KERN_SUCCESS MACH_TASK_BASIC_INFO TASK_VM_INFO URLCache
+    CryptoKit SHA256 SHA256Digest HKDF SymmetricKey
     task_info task_vm_info MACH_TASK_BASIC_INFO_COUNT
     AVFoundation Speech AVAudioSession AVAudioEngine AVAudioApplication SFSpeechRecognizer
     SFSpeechAudioBufferRecognitionRequest SFSpeechRecognitionTask SFSpeechRecognitionResult

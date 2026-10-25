@@ -199,7 +199,7 @@ struct AppearanceView: View {
         if let info = DictionaryPackStore.shared.installedInfo {
             return "在线 v\(info.version) · \(info.entryCount) 条"
         }
-        return "内置 · \(appState.dictionaryWordCount) 条"
+        return "内置 · \(appState.dictionaryInfo?.wordCount ?? 0) 条"
     }
 
     // MARK: - 主题与形象
