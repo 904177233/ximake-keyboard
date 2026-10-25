@@ -387,7 +387,13 @@ struct ExtensionSettingsSheet: View {
     // MARK: - 弹层
 
     /// 当前弹层类型。
-    private enum ActiveSheet: String, Identifiable {
+    /// 设置页弹层类型。
+    ///
+    /// 不用 `private`：`activeSheet` 必须给 `ExtensionSettingsSheet+Provider.swift` 的
+    /// `providerPicker` 用，而 Swift 的 `private` 是文件级的；`activeSheet` 一升到
+    /// internal，它的类型也必须跟着升（否则报 "property must be declared private
+    /// because its type uses a private type"）。
+    enum ActiveSheet: String, Identifiable {
         /// 服务商选择。
         case provider
         /// 语气选择。
