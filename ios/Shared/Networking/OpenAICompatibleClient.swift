@@ -321,17 +321,27 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
                 continuation.yield(ChatDelta(text: payload.text, isFinal: false))
             }
         }
-        // 二级兜底：整段流里一个正文字符都没拿到，且缓冲区看起来是一个 JSON 对象，
-        // 说明服务端忽略了 `stream: true`。按非流式响应解析，把完整回复一次性吐出来。
+        // 二级兜底：整段流里一个正文字符都没拿到 —— 说明服务端忽略了 `stream: true`，
+        // 一次性回了个非流式体（或者回了不符合 SSE 规范的分片，被 SSEParser 全部漏掉）。
+        // 把缓冲区按非流式响应再解析一次，把完整回复一次性吐出来。
+        //
+        // v2.5 修正：早期这里要求「缓冲区第一个非空白字节是 `{`」才肯兜底，
+        // 但实测的网关回的是 `data：{…}`（前缀是 `d`、且冒号是全角），
+        // 于是这个判断永远不成立、兜底形同不存在 —— 用户在聊天里照样看到
+        // 「服务商没有返回内容」。现在只要缓冲区非空就尝试宽松解析，
+        // 解析不出来（真的是垃圾）自然返回 nil，不会误吐内容。
         if !didEmitText, !rawBuffer.isEmpty {
-            let trimmed = rawBuffer
-                .drop(while: { $0 == 0x20 || $0 == 0x0A || $0 == 0x0D || $0 == 0x09 })
-            if trimmed.first == UInt8(ascii: "{") {
-                let payload = try parseCompletion(data: rawBuffer)
-                if !payload.text.isEmpty {
-                    didEmitText = true
-                    continuation.yield(ChatDelta(text: payload.text, isFinal: false))
-                }
+            if let lenient = OpenAICompatibleClient.parseSSEBodyAsCompletion(rawBuffer),
+               !lenient.text.isEmpty {
+                didEmitText = true
+                continuation.yield(ChatDelta(text: lenient.text, isFinal: false))
+            } else if let payload = try? parseCompletion(data: rawBuffer),
+                      !payload.text.isEmpty {
+                // 走到这里说明它确实是一个普通 JSON 对象（服务端忽略 stream:true 的另一种形态）。
+                // 用 `try?` 而不是 `try`：缓冲区里可能就是一坨解析不了的东西，
+                // 那种情况下应该继续往下走「正文为空」的统一判定，而不是抛一个更晦涩的解码错误。
+                didEmitText = true
+                continuation.yield(ChatDelta(text: payload.text, isFinal: false))
             }
         }
         // 正文为空时给出「用户能照着改」的中文错误，而不是让上层只显示「服务商没有返回内容」。
