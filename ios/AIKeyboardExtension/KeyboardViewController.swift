@@ -34,6 +34,8 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
     #if MOYU_SIM_CHECK
     private let simLabel = UILabel()
     private var simStarted = false
+    /// 试高度时临时指定的数。
+    private var simForcedHeight: CGFloat?
     #endif
 
     // MARK: - KeyboardHost
@@ -241,6 +243,11 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
     /// 每一页都一样，只跟「低、标准、高」有关。系统不保证键盘显示时跟着改高度，
     /// 所以对话页不靠长高，靠在打字和看回答之间切换。
     private var contentHeight: CGFloat {
+        #if MOYU_SIM_CHECK
+        if let simForcedHeight {
+            return simForcedHeight
+        }
+        #endif
         let metrics = nominalMetrics
         return metrics.topBarHeight + metrics.surfaceHeight
     }
@@ -419,7 +426,48 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
         simLabel.numberOfLines = 2
         view.addSubview(simLabel)
         let session = self.session
+        // 先试让系统改高度的几种写法，绿字里「给」变了就是有用
+        let setPriority: (UILayoutPriority) -> Void = { [weak self] priority in
+            guard let constraint = self?.heightConstraint else { return }
+            constraint.isActive = false
+            constraint.priority = priority
+            constraint.isActive = true
+        }
+        let force: (CGFloat) -> Void = { [weak self] height in
+            self?.simForcedHeight = height
+            self?.heightConstraint?.constant = height
+            self?.view.setNeedsLayout()
+            self?.view.layoutIfNeeded()
+        }
         let steps: [(String, () -> Void)] = [
+            ("P0 999 要288", { force(288) }),
+            ("P1 关自动约束 要300", { [weak self] in
+                self?.view.translatesAutoresizingMaskIntoConstraints = false
+                force(300)
+            }),
+            ("P2 selfSizing 要320", { [weak self] in
+                (self?.view as? UIInputView)?.allowsSelfSizing = true
+                (self?.inputView)?.allowsSelfSizing = true
+                force(320)
+            }),
+            ("P3 required 要340", { setPriority(.required); force(340) }),
+            ("P4 required 要261", { force(261) }),
+            ("P5 required 要400", { force(400) }),
+            ("P6 删约束再加 要300", { [weak self] in
+                guard let self, let old = self.heightConstraint else { return }
+                old.isActive = false
+                let fresh = self.view.heightAnchor.constraint(equalToConstant: 300)
+                fresh.priority = UILayoutPriority(999)
+                fresh.isActive = true
+                self.heightConstraint = fresh
+                force(300)
+            }),
+            ("P7 还原", { [weak self] in
+                self?.simForcedHeight = nil
+                self?.view.translatesAutoresizingMaskIntoConstraints = true
+                (self?.inputView)?.allowsSelfSizing = false
+                session.updatePrefs { $0.height = .standard }
+            }),
             ("标准", { session.updatePrefs { $0.height = .standard }; session.setPage(.keys) }),
             ("高", { session.updatePrefs { $0.height = .tall }; session.setPage(.keys) }),
             ("低", { session.updatePrefs { $0.height = .low }; session.setPage(.keys) }),
