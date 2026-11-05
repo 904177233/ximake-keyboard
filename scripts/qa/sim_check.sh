@@ -81,5 +81,12 @@ if [ "$count" -eq 0 ]; then
   exit 1
 fi
 
+# 键盘进程还在不在、有没有崩溃报告。扩展崩了系统会退回自带键盘，截图上看不出来
+ps ax | grep -i "AIKeyboard" | grep -v grep | cut -c1-200 | tee "$OUT/processes.txt" || true
+mkdir -p "$OUT/crash"
+find "$HOME/Library/Logs/DiagnosticReports" -iname "*AIKeyboard*" -exec cp {} "$OUT/crash/" \; 2>/dev/null || true
+ls -la "$OUT/crash" | tee "$OUT/crash-list.txt"
+screencapture -x "$OUT/desktop-end.png" 2>&1 | tee -a "$OUT/screenshot.txt" || true
+
 $SPAWN log show --last 3m --style compact --predicate 'process == "AIKeyboardExtension"' 2>/dev/null | tail -n 200 > "$OUT/keyboard.log" || true
 ls -la "$OUT"

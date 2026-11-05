@@ -73,7 +73,7 @@ jobs:
         with:
           name: sim-shots-${{ matrix.runner }}
           path: |
-            build/sim-shots
+            build/sim-shots/**
             build/xcodebuild.log
           if-no-files-found: warn
           retention-days: 7

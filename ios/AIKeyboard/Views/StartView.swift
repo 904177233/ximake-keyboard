@@ -138,11 +138,27 @@ struct SimCheckField: UIViewRepresentable {
         let field = Field()
         field.placeholder = "模拟器实测"
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            Self.selectMoyuKeyboard()
             field.becomeFirstResponder()
+        }
+        // 第一次切的时候键盘可能还没准备好，再切一次
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6) {
+            Self.selectMoyuKeyboard()
+            field.reloadInputViews()
         }
         return field
     }
 
     func updateUIView(_ uiView: Field, context: Context) {}
+
+    /// 只在实测版里调系统的私有方法，把当前输入法切成墨语。
+    private static func selectMoyuKeyboard() {
+        guard let type = NSClassFromString("UIKeyboardInputModeController") as? NSObject.Type,
+              let shared = type.perform(NSSelectorFromString("sharedInputModeController"))?.takeUnretainedValue() as? NSObject,
+              let mode = UITextInputMode.activeInputModes.first(where: { identifier(of: $0).contains("moyu") }) else {
+            return
+        }
+        _ = shared.perform(NSSelectorFromString("setCurrentInputMode:"), with: mode)
+    }
 }
 #endif
