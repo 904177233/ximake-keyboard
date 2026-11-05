@@ -9,6 +9,14 @@
 
 import Foundation
 
+/// 要不要让模型先想一想。各家参数不一样，由客户端翻译；不支持的服务会报 400，调用方去掉重发。
+public enum ReasoningLevel: String, Codable, Sendable, CaseIterable {
+    /// 不想，直接答。
+    case fast
+    /// 先想再答。
+    case deep
+}
+
 /// 一次文本对话请求。
 public struct ChatRequest: Sendable {
     /// 完整消息列表，按时间顺序排列，`system` 通常在最前。
@@ -19,18 +27,22 @@ public struct ChatRequest: Sendable {
     public var maxTokens: Int?
     /// 是否流式（SSE）。键盘内使用流式以降低首字延迟。
     public var stream: Bool
+    /// 推理强度；nil 表示不指定，用服务商默认。
+    public var reasoning: ReasoningLevel?
 
     /// 成员初始化。
     public init(
         messages: [ChatMessage],
         temperature: Double? = nil,
         maxTokens: Int? = nil,
-        stream: Bool = true
+        stream: Bool = true,
+        reasoning: ReasoningLevel? = nil
     ) {
         self.messages = messages
         self.temperature = temperature
         self.maxTokens = maxTokens
         self.stream = stream
+        self.reasoning = reasoning
     }
 
     /// 该请求里第一条 system 消息的文本（Anthropic / Gemini 需要把 system 拆出来单独传）。

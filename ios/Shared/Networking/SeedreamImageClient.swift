@@ -67,7 +67,7 @@ public final class SeedreamImageClient: ImageGenerating, @unchecked Sendable {
         guard let url = generationURL() else { throw AIError.notConfigured }
 
         let lastGood = UserDefaults.standard.string(forKey: Self.lastGoodKey)
-        var firstError: AIError?
+        var attempts: [(model: String, error: AIError)] = []
         for model in Self.candidates(configured: config.imageModel, lastGood: lastGood) {
             var body: [String: Any] = [
                 "model": model,
@@ -88,16 +88,18 @@ public final class SeedreamImageClient: ImageGenerating, @unchecked Sendable {
             )
             do {
                 let data = try await performWithRetry(urlRequest, attempt: 1)
-                let images = try await decodeImages(data: data)
+                let images = try await decodeImages(data: data).map { image -> GeneratedImage in
+                    var tagged = image
+                    tagged.model = model
+                    return tagged
+                }
                 UserDefaults.standard.set(model, forKey: Self.lastGoodKey)
                 return images
             } catch let error as AIError where Self.shouldTryNextModel(error) {
-                if firstError == nil {
-                    firstError = error
-                }
+                attempts.append((model, error))
             }
         }
-        throw Self.allModelsFailed(firstError)
+        throw Self.allModelsFailed(attempts)
     }
 
     // MARK: - 检查 Key 和模型（不花钱）
@@ -235,12 +237,37 @@ public final class SeedreamImageClient: ImageGenerating, @unchecked Sendable {
         return !(message ?? "").lowercased().contains("sensitive")
     }
 
-    private static func allModelsFailed(_ first: AIError?) -> AIError {
-        guard case let .server(code, message)? = first else {
-            return first ?? .notConfigured
+    /// 都失败了怎么说。
+    ///
+    /// 不能只报第一个：第一个往往是配置里的老模型（3.0），它报「没开通」会把真正的原因盖住。
+    /// 有不是「没开通 / 不存在」的错（参数不对、额度用完），那才是真问题，先报它；
+    /// 全是没开通，就把试过的都列出来。
+    static func allModelsFailed(_ attempts: [(model: String, error: AIError)]) -> AIError {
+        guard !attempts.isEmpty else { return .notConfigured }
+        for attempt in attempts {
+            if case let .server(code, message) = attempt.error, code != 404, !isModelMissing(message) {
+                return .server(code: code, message: "\(displayName(attempt.model))：\(message ?? "没有说明")")
+            }
         }
-        return .server(code: code,
-                       message: "即梦的模型都用不了，多半是还没开通：到火山方舟控制台的「开通管理」开通 Seedream 再试。服务器原话：\(message ?? "没有说明")")
+        let names = attempts.map { displayName($0.model) }.joined(separator: "、")
+        var reason = ""
+        if case let .server(_, message)? = attempts.last?.error, let message {
+            reason = "\n服务器原话：\(message)"
+        }
+        return .server(code: 404,
+                       message: "试了 \(names)，都显示没开通或不存在。到火山方舟控制台「开通管理」开通一个 Seedream 模型；开通的如果是别的型号，在画图服务的「模型」里填它的名字。\(reason)")
+    }
+
+    /// 给人看的模型名。
+    static func displayName(_ model: String) -> String {
+        let known = [
+            "doubao-seedream-5-0-pro-260628": "Seedream 5.0 Pro",
+            "doubao-seedream-5-0-lite-260128": "Seedream 5.0 Lite",
+            "doubao-seedream-4-5-251128": "Seedream 4.5",
+            "doubao-seedream-4-0-250828": "Seedream 4.0",
+            "doubao-seedream-3-0-t2i-250415": "Seedream 3.0"
+        ]
+        return known[model] ?? model
     }
 
     /// 这个模型该用什么尺寸。4.5 和 5.0 lite 不接受 1K 这一档。

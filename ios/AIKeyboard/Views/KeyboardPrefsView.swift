@@ -4,6 +4,7 @@
 //
 
 import AVFoundation
+import Photos
 import PhotosUI
 import Speech
 import SwiftUI
@@ -16,6 +17,8 @@ struct KeyboardPrefsView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var photoItem: PhotosPickerItem?
     @State private var voiceStatus = ""
+    @State private var photoStatus = ""
+    @State private var voiceMinutes = AIPrefs.load().voiceKeepAliveMinutes
 
     var body: some View {
         AppPage(title: "键盘", subtitle: "颜色只用两种，一种底色，一种主色。") {
@@ -30,8 +33,19 @@ struct KeyboardPrefsView: View {
                 pickerRow("默认布局", items: KeyboardPrefs.Layout.allCases.map { ($0.title, model.prefs.layout == $0) }) { index in
                     model.updatePrefs { $0.layout = KeyboardPrefs.Layout.allCases[index] }
                 }
-                pickerRow("键盘高度", items: KeyboardPrefs.Height.allCases.map { ($0.title, model.prefs.height == $0) }) { index in
-                    model.updatePrefs { $0.height = KeyboardPrefs.Height.allCases[index] }
+                pickerRow("键盘高度", items: KeyboardPrefs.Height.allCases.map {
+                    ($0.title, model.prefs.customSurfaceHeight == nil && model.prefs.height == $0)
+                }) { index in
+                    model.updatePrefs {
+                        $0.height = KeyboardPrefs.Height.allCases[index]
+                        $0.customSurfaceHeight = nil
+                    }
+                }
+                if model.prefs.customSurfaceHeight != nil {
+                    Text("现在用的是在键盘上拖出来的高度。要再调，到键盘的设置里点「拖动」。")
+                        .font(.system(size: 12.5))
+                        .foregroundColor(palette.secondary.color)
+                        .padding(.vertical, 4)
                 }
                 toggle("模糊音", detail: "z/zh、c/ch、s/sh、in/ing、l/n 不分也能打对", isOn: model.prefs.fuzzyPinyin) { value in
                     model.updatePrefs { $0.fuzzyPinyin = value }
@@ -61,9 +75,18 @@ struct KeyboardPrefsView: View {
                 toggle("剪贴板历史", detail: "留下在键盘里粘贴过的内容，最多 20 条，只存在这台手机", isOn: model.snapshot.enableClipboardHistory) { value in
                     model.update { $0.enableClipboardHistory = value }
                 }
-                toggle("记住我打过的词", detail: "常打的词排到前面，只存在这台手机。要清除到键盘的设置里。", isOn: model.snapshot.enableLearning) { value in
+                toggle("记住我打过的词", detail: "选过的词下次排第一个，只存在这台手机", isOn: model.snapshot.enableLearning) { value in
                     model.update { $0.enableLearning = value }
                 }
+                NavigationLink {
+                    PersonalDictionaryView()
+                        .environment(\.palette, palette)
+                } label: {
+                    LineRow(title: "个人词库", detail: "看、加、删、清空记下的词") {
+                        Chevron()
+                    }
+                }
+                .buttonStyle(.plain)
 
                 SectionLabel(text: "语音输入")
                 NavigationLink {
@@ -71,13 +94,25 @@ struct KeyboardPrefsView: View {
                         .environmentObject(model)
                         .environment(\.palette, palette)
                 } label: {
-                    LineRow(title: "说话转文字", detail: "键盘里点麦克风会跳到这里。说完回到聊天框，文字会自动放进输入框。") {
+                    LineRow(title: "说话转文字", detail: "第一次在键盘上长按空格会跳到这里。打开后回到聊天框，长按空格就能直接说。") {
                         Chevron()
                     }
                 }
                 .buttonStyle(.plain)
+                pickerRow("麦克风开着多久", items: [1, 5, 15, 30].map { ("\($0) 分", voiceMinutes == $0) }) { index in
+                    var prefs = AIPrefs.load()
+                    prefs.voiceKeepAliveMinutes = [1, 5, 15, 30][index]
+                    prefs.save()
+                    voiceMinutes = prefs.voiceKeepAliveMinutes
+                }
                 LineRow(title: "允许麦克风和语音识别", detail: voiceStatus.isEmpty ? "键盘里不能弹权限框，要在这里先允许。" : voiceStatus) {
                     Button("允许") { requestVoicePermission() }
+                        .font(.system(size: 14, weight: .semibold))
+                }
+
+                SectionLabel(text: "图片")
+                LineRow(title: "允许存图片", detail: photoStatus.isEmpty ? "键盘里画的图要存到相册，得先在这里允许一次" : photoStatus) {
+                    Button("允许") { requestPhotoPermission() }
                         .font(.system(size: 14, weight: .semibold))
                 }
 
@@ -222,6 +257,16 @@ struct KeyboardPrefsView: View {
             .padding(2)
             .background(palette.surface.color)
             .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+        }
+    }
+
+    private func requestPhotoPermission() {
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+            Task { @MainActor in
+                photoStatus = status == .authorized || status == .limited
+                    ? "已经允许了，键盘里画的图可以存相册了"
+                    : "没有允许。到 设置 › 墨语 › 照片 里打开"
+            }
         }
     }
 

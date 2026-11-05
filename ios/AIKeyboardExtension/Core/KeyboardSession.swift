@@ -54,6 +54,11 @@ final class KeyboardSession: ObservableObject {
         let onDone: (String) -> Void
     }
 
+    /// 长按空格说话的状态。
+    enum VoiceHold: Equatable {
+        case off, listening, cancelling, transcribing
+    }
+
     /// 语音面板显示什么。录音在 App 里，这里只是看结果。
     enum VoicePanelState: Equatable {
         case opening, listening, transcribing, waitingInApp
@@ -83,6 +88,9 @@ final class KeyboardSession: ObservableObject {
     @Published private(set) var chatTyping = true
     @Published private(set) var voiceState: VoicePanelState = .opening
     @Published private(set) var voiceText = ""
+    @Published private(set) var voiceHold: VoiceHold = .off
+    /// 在键盘上拖动调高度。
+    @Published private(set) var isResizing = false
 
     /// 是否深色（控制器根据外观回填）。
     private(set) var isDark = false
@@ -106,6 +114,9 @@ final class KeyboardSession: ObservableObject {
     private var isActive = false
     private var toastTask: Task<Void, Never>?
     private var voiceTask: Task<Void, Never>?
+    private var holdTask: Task<Void, Never>?
+    private var appAliveAt: Date?
+    private var signalsReady = false
 
     /// UIKit 部分需要刷新时调用。
     var onRender: (() -> Void)?
@@ -148,6 +159,9 @@ final class KeyboardSession: ObservableObject {
         _ = FuzzyPinyinSettings.shared.setEnabled(prefs.fuzzyPinyin)
         palette = MoyuPalette(theme: prefs.theme, dark: isDark)
         syncWithDocument(force: true)
+        kit.learning.reloadIfChanged()
+        setUpVoiceSignals()
+        VoiceSignals.post(.ping)
         resumeVoice()
         render()
     }
@@ -168,6 +182,15 @@ final class KeyboardSession: ObservableObject {
         kit.learning.flush()
         voiceTask?.cancel()
         voiceTask = nil
+        if voiceHold != .off {
+            holdTask?.cancel()
+            VoiceSignals.post(.discard)
+            voiceHold = .off
+        }
+        if isResizing {
+            isResizing = false
+            prefs.save()
+        }
         if page == .voice {
             page = .keys
         }
@@ -302,7 +325,7 @@ final class KeyboardSession: ObservableObject {
                               marks: marks)
         }
         if page == .chat {
-            return .hint("这里打的字只发给 AI，不会进聊天框")
+            return .options(chat.optionTitles)
         }
         if page == .field {
             return .hint("正在填写：\(fieldEdit?.title ?? "")")
@@ -711,6 +734,10 @@ final class KeyboardSession: ObservableObject {
 
     /// 顶栏联想被点了。AI 给的排在前面。
     func chooseSuggestion(at index: Int) {
+        if page == .chat {
+            chat.cycleOption(at: index)
+            return
+        }
         let words = aiSuggestions + predictions
         guard words.indices.contains(index) else { return }
         let word = words[index]
@@ -748,6 +775,7 @@ final class KeyboardSession: ObservableObject {
             voiceTask = nil
             if voiceState == .listening {
                 VoiceBridge.send(.discard)
+                VoiceSignals.post(.discard)
             }
         }
         if page == .chat || page == .field {
@@ -849,15 +877,24 @@ final class KeyboardSession: ObservableObject {
         setPage(.settings)
     }
 
-    /// 点麦克风：苹果不给键盘用麦克风，跳到 App 里录。回来时 resumeVoice 接着。
+    /// 点麦克风：App 的语音会话开着就直接在这里听；没开就跳到 App 里打开（苹果不给键盘用麦克风）。
     func openVoice() {
         guard host?.hostHasFullAccess == true else {
             showToast("先在系统设置里打开「允许完全访问」")
             return
         }
+        setUpVoiceSignals()
+        voiceText = ""
+        if isAppVoiceAlive {
+            VoiceSignals.post(.start)
+            VoiceBridge.send(.start)
+            voiceState = .listening
+            setPage(.voice)
+            startVoicePolling()
+            return
+        }
         guard let url = URL(string: "moyu://voice") else { return }
         VoiceBridge.clear()
-        voiceText = ""
         voiceState = .opening
         setPage(.voice)
         host?.openContainingApp(url) { [weak self] success in
@@ -927,10 +964,165 @@ final class KeyboardSession: ObservableObject {
     /// 语音面板上的「说完了」。
     func finishVoice() {
         VoiceBridge.send(.stop)
+        VoiceSignals.post(.stop)
         voiceState = .transcribing
     }
 
+    // MARK: - 长按空格说话
+
+    private func setUpVoiceSignals() {
+        guard !signalsReady else { return }
+        signalsReady = true
+        VoiceSignals.observe(.pong) { [weak self] in
+            self?.appAliveAt = Date()
+        }
+        VoiceSignals.observe(.done) { [weak self] in
+            self?.voiceResultReady()
+        }
+    }
+
+    /// App 的语音会话开着。
+    private var isAppVoiceAlive: Bool {
+        if let appAliveAt, Date().timeIntervalSince(appAliveAt) < 20 {
+            return true
+        }
+        if let state = VoiceBridge.readState(), state.isFresh,
+           state.status == .ready || state.status == .listening || state.status == .transcribing {
+            return true
+        }
+        return false
+    }
+
+    func beginVoiceHold() {
+        guard host?.hostHasFullAccess == true else {
+            showToast("先在系统设置里打开「允许完全访问」")
+            return
+        }
+        setUpVoiceSignals()
+        if isComposing {
+            commitTopCandidate()
+        }
+        VoiceSignals.post(.ping)
+        VoiceSignals.post(.start)
+        VoiceBridge.send(.start)
+        voiceText = ""
+        voiceHold = .listening
+        render()
+        holdTask?.cancel()
+        holdTask = Task { [weak self] in
+            // 等一下 App 的回应：没开着就跳过去开
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            guard let self, self.voiceHold != .off else { return }
+            guard self.isAppVoiceAlive else {
+                self.voiceHold = .off
+                self.render()
+                self.showToast("先到墨语里打开语音，之后长按空格就能直接说")
+                self.openVoice()
+                return
+            }
+            while !Task.isCancelled, self.voiceHold == .listening || self.voiceHold == .cancelling {
+                if let state = VoiceBridge.readState(), state.status == .listening, state.text != self.voiceText {
+                    self.voiceText = state.text
+                    self.render()
+                }
+                try? await Task.sleep(nanoseconds: 200_000_000)
+            }
+        }
+    }
+
+    func updateVoiceHold(cancel: Bool) {
+        guard voiceHold == .listening || voiceHold == .cancelling else { return }
+        voiceHold = cancel ? .cancelling : .listening
+        render()
+    }
+
+    func endVoiceHold(cancelled: Bool) {
+        holdTask?.cancel()
+        guard voiceHold != .off else { return }
+        if cancelled {
+            VoiceSignals.post(.discard)
+            VoiceBridge.send(.discard)
+            voiceHold = .off
+            render()
+            return
+        }
+        VoiceSignals.post(.stop)
+        VoiceBridge.send(.stop)
+        voiceHold = .transcribing
+        render()
+        holdTask = Task { [weak self] in
+            for _ in 0..<40 {
+                try? await Task.sleep(nanoseconds: 200_000_000)
+                guard let self, self.voiceHold == .transcribing else { return }
+                if self.takeVoiceResult() { return }
+            }
+            guard let self, self.voiceHold == .transcribing else { return }
+            self.voiceHold = .off
+            self.render()
+            self.showToast("没等到结果，再说一次")
+        }
+    }
+
+    /// App 说结果好了。
+    private func voiceResultReady() {
+        if voiceHold == .transcribing {
+            _ = takeVoiceResult()
+        } else if page == .voice {
+            pollVoice()
+        }
+    }
+
+    /// 取结果放进输入框。取到了返回 true。
+    private func takeVoiceResult() -> Bool {
+        if let text = VoiceBridge.takeFinishedText() {
+            voiceHold = .off
+            render()
+            deliverVoice(text)
+            return true
+        }
+        if let state = VoiceBridge.readState(), state.status == .failed {
+            voiceHold = .off
+            render()
+            showToast(state.text)
+            VoiceBridge.clear()
+            return true
+        }
+        return false
+    }
+
+    // MARK: - 拖动调高度
+
+    func beginResize() {
+        setPage(.keys)
+        isResizing = true
+        render()
+    }
+
+    func resize(toSurfaceHeight height: CGFloat) {
+        prefs.customSurfaceHeight = Double(height)
+        render()
+    }
+
+    func endResize() {
+        isResizing = false
+        prefs.save()
+        render()
+        showToast("高度已保存")
+    }
+
+    func resetHeight() {
+        prefs.customSurfaceHeight = nil
+        prefs.save()
+        render()
+    }
+
     #if MOYU_SIM_CHECK
+    func showVoiceHoldForSimCheck() {
+        voiceText = "今天下午三点开会"
+        voiceHold = .listening
+        render()
+    }
+
     func showVoicePanelForSimCheck() {
         voiceText = "今天下午三点开会"
         voiceState = .listening

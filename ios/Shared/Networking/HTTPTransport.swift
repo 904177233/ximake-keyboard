@@ -14,8 +14,14 @@ import Foundation
 public enum HTTPTransport {
 
     /// 统一的 `URLSession` 配置：内存/磁盘缓存关闭（流式与鉴权请求都不应被缓存）。
+    /// 只给 tools/apicheck 用：把请求交给假的服务器。正式包里永远是 nil。
+    public static var testProtocolClasses: [AnyClass]?
+
     public static func makeSession(timeout: TimeInterval) -> URLSession {
         let configuration = URLSessionConfiguration.ephemeral
+        if let testProtocolClasses {
+            configuration.protocolClasses = testProtocolClasses + (configuration.protocolClasses ?? [])
+        }
         let clamped = min(max(timeout, 5), 180)
         configuration.timeoutIntervalForRequest = clamped
         configuration.timeoutIntervalForResource = max(clamped, 120)
@@ -73,6 +79,9 @@ public enum HTTPTransport {
         if let dictionary = root as? [String: Any] {
             if let error = dictionary["error"] as? [String: Any] {
                 if let message = error["message"] as? String, !message.isEmpty {
+                    if let code = error["code"] as? String, !code.isEmpty, !message.contains(code) {
+                        return "\(message)（\(code)）"
+                    }
                     return message
                 }
                 if let code = error["code"] as? String, !code.isEmpty {

@@ -66,6 +66,10 @@ open -a Simulator --args -CurrentDeviceUDID "$UDID" || true
 sleep 15
 
 $SPAWN defaults read .GlobalPreferences AppleKeyboards 2>&1 | tee "$OUT/keyboards.txt" || true
+# 先给麦克风、语音识别权限，免得系统弹框挡住画面（不支持的项会报错，不管它）
+for service in microphone speech-recognition photos-add; do
+  xcrun simctl privacy "$UDID" grant "$service" "$APP_ID" 2>&1 | tee -a "$OUT/privacy.txt" || true
+done
 xcrun simctl launch "$UDID" "$APP_ID" | tee "$OUT/launch.txt"
 sleep 15
 
@@ -79,6 +83,14 @@ for index in $(seq -w 1 26); do
   fi
   sleep 4
 done
+
+# App 自己能不能从链接打开语音（键盘里点麦克风走的就是这个）
+xcrun simctl openurl "$UDID" "moyu://voice" 2>&1 | tee -a "$OUT/openurl.txt" || true
+sleep 6
+xcrun simctl io "$UDID" screenshot --type=png "$OUT/shot-zz-openurl.png" >/dev/null 2>&1 || true
+sleep 6
+xcrun simctl io "$UDID" screenshot --type=png "$OUT/shot-zz-openurl-2.png" >/dev/null 2>&1 || true
+ps ax | grep -i "AIKeyboard" | grep -v grep | cut -c1-120 | tee "$OUT/processes-after-openurl.txt" || true
 
 count=$(ls "$OUT" | grep -c "^shot-.*\.png$" || true)
 echo "截到 $count 张"

@@ -92,6 +92,9 @@
 		<true/>
 	</dict>
 
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>把 AI 画的图存到相册。</string>
+
 	<key>NSMicrophoneUsageDescription</key>
 	<string>墨语需要麦克风权限，这样你可以直接对着键盘说话，把说的话变成文字。</string>
 

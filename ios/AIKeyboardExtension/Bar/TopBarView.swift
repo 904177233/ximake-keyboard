@@ -53,6 +53,8 @@ enum TopBarContent: Equatable {
     case composing(selected: String, spelling: String, candidates: [String], marks: [Int: String])
     case suggestions(words: [String], aiWords: [String])
     case hint(String)
+    /// 一排可以点的开关（对话时的推理、长短等）。
+    case options([String])
 }
 
 final class TopBarView: UIView {
@@ -217,6 +219,12 @@ final class TopBarView: UIView {
         case let .hint(text):
             hintLabel.text = text
             showsHint = true
+        case let .options(titles):
+            showsStrip = true
+            if changed {
+                layoutStrip(for: content)
+                strip.update(items: titles.map { CandidateStripView.Item(text: $0, style: .pill) }, markFirst: false, marks: [:])
+            }
         }
 
         toolsScroll.isHidden = !showsTools
@@ -275,6 +283,8 @@ final class TopBarView: UIView {
             let left = 6 + circle + 2
             let knobSide = min(38, height - 8)
             strip.frame = CGRect(x: left, y: 0, width: width - knobSide - 7 - left - 2, height: height)
+        case .options:
+            strip.frame = CGRect(x: 4, y: 0, width: width - 8, height: height)
         default:
             break
         }

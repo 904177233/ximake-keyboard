@@ -247,11 +247,13 @@ public struct KeyboardPrefs: Codable, Equatable, Sendable {
     public var haptics: HapticLevel = .light
     public var keySound: Bool = false
     public var fuzzyPinyin: Bool = true
+    /// 在键盘上拖出来的键区高度（竖屏）。nil 表示用「矮、标准、高」。
+    public var customSurfaceHeight: Double?
 
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
-        case theme, mascot, layout, height, haptics, keySound, fuzzyPinyin
+        case theme, mascot, layout, height, haptics, keySound, fuzzyPinyin, customSurfaceHeight
     }
 
     /// 容错解码：缺字段或值不认识都用默认值。
@@ -265,6 +267,7 @@ public struct KeyboardPrefs: Codable, Equatable, Sendable {
         haptics = (try? container.decodeIfPresent(HapticLevel.self, forKey: .haptics)) ?? .light
         keySound = (try? container.decodeIfPresent(Bool.self, forKey: .keySound)) ?? false
         fuzzyPinyin = (try? container.decodeIfPresent(Bool.self, forKey: .fuzzyPinyin)) ?? true
+        customSurfaceHeight = try? container.decodeIfPresent(Double.self, forKey: .customSurfaceHeight)
     }
 
     /// 读取。

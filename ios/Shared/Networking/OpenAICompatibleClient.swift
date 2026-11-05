@@ -171,6 +171,11 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
             let temperature = request.temperature ?? config.temperature
             body["temperature"] = AIProviderConfig.clampTemperature(temperature)
         }
+        if let reasoning = request.reasoning {
+            for (key, value) in Self.reasoningFields(reasoning, baseURL: config.normalizedBaseURL) {
+                body[key] = value
+            }
+        }
         // 注意：这里**不加** `stream_options`。
         //
         // 它是 OpenAI 专有参数，大量「OpenAI 兼容」端点并不认识：DeepSeek 部分版本、
@@ -180,6 +185,23 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
         // 而流式侧的 usage 本来就没被使用（见 `runStream` 里的 `_ = usage`），
         // 去掉它对功能零损失，换来的是对所有兼容端点可用。
         return body
+    }
+
+    /// 各家开关「先想再答」的参数。不认识的服务会回 400，调用方去掉这个参数重发。
+    static func reasoningFields(_ level: ReasoningLevel, baseURL: String) -> [String: Any] {
+        let base = baseURL.lowercased()
+        let deep = level == .deep
+        if base.contains("api.openai.com") {
+            return ["reasoning_effort": deep ? "high" : "low"]
+        }
+        if base.contains("dashscope") {
+            return ["enable_thinking": deep]
+        }
+        if base.contains("openrouter") {
+            return ["reasoning": deep ? ["effort": "high"] : ["enabled": false]]
+        }
+        // 豆包、智谱、DeepSeek、Kimi 等
+        return ["thinking": ["type": deep ? "enabled" : "disabled"]]
     }
 
     /// 计算本次请求的 `max_tokens`。

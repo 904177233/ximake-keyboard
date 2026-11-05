@@ -78,6 +78,12 @@ final class AIPanelModel: ObservableObject {
     @Published var tone = "自然"
     @Published var targetLanguage = "英文"
     @Published private(set) var sourceIsClipboard = false
+    /// 画图的画幅、风格等。
+    @Published private(set) var prefs = AIPrefs.load()
+    /// 画过的图（最近的在前）和它们的小图。
+    @Published private(set) var history: [ImageHistory.Item] = []
+    @Published private(set) var thumbnails: [String: UIImage] = [:]
+    @Published private(set) var selectedImageID: String?
 
     private unowned let session: KeyboardSession
     private var task: Task<Void, Never>?
@@ -102,6 +108,8 @@ final class AIPanelModel: ObservableObject {
     func open(_ feature: AIPanelFeature) {
         cancel()
         self.feature = feature
+        prefs = AIPrefs.load()
+        reloadHistory()
         tone = session.snapshot.defaultTone
         normalizeTone()
         sourceIsClipboard = false
@@ -345,8 +353,9 @@ final class AIPanelModel: ObservableObject {
                             suggestsSettings: true)
             return
         }
-        let prompt = source
-        let size = snapshot.imageSize
+        let prompt = source + prefs.imageStyle.promptSuffix
+        let size = prefs.imageShape.size
+        let polish = prefs.polishImagePrompt
         let chatProvider = snapshot.defaultProvider
         let chatKey = chatProvider.flatMap { KeychainStore.shared.apiKey(for: $0.id) }
         let client = AIClientFactory.makeImage(config: provider, apiKey: apiKey)
@@ -356,7 +365,7 @@ final class AIPanelModel: ObservableObject {
         task = Task { [weak self] in
             do {
                 var finalPrompt = prompt
-                if let chatProvider, let chatKey, !chatKey.isEmpty {
+                if polish, let chatProvider, let chatKey, !chatKey.isEmpty {
                     let llm = AIClientFactory.makeLLM(config: chatProvider, apiKey: chatKey)
                     if let enhanced = try? await llm.complete(PromptLibrary.imagePromptEnhanceRequest(prompt)) {
                         let text = enhanced.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -375,6 +384,18 @@ final class AIPanelModel: ObservableObject {
                 self.imageData = first.data
                 self.image = picture
                 self.phase = .done
+                if let item = ImageHistory.shared.add(first.data, prompt: prompt) {
+                    self.selectedImageID = item.id
+                    self.reloadHistory()
+                }
+                // 配置里的模型用不了、换了一个才画出来：把能用的存回去，下次不用再试
+                if let used = first.model, used != provider.imageModel {
+                    var updated = self.session.snapshot
+                    if let index = updated.providers.firstIndex(where: { $0.id == provider.id }) {
+                        updated.providers[index].imageModel = used
+                        self.session.saveConfig(updated)
+                    }
+                }
             } catch {
                 guard let self, !Task.isCancelled else { return }
                 self.progressTask?.cancel()
@@ -395,6 +416,59 @@ final class AIPanelModel: ObservableObject {
                     self.phase = .waiting("正在画，已经等了 \(seconds) 秒…")
                 }
             }
+        }
+    }
+
+    // MARK: - 画图设置和历史
+
+    func setImageShape(_ shape: AIPrefs.ImageShape) {
+        prefs.imageShape = shape
+        prefs.save()
+    }
+
+    func setImageStyle(_ style: AIPrefs.ImageStyle) {
+        prefs.imageStyle = style
+        prefs.save()
+    }
+
+    func togglePolish() {
+        prefs.polishImagePrompt.toggle()
+        prefs.save()
+        session.showToast(prefs.polishImagePrompt ? "画之前先把描述写具体" : "按原话画")
+    }
+
+    func reloadHistory() {
+        history = ImageHistory.shared.items
+        var thumbs: [String: UIImage] = [:]
+        for item in history {
+            thumbs[item.id] = thumbnails[item.id] ?? ImageHistory.shared.thumbnail(for: item.id, side: 52)
+        }
+        thumbnails = thumbs
+    }
+
+    /// 看以前画的一张。
+    func showHistory(_ item: ImageHistory.Item) {
+        cancel()
+        guard let data = ImageHistory.shared.data(for: item.id) else {
+            session.showToast("这张图找不到了")
+            reloadHistory()
+            return
+        }
+        imageData = data
+        image = Self.thumbnail(from: data)
+        selectedImageID = item.id
+        source = item.prompt
+        phase = .done
+    }
+
+    /// 存到相册。
+    func saveImage() {
+        guard let imageData else {
+            session.showToast("先画一张")
+            return
+        }
+        ImageHistory.saveToPhotos(imageData) { [weak self] message in
+            self?.session.showToast(message)
         }
     }
 

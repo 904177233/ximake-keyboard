@@ -16,6 +16,8 @@ import UIKit
 /// 一次录音现在的样子。
 public struct VoiceBridgeState: Codable, Equatable, Sendable {
     public enum Status: String, Codable, Sendable {
+        /// App 的语音会话开着，等键盘喊开始。
+        case ready
         case listening, transcribing, finished, failed
     }
 
@@ -23,11 +25,14 @@ public struct VoiceBridgeState: Codable, Equatable, Sendable {
     /// 听到的字；失败时是原因。
     public var text: String
     public var updatedAt: Date
+    /// 音量 0 到 1，键盘的动画用。
+    public var level: Double?
 
-    public init(status: Status, text: String, updatedAt: Date = Date()) {
+    public init(status: Status, text: String, updatedAt: Date = Date(), level: Double? = nil) {
         self.status = status
         self.text = text
         self.updatedAt = updatedAt
+        self.level = level
     }
 
     /// App 还活着。录音时每秒都会更新。
@@ -45,7 +50,7 @@ public enum VoiceBridge {
 
     /// 键盘让 App 做什么。
     public enum Command: String, Sendable {
-        case stop, discard
+        case start, stop, discard
     }
 
     private static let stateKey = "moyu.voice.state"

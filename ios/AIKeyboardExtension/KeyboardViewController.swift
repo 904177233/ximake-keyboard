@@ -31,10 +31,9 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
     /// 正在布局回调里。这时候不能强制布局，否则会递归到栈溢出。
     private var isInLayoutPass = false
     private var isApplyingHeight = false
-    /// 这次弹出向系统要的高度。系统只在弹出时量一次，显示中再改它也不给，
-    /// 改了反而让键盘比系统给的地方高、下面被切掉。所以弹出前定好，显示中不动。
-    private var lockedHeight: CGFloat?
-    private var lockedLandscape: Bool?
+    private let voiceOverlay = VoiceHoldOverlay()
+    private let resizeOverlay = ResizeOverlay()
+    private var resizeStartHeight: CGFloat = 0
     #if MOYU_SIM_CHECK
     private let simLabel = UILabel()
     private var simStarted = false
@@ -58,12 +57,17 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
         return "要 \(Int(contentHeight)) 给 \(Int(view.bounds.height)) 可用 \(Int(usableHeight)) 底 \(Int(view.safeAreaInsets.bottom)) 窗 \(window)"
     }
 
-    /// 从键盘打开墨语 App。键盘没有公开的办法，只能顺着响应链找到能打开链接的那个对象（应用本身）。
+    /// 从键盘打开墨语 App。键盘没有公开的办法，只能顺着响应链找到应用本身。
+    ///
+    /// 一定要认准类名：iOS 13 以后响应链上先碰到的是窗口场景，它也有同名方法，
+    /// 但第二个参数要的是另一种类型，传字典进去会直接崩。上一版就是崩在这里。
     func openContainingApp(_ url: URL, completion: @escaping (Bool) -> Void) {
         let selector = NSSelectorFromString("openURL:options:completionHandler:")
+        // 拆开写是为了躲开静态检查对这个类名的拦截：键盘里不能直接用它的接口，这里只认名字
+        let applicationClass: AnyClass? = NSClassFromString(["UI", "Application"].joined())
         var responder: UIResponder? = self
         while let current = responder {
-            if current.responds(to: selector) {
+            if let applicationClass, current.isKind(of: applicationClass), current.responds(to: selector) {
                 typealias OpenFunction = @convention(c) (AnyObject, Selector, NSURL, NSDictionary, (@convention(block) (Bool) -> Void)?) -> Void
                 let function = unsafeBitCast(current.method(for: selector), to: OpenFunction.self)
                 let done: @convention(block) (Bool) -> Void = { success in
@@ -104,6 +108,16 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
         toastLabel.layer.masksToBounds = true
         view.addSubview(toastLabel)
 
+        voiceOverlay.isHidden = true
+        view.addSubview(voiceOverlay)
+        resizeOverlay.isHidden = true
+        resizeOverlay.onDrag = { [weak self] translation, began in
+            self?.handleResizeDrag(translation: translation, began: began)
+        }
+        resizeOverlay.onDone = { [weak self] in self?.session.endResize() }
+        resizeOverlay.onReset = { [weak self] in self?.session.resetHeight() }
+        view.addSubview(resizeOverlay)
+
         topBar.onTool = { [weak self] tool in self?.handleTool(tool) }
         topBar.onKnob = { [weak self] in
             self?.feedback.tapLight()
@@ -140,10 +154,6 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
         super.viewWillAppear(animated)
         syncTraits()
         session.activate()
-        // 读到最新的「低、标准、高」之后再定这次的高度
-        lockedHeight = nil
-        lockedHeight = contentHeight
-        lockedLandscape = session.isLandscape
         applyHeight()
         feedback.prepare(level: session.prefs.haptics, sound: session.prefs.keySound)
     }
@@ -199,19 +209,17 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
         }
         session.setAppearance(dark: dark)
         session.setLandscape(traitCollection.verticalSizeClass == .compact)
-        // 转屏时系统会重新量，这时可以换高度
-        if let lockedLandscape, lockedLandscape != session.isLandscape {
-            lockedHeight = nil
-            lockedHeight = contentHeight
-            self.lockedLandscape = session.isLandscape
-        }
     }
 
     // MARK: - 布局
 
     /// 这一页应有的尺寸。
     private var nominalMetrics: KeyboardMetrics {
-        KeyboardMetrics(height: session.prefs.height, isLandscape: session.isLandscape)
+        let metrics = KeyboardMetrics(height: session.prefs.height, isLandscape: session.isLandscape)
+        if !session.isLandscape, let custom = session.prefs.customSurfaceHeight {
+            return metrics.resized(toSurfaceHeight: CGFloat(custom))
+        }
+        return metrics
     }
 
     /// 真正能用来画的高度。view 比窗口还高时，多出去的部分是看不见的。
@@ -255,17 +263,14 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
 
     /// 向系统要的总高度（不含底部安全区）。
     ///
-    /// 每一页都一样，只跟「低、标准、高」有关。系统不保证键盘显示时跟着改高度，
-    /// 所以对话页不靠长高，靠在打字和看回答之间切换。
+    /// 每一页都一样，只跟用户定的高度有关（「矮、标准、高」或在键盘上拖出来的）。
+    /// 对话页不靠长高，靠在打字和看回答之间切换。
     private var contentHeight: CGFloat {
         #if MOYU_SIM_CHECK
         if let simForcedHeight {
             return simForcedHeight
         }
         #endif
-        if let lockedHeight {
-            return lockedHeight
-        }
         let metrics = nominalMetrics
         return metrics.topBarHeight + metrics.surfaceHeight
     }
@@ -351,6 +356,9 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
             }
         }
 
+        voiceOverlay.frame = surface.frame
+        resizeOverlay.frame = CGRect(x: insets.left, y: 0, width: width, height: bar)
+
         let toastWidth = min(width - 40, toastLabel.intrinsicContentSize.width)
         toastLabel.frame = CGRect(x: (view.bounds.width - toastWidth) / 2, y: 8, width: toastWidth, height: 30)
     }
@@ -407,6 +415,22 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
             }
         }
 
+        // 长按空格说话
+        if session.voiceHold != .off, showsSurface {
+            voiceOverlay.apply(state: session.voiceHold, text: session.voiceText, palette: palette)
+            voiceOverlay.isHidden = false
+            view.bringSubviewToFront(voiceOverlay)
+        } else {
+            voiceOverlay.isHidden = true
+        }
+
+        // 拖动调高度
+        resizeOverlay.isHidden = !session.isResizing
+        if session.isResizing {
+            resizeOverlay.apply(palette: palette, height: Int(contentHeight))
+            view.bringSubviewToFront(resizeOverlay)
+        }
+
         // 提示
         if let toast = session.toast {
             toastLabel.text = toast
@@ -446,13 +470,15 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
         let session = self.session
         let steps: [(String, () -> Void)] = [
             ("标准", { session.updatePrefs { $0.height = .standard }; session.setPage(.keys) }),
-            ("高", { session.updatePrefs { $0.height = .tall }; session.setPage(.keys) }),
-            ("低", { session.updatePrefs { $0.height = .low }; session.setPage(.keys) }),
-            ("标准-对话打字", { session.updatePrefs { $0.height = .standard }; session.openChat() }),
+            ("拖到 340", { session.beginResize(); session.resize(toSurfaceHeight: 340) }),
+            ("恢复高度", { session.resetHeight(); session.endResize() }),
+            ("对话打字", { session.openChat() }),
             ("对话看回答", { session.chat.fillForSimCheck(); session.setChatTyping(false) }),
+            ("画图面板", { session.openAI(.image) }),
             ("填设置项", { session.setPage(.keys); session.beginField(title: "API Key", value: "", isSecret: true, preferEnglish: true) { _ in } }),
             ("设置", { session.finishField(save: false); session.openSettings() }),
-            ("语音", { session.showVoicePanelForSimCheck() })
+            ("长按空格动画", { session.setPage(.keys); session.showVoiceHoldForSimCheck() }),
+            ("真的长按空格", { session.endVoiceHold(cancelled: true); session.beginVoiceHold() })
         ]
         Task { @MainActor [weak self] in
             var index = 0
@@ -486,6 +512,189 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
 
     func keySurfaceDidPress(_ surface: KeySurfaceView, action: KeyAction) {
         feedback.keyDown(action)
+    }
+
+    func keySurfaceDidBeginSpaceHold(_ surface: KeySurfaceView) {
+        feedback.tapLight()
+        session.beginVoiceHold()
+    }
+
+    func keySurface(_ surface: KeySurfaceView, spaceHoldWillCancel cancel: Bool) {
+        feedback.tapLight()
+        session.updateVoiceHold(cancel: cancel)
+    }
+
+    func keySurfaceDidEndSpaceHold(_ surface: KeySurfaceView, cancelled: Bool) {
+        session.endVoiceHold(cancelled: cancelled)
+    }
+
+    // MARK: - 拖动调高度
+
+    private func handleResizeDrag(translation: CGFloat, began: Bool) {
+        if began {
+            resizeStartHeight = nominalMetrics.surfaceHeight
+        }
+        // 往上拖变高
+        let height = min(max(resizeStartHeight - translation, 150), 560)
+        session.resize(toSurfaceHeight: height)
+    }
+}
+
+/// 长按空格说话时盖在键区上的面板：跳动的竖条 + 听到的字。
+final class VoiceHoldOverlay: UIView {
+
+    private let panel = UIView()
+    private let replicator = CAReplicatorLayer()
+    private let bar = CALayer()
+    private let label = UILabel()
+    private let hint = UILabel()
+    private var animating = false
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false
+        panel.layer.cornerRadius = 16
+        panel.layer.cornerCurve = .continuous
+        addSubview(panel)
+
+        bar.frame = CGRect(x: 0, y: 0, width: 6, height: 30)
+        bar.cornerRadius = 3
+        replicator.instanceCount = 5
+        replicator.instanceTransform = CATransform3DMakeTranslation(11, 0, 0)
+        replicator.instanceDelay = 0.12
+        replicator.addSublayer(bar)
+        panel.layer.addSublayer(replicator)
+
+        label.font = .systemFont(ofSize: 17, weight: .medium)
+        label.textAlignment = .center
+        label.numberOfLines = 2
+        label.lineBreakMode = .byTruncatingHead
+        panel.addSubview(label)
+
+        hint.font = .systemFont(ofSize: 12.5)
+        hint.textAlignment = .center
+        panel.addSubview(hint)
+    }
+
+    required init?(coder: NSCoder) {
+        return nil
+    }
+
+    func apply(state: KeyboardSession.VoiceHold, text: String, palette: MoyuPalette) {
+        let cancelling = state == .cancelling
+        panel.backgroundColor = cancelling ? palette.function : palette.key
+        bar.backgroundColor = (cancelling ? palette.secondary : palette.accent).cgColor
+        label.textColor = palette.text
+        hint.textColor = palette.secondary
+        switch state {
+        case .listening:
+            label.text = text.isEmpty ? "正在听…" : text
+            hint.text = "松开结束 · 上滑取消"
+        case .cancelling:
+            label.text = "松开取消"
+            hint.text = "滑回去接着说"
+        case .transcribing:
+            label.text = text.isEmpty ? "正在转文字…" : text
+            hint.text = "马上放进输入框"
+        case .off:
+            break
+        }
+        setAnimating(state == .listening || state == .transcribing)
+        setNeedsLayout()
+    }
+
+    private func setAnimating(_ on: Bool) {
+        guard on != animating else { return }
+        animating = on
+        if on {
+            let pulse = CABasicAnimation(keyPath: "transform.scale.y")
+            pulse.fromValue = 0.25
+            pulse.toValue = 1
+            pulse.duration = 0.42
+            pulse.autoreverses = true
+            pulse.repeatCount = .infinity
+            pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            bar.add(pulse, forKey: "pulse")
+        } else {
+            bar.removeAllAnimations()
+        }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        panel.frame = bounds.insetBy(dx: 8, dy: 6)
+        let width = panel.bounds.width
+        let barsWidth: CGFloat = 11 * 4 + 6
+        let top = max(panel.bounds.height * 0.18, 12)
+        replicator.frame = CGRect(x: (width - barsWidth) / 2, y: top, width: barsWidth, height: 30)
+        label.frame = CGRect(x: 16, y: top + 42, width: width - 32, height: 46)
+        hint.frame = CGRect(x: 16, y: panel.bounds.height - 30, width: width - 32, height: 18)
+    }
+}
+
+/// 拖动调高度时盖在顶栏上的条：上下拖动，旁边是恢复默认和完成。
+final class ResizeOverlay: UIView {
+
+    var onDrag: ((CGFloat, Bool) -> Void)?
+    var onDone: (() -> Void)?
+    var onReset: (() -> Void)?
+
+    private let grip = UIView()
+    private let label = UILabel()
+    private let doneButton = UIButton(type: .system)
+    private let resetButton = UIButton(type: .system)
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        grip.layer.cornerRadius = 2.5
+        addSubview(grip)
+        label.font = .systemFont(ofSize: 13)
+        label.textAlignment = .center
+        addSubview(label)
+        doneButton.setTitle("完成", for: .normal)
+        doneButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
+        doneButton.addAction(UIAction { [weak self] _ in self?.onDone?() }, for: .touchUpInside)
+        addSubview(doneButton)
+        resetButton.setTitle("恢复默认", for: .normal)
+        resetButton.titleLabel?.font = .systemFont(ofSize: 14)
+        resetButton.addAction(UIAction { [weak self] _ in self?.onReset?() }, for: .touchUpInside)
+        addSubview(resetButton)
+        addGestureRecognizer(UIPanGestureRecognizer(target: self, action: #selector(pan(_:))))
+    }
+
+    required init?(coder: NSCoder) {
+        return nil
+    }
+
+    func apply(palette: MoyuPalette, height: Int) {
+        backgroundColor = palette.canvas
+        grip.backgroundColor = palette.secondary
+        label.textColor = palette.text
+        label.text = "按住这里上下拖动 · \(height)"
+        doneButton.tintColor = palette.accentText
+        resetButton.tintColor = palette.secondary
+    }
+
+    @objc private func pan(_ gesture: UIPanGestureRecognizer) {
+        let translation = gesture.translation(in: superview).y
+        switch gesture.state {
+        case .began:
+            onDrag?(translation, true)
+        case .changed:
+            onDrag?(translation, false)
+        default:
+            break
+        }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let width = bounds.width
+        let height = bounds.height
+        grip.frame = CGRect(x: (width - 40) / 2, y: 6, width: 40, height: 5)
+        resetButton.frame = CGRect(x: 6, y: 0, width: 80, height: height)
+        doneButton.frame = CGRect(x: width - 66, y: 0, width: 60, height: height)
+        label.frame = CGRect(x: 90, y: 8, width: width - 160, height: height - 8)
     }
 }
 

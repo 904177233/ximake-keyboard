@@ -130,6 +130,15 @@ learning.record(segments: [(text: "握", key: "wo")])
 let afterLearning = texts(qwerty("wo"), 6)
 check("常选的词往前排", afterLearning.contains("握"), "\(afterLearning)")
 
+print("个人词库")
+let beforeChoice = texts(qwerty("shiyong"), 10)
+learning.record(segments: [(text: "试用", key: "shiyong")])
+check("选过「试用」后 shiyong 首选是试用", qwerty("shiyong").candidates.first?.text == "试用", "\(beforeChoice) -> \(texts(qwerty("shiyong")))")
+learning.record(segments: [(text: "睡觉了", key: "shuijiaole")])
+check("选过的三字词整句也用它", qwerty("woyaoshuijiaole").candidates.first?.text.hasSuffix("睡觉了") == true, "\(texts(qwerty("woyaoshuijiaole")))")
+learning.removeEntry(text: "试用", key: "shiyong")
+check("删掉以后不再排第一", qwerty("shiyong").candidates.first?.text != "试用", "\(texts(qwerty("shiyong")))")
+
 print("性能")
 let started = Date()
 for _ in 0..<50 {

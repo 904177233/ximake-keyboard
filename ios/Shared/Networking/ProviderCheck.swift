@@ -336,6 +336,22 @@ public extension PresetProviders {
         }
     }
 
+    /// 已确认用不了的画图模型 -> 替代。
+    static let retiredImageModels: [String: String] = [
+        "doubao-seedream-3-0-t2i-250415": "doubao-seedream-5-0-pro-260628"
+    ]
+
+    /// 读配置时换掉已确认下线的模型。只换内置服务，自定义服务（中转站）的模型名可能另有含义。
+    static func migrateRetiredModels(_ provider: inout AIProviderConfig) {
+        guard preset(id: provider.id) != nil else { return }
+        if let next = retiredModels[provider.model] {
+            provider.model = next
+        }
+        if let image = provider.imageModel, let next = retiredImageModels[image] {
+            provider.imageModel = next
+        }
+    }
+
     /// 已确认下线的模型名 -> 替代。老用户存过的配置在读取时换掉。
     static let retiredModels: [String: String] = [
         "deepseek-chat": "deepseek-flash",

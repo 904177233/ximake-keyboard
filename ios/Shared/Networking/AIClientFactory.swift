@@ -19,10 +19,10 @@ public enum AIClientFactory {
     ///   - config: 服务商配置。
     ///   - apiKey: 从 Keychain 取出的明文 Key；为空时客户端会在首次请求前抛 `.missingAPIKey`。
     /// - Returns: 符合协议的具体客户端（`OpenAICompatibleClient` / `AnthropicClient` / `GeminiClient`）。
-    public static func makeLLM(config: AIProviderConfig, apiKey: String) -> LLMClient {
+    public static func makeLLM(config: AIProviderConfig, apiKey: String, capturesReasoning: Bool = false) -> LLMClient {
         switch config.kind {
         case .openAICompatible, .custom:
-            return OpenAICompatibleClient(config: config, apiKey: apiKey)
+            return OpenAICompatibleClient(config: config, apiKey: apiKey, capturesReasoning: capturesReasoning)
         case .anthropic:
             return AnthropicClient(config: config, apiKey: apiKey)
         case .gemini:

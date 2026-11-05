@@ -68,7 +68,68 @@ struct AIPanelView: View {
         case .translate:
             chipRow(AIPanelModel.languages, selected: ai.targetLanguage, prefix: "翻成") { ai.setTargetLanguage($0) }
         case .image:
-            EmptyView()
+            imageParams
+        }
+    }
+
+    /// 画幅、风格、要不要润色描述。
+    private var imageParams: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(AIPrefs.ImageShape.allCases, id: \.self) { shape in
+                    PanelChip(title: shape.title, isSelected: ai.prefs.imageShape == shape) { ai.setImageShape(shape) }
+                }
+                palette.line.color.frame(width: 1, height: 16)
+                ForEach(AIPrefs.ImageStyle.allCases, id: \.self) { style in
+                    PanelChip(title: style.title, isSelected: ai.prefs.imageStyle == style) { ai.setImageStyle(style) }
+                }
+                palette.line.color.frame(width: 1, height: 16)
+                PanelChip(title: ai.prefs.polishImagePrompt ? "润色描述 ✓" : "润色描述", isSelected: ai.prefs.polishImagePrompt) {
+                    ai.togglePolish()
+                }
+            }
+            .padding(.horizontal, 10)
+        }
+        .frame(height: 32)
+    }
+
+    /// 最近画过的图，点一下就能再看、再复制。
+    @ViewBuilder
+    private var historyStrip: some View {
+        if !ai.history.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("画过的图")
+                    .font(.system(size: 11))
+                    .foregroundColor(palette.secondary.color)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(ai.history) { item in
+                            Button {
+                                ai.showHistory(item)
+                            } label: {
+                                Group {
+                                    if let thumb = ai.thumbnails[item.id] {
+                                        Image(uiImage: thumb)
+                                            .resizable()
+                                            .scaledToFill()
+                                    } else {
+                                        palette.function.color
+                                    }
+                                }
+                                .frame(width: 44, height: 44)
+                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .strokeBorder(palette.accent.color, lineWidth: ai.selectedImageID == item.id ? 2 : 0)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(item.prompt)
+                        }
+                    }
+                }
+            }
+            .padding(.top, 4)
         }
     }
 
@@ -148,6 +209,7 @@ struct AIPanelView: View {
             note("先在聊天里长按对方的话，点拷贝，再点下面的按钮。")
         case .image:
             note("先在输入框里写下想画什么，比如「雨夜的小酒馆」，再回来点这里。")
+            historyStrip
         default:
             note("输入框是空的。先打一句话，或者选中一段字，再回来点这里。")
         }
@@ -169,6 +231,7 @@ struct AIPanelView: View {
                 .frame(maxHeight: 112)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .frame(maxWidth: .infinity)
+            historyStrip
         } else if ai.feature == .reply, !ai.replies.isEmpty {
             ForEach(Array(ai.replies.enumerated()), id: \.offset) { pair in
                 Button {
@@ -238,6 +301,7 @@ struct AIPanelView: View {
         switch ai.feature {
         case .image:
             PanelButton(title: "重画") { ai.regenerate() }
+            PanelButton(title: "存相册") { ai.saveImage() }
             Spacer(minLength: 0)
             PanelButton(title: "复制图片", isPrimary: true) { ai.copyImage() }
         case .reply:

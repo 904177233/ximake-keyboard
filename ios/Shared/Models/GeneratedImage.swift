@@ -17,12 +17,15 @@ public struct GeneratedImage: Sendable {
     public var remoteURL: URL?
     /// MIME 类型，例如 `image/png`、`image/jpeg`。
     public var mimeType: String
+    /// 实际画出这张图的模型（和配置里的不一样时，说明配置里的那个用不了）。
+    public var model: String?
 
     /// 成员初始化。
-    public init(data: Data, remoteURL: URL? = nil, mimeType: String = "image/png") {
+    public init(data: Data, remoteURL: URL? = nil, mimeType: String = "image/png", model: String? = nil) {
         self.data = data
         self.remoteURL = remoteURL
         self.mimeType = mimeType
+        self.model = model
     }
 
     /// 数据是否为空。

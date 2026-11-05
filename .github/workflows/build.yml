@@ -48,6 +48,7 @@ on:
       - "scripts/gen_xcodeproj.py"
       - "scripts/validate_project.py"
       - "tools/imecheck/**"
+      - "tools/apicheck/**"
       - ".github/workflows/build.yml"
 
 # 同一分支只保留最新一次运行，避免多个 macOS 任务排队烧时长
@@ -70,7 +71,7 @@ env:
   # 之前所有构建都写死 `1.0.0 build 1`，导致装到手机上根本无法区分是哪一版 ——
   # 用户反馈「好像没更新」，我在设备侧和包里都拿不到版本证据。现在改为：
   #   设置 › 通用 › iPhone 储存空间 › 墨语 → 版本 1.5.0，构建号 = run 序号
-  MARKETING_VERSION: 3.0.3
+  MARKETING_VERSION: 3.0.4
   BUILD_NUMBER: ${{ github.run_number }}
 
 jobs:
@@ -200,8 +201,20 @@ jobs:
             ios/Shared/IMECore/UserLearningStore.swift \
             ios/Shared/Storage/SharedStore.swift \
             ios/Shared/Storage/SharedVault.swift \
+            ios/Shared/Storage/SharedBlob.swift \
             tools/imecheck/main.swift
           "${BUILD_DIR}/imecheck" ios/Shared/dict/moyu.dict ios/Shared/dict/next.tsv
+
+      - name: API logic check
+        run: |
+          set -euo pipefail
+          mkdir -p "${BUILD_DIR}"
+          xcrun --sdk macosx swiftc -swift-version 5 \
+            -o "${BUILD_DIR}/apicheck" \
+            ios/Shared/Models/*.swift \
+            ios/Shared/Networking/*.swift \
+            tools/apicheck/main.swift
+          "${BUILD_DIR}/apicheck"
 
       - name: Regenerate Xcode project from source tree
         run: |

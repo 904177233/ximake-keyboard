@@ -125,6 +125,14 @@ struct KeyboardMetrics {
         topPadding + capHeight * 4 + rowGap * 3 + bottomPadding
     }
 
+    /// 拖出来的高度：键高和行距一起按比例变。
+    func resized(toSurfaceHeight height: CGFloat) -> KeyboardMetrics {
+        var copy = self
+        copy.rowGap = min(max((height - topPadding - bottomPadding) * 0.045, 6), 14)
+        copy.capHeight = max((height - topPadding - bottomPadding - copy.rowGap * 3) / 4, 22)
+        return copy
+    }
+
     /// 按系统实际给的高度调整键高：不够就压缩，多一点就撑满。多太多是系统的过渡状态，不跟。
     func fitted(toSurfaceHeight available: CGFloat) -> KeyboardMetrics {
         guard available >= 90 else { return self }

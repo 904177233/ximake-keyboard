@@ -24,6 +24,12 @@ protocol KeySurfaceDelegate: AnyObject {
     func keySurfaceDidSwipeClear(_ surface: KeySurfaceView)
     /// 按键触感与按键音。
     func keySurfaceDidPress(_ surface: KeySurfaceView, action: KeyAction)
+    /// 长按空格：开始说话。
+    func keySurfaceDidBeginSpaceHold(_ surface: KeySurfaceView)
+    /// 按着空格往上滑：要取消（true）或回到正常（false）。
+    func keySurface(_ surface: KeySurfaceView, spaceHoldWillCancel cancel: Bool)
+    /// 松开空格：说完了，或者取消。
+    func keySurfaceDidEndSpaceHold(_ surface: KeySurfaceView, cancelled: Bool)
 }
 
 final class KeySurfaceView: UIView, UIInputViewAudioFeedback {
@@ -50,6 +56,9 @@ final class KeySurfaceView: UIView, UIInputViewAudioFeedback {
         var didFire = false
         var cursorMode = false
         var cursorSteps = 0
+        /// 长按空格在说话。
+        var voiceHold = false
+        var holdCancel = false
         var holdTask: Task<Void, Never>?
 
         init(keyIndex: Int, startPoint: CGPoint) {
@@ -60,6 +69,12 @@ final class KeySurfaceView: UIView, UIInputViewAudioFeedback {
 
     private var presses: [ObjectIdentifier: Press] = [:]
     private let popup = KeyPopupView()
+    /// 正在滑空格移光标：键面变暗，提示左右滑。
+    private var cursorActive = false {
+        didSet {
+            if oldValue != cursorActive { setNeedsDisplay() }
+        }
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -141,6 +156,12 @@ final class KeySurfaceView: UIView, UIInputViewAudioFeedback {
     override func draw(_ rect: CGRect) {
         for (index, key) in keys.enumerated() where key.frame.intersects(rect.insetBy(dx: -2, dy: -2)) {
             drawKey(key, isPressed: isPressed(index))
+        }
+        if cursorActive {
+            palette.canvas.withAlphaComponent(0.72).setFill()
+            UIRectFillUsingBlendMode(bounds, .normal)
+            drawCentered("◀   左右滑动移动光标   ▶", in: bounds,
+                         font: .systemFont(ofSize: 15, weight: .medium), color: palette.secondary)
         }
     }
 
@@ -349,6 +370,16 @@ final class KeySurfaceView: UIView, UIInputViewAudioFeedback {
         case .shift:
             delegate?.keySurface(self, didTrigger: .shift)
             press.didFire = true
+        case .space:
+            // 按住不动 0.45 秒：说话。先滑动就是移光标，不会触发
+            press.holdTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 450_000_000)
+                guard !Task.isCancelled, let self, !press.cursorMode, !press.didFire else { return }
+                press.didLongPress = true
+                press.voiceHold = true
+                self.popup.isHidden = true
+                self.delegate?.keySurfaceDidBeginSpaceHold(self)
+            }
         default:
             if key.alternate != nil {
                 press.holdTask = Task { @MainActor [weak self] in
@@ -375,9 +406,19 @@ final class KeySurfaceView: UIView, UIInputViewAudioFeedback {
 
             switch key.action {
             case .space:
-                if press.cursorMode || abs(dx) > 12 {
-                    press.cursorMode = true
-                    let steps = Int(dx / 9)
+                if press.voiceHold {
+                    let cancel = dy < -50
+                    if cancel != press.holdCancel {
+                        press.holdCancel = cancel
+                        delegate?.keySurface(self, spaceHoldWillCancel: cancel)
+                    }
+                } else if press.cursorMode || abs(dx) > 10 {
+                    if !press.cursorMode {
+                        press.cursorMode = true
+                        press.holdTask?.cancel()
+                        cursorActive = true
+                    }
+                    let steps = Int(dx / 8)
                     if steps != press.cursorSteps {
                         delegate?.keySurface(self, moveCursorBy: steps - press.cursorSteps)
                         press.cursorSteps = steps
@@ -427,12 +468,21 @@ final class KeySurfaceView: UIView, UIInputViewAudioFeedback {
             guard keys.indices.contains(index) else { continue }
             let key = keys[index]
             redraw(keyIndex: index)
+            if press.voiceHold {
+                delegate?.keySurfaceDidEndSpaceHold(self, cancelled: press.holdCancel)
+                continue
+            }
             if press.didFire || press.cursorMode || key.action == .backspace || key.action == .shift {
                 continue
             }
             fire(press, key: key)
         }
+        updateCursorActive()
         hidePopupIfIdle()
+    }
+
+    private func updateCursorActive() {
+        cursorActive = presses.values.contains { $0.cursorMode }
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -442,7 +492,11 @@ final class KeySurfaceView: UIView, UIInputViewAudioFeedback {
             presses[identifier] = nil
             press.holdTask?.cancel()
             redraw(keyIndex: press.keyIndex)
+            if press.voiceHold {
+                delegate?.keySurfaceDidEndSpaceHold(self, cancelled: true)
+            }
         }
+        updateCursorActive()
         hidePopupIfIdle()
     }
 

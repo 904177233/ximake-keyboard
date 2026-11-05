@@ -126,6 +126,11 @@ public final class PinyinEngine {
         return best
     }
 
+    /// 个人词库里的词：比词库里很常用的词还高一点，选得越多越高。
+    private static func userWordScore(syllables: Int, chosen: Int) -> Double {
+        log(200_000.0) - tilePenalty + syllableBonus * Double(max(syllables - 1, 0)) + 1.5 * log2(Double(chosen) + 1)
+    }
+
     private func scoreWord(frequency: Int, syllableCount: Int, text: String, previous: String? = nil) -> Double {
         let learned = learning.count(of: text)
         var score = log(Double(frequency) + 1)
@@ -180,6 +185,16 @@ public final class PinyinEngine {
                 let score = log(60000.0) - Self.tilePenalty + 1.2 * log2(Double(learning.count(of: phrase)) + 1)
                 tiles.append(Tile(end: position, text: phrase, key: subString, score: score,
                                   syllables: nil, lastSyllable: nil))
+            }
+
+            // 个人词库：这个拼音下选过的词。两个音节以上才进整句；单字只调候选顺序，免得句子里到处是它
+            if let syllables = PinyinSyllables.segment(subString), syllables.count >= 2 {
+                for word in learning.userWords(forKey: subString).prefix(2) {
+                    matchedExact = true
+                    tiles.append(Tile(end: position, text: word.text, key: subString,
+                                      score: Self.userWordScore(syllables: syllables.count, chosen: word.count),
+                                      syllables: syllables, lastSyllable: syllables.last))
+                }
             }
 
             // 简拼：这一段没有全拼能对上时才试
@@ -288,6 +303,13 @@ public final class PinyinEngine {
                                       syllables: nil, lastSyllable: nil))
                 }
             }
+            for word in learning.userWords(forT9: digitString).prefix(3) {
+                guard let syllables = PinyinSyllables.segment(word.key), syllables.count >= 2,
+                      matchesLocks(keyBytes: Array(word.key.utf8), at: start, locks: query.locks) else { continue }
+                tiles.append(Tile(end: position, text: word.text, key: word.key,
+                                  score: Self.userWordScore(syllables: syllables.count, chosen: word.count),
+                                  syllables: syllables, lastSyllable: syllables.last))
+            }
             if query.locks.isEmpty, digits.count >= 2, digits.count <= 6,
                let top = dictionary.t9InitialKeys(digits, limit: 1).first,
                let entry = bestWord(key: top, dictionary: dictionary) {
@@ -390,6 +412,18 @@ public final class PinyinEngine {
             addQwertyLists(query: query, dictionary: dictionary, into: &builder)
         } else {
             addT9Lists(query: query, dictionary: dictionary, into: &builder)
+        }
+
+        // 个人词库：这串拼音选过的词放第一个
+        let typed = String(decoding: query.input, as: UTF8.self)
+        if query.mode == .qwerty {
+            if let favorite = learning.userWords(forKey: typed).first {
+                builder.promote(IMECandidate(text: favorite.text, key: typed, consumed: count), to: 0)
+            }
+        } else if let favorite = learning.userWords(forT9: typed).first(where: {
+            matchesLocks(keyBytes: Array($0.key.utf8), at: 0, locks: query.locks)
+        }) {
+            builder.promote(IMECandidate(text: favorite.text, key: favorite.key, consumed: count), to: 0)
         }
 
         if query.mode == .qwerty {
@@ -742,6 +776,18 @@ private struct CandidateBuilder {
     mutating func insert(_ candidate: IMECandidate, at index: Int) {
         guard !candidate.text.isEmpty, seen.insert(candidate.text).inserted else { return }
         candidates.insert(candidate, at: min(index, candidates.count))
+    }
+
+    /// 挪到指定位置；还没有就插进去。
+    mutating func promote(_ candidate: IMECandidate, to index: Int) {
+        guard !candidate.text.isEmpty else { return }
+        if let existing = candidates.firstIndex(where: { $0.text == candidate.text }) {
+            let item = candidates.remove(at: existing)
+            candidates.insert(item, at: min(index, candidates.count))
+        } else {
+            seen.insert(candidate.text)
+            candidates.insert(candidate, at: min(index, candidates.count))
+        }
     }
 
     mutating func add(_ candidate: IMECandidate) {

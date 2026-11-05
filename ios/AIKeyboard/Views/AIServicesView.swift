@@ -35,6 +35,17 @@ struct AIServicesView: View {
                 PrimaryButton(title: "添加服务") { showsAdd = true }
                     .padding(.top, 16)
 
+                SectionLabel(text: "对话")
+                NavigationLink {
+                    AgentSettingsView()
+                        .environment(\.palette, palette)
+                } label: {
+                    LineRow(title: "AI 对话设置", detail: "人设、推理、回答长短、带几轮上下文、画图偏好、对话记录") {
+                        Chevron()
+                    }
+                }
+                .buttonStyle(.plain)
+
                 SectionLabel(text: "默认语气")
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
