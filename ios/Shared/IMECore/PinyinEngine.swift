@@ -253,8 +253,8 @@ public final class PinyinEngine {
             position += 1
         }
 
-        // 还没打完的词
-        if count - start >= 2, !hasBreak(query, after: start, before: count) {
+        // 还没打完的词。末尾已经对得上完整的词就不补，免得多出没打的字。
+        if count - start >= 2, !tailHasExact, !hasBreak(query, after: start, before: count) {
             let digits = Array(input[start..<count])
             var best: Int?
             var bestFrequency = -1

@@ -50,6 +50,19 @@ check("句尾 ma 是吗", qwerty("nihaoma").candidates.first?.text == "你好吗
 check("句尾 ba 是吧", qwerty("womenzouba").candidates.first?.text == "我们走吧", "\(texts(qwerty("womenzouba")))")
 check("拼音分词显示", qwerty("woxihuanni").spelling == "wo'xi'huan'ni", qwerty("woxihuanni").spelling)
 
+print("拼音打完整时不多补字")
+for (input, expected) in [("nichifanlema", "你吃饭了吗"), ("jintianhenmang", "今天很忙"),
+                          ("zhegedongxihenhaoyong", "这个东西很好用"), ("meiguanxiwolaichuli", "没关系我来处理")] {
+    let got = qwerty(input).candidates.first?.text ?? ""
+    check("\(input) 首选是\(expected)", got == expected, "得到「\(got)」")
+}
+for input in ["jintianhenmang", "womenmingtianzaijian", "zhegedongxihenhaoyong", "nichifanlema"] {
+    // 汉字数不能超过音节数：整句候选绝不能比打的拼音多字
+    let syllableCount = PinyinSyllables.segment(input)?.count ?? input.count
+    let got = qwerty(input).candidates.first?.text ?? ""
+    check("\(input) 没有多字", got.count <= syllableCount, "得到「\(got)」，音节数 \(syllableCount)")
+}
+
 print("逐词选词")
 let long = qwerty("woxihuanni")
 let wo = long.candidates.first { $0.text == "我" }
