@@ -13,11 +13,13 @@ defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false
 
 UDID=$(python3 - <<'PY'
 import json
+import re
 import subprocess
 
 data = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "devices", "available", "-j"]))
 runtimes = [k for k in data["devices"] if "iOS" in k and data["devices"][k]]
-runtimes.sort(key=lambda k: [int(p) for p in k.rsplit("iOS-", 1)[1].split("-")], reverse=True)
+# 运行环境的名字可能带机型后缀（iOS-27-2-iPhone19-4），只取主次版本号
+runtimes.sort(key=lambda k: [int(p) for p in re.search(r"iOS-(\d+)-(\d+)", k).groups()], reverse=True)
 chosen = None
 for runtime in runtimes:
     phones = [d for d in data["devices"][runtime] if d["name"].startswith("iPhone")]
@@ -33,6 +35,10 @@ print(chosen["udid"])
 PY
 )
 echo "设备 $UDID"
+if [ -z "$UDID" ]; then
+  echo "::error::没选到模拟器"
+  exit 1
+fi
 xcrun simctl list devices available > "$OUT/devices.txt"
 xcrun simctl list devices | grep "$UDID" | tee "$OUT/device.txt"
 
@@ -74,7 +80,7 @@ for index in $(seq -w 1 16); do
   sleep 4
 done
 
-count=$(ls "$OUT" | grep -c "\.png$" || true)
+count=$(ls "$OUT" | grep -c "^shot-.*\.png$" || true)
 echo "截到 $count 张"
 if [ "$count" -eq 0 ]; then
   echo "::error::一张截图都没有"
