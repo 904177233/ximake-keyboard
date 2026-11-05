@@ -53,15 +53,9 @@ OPENER = urllib.request.build_opener(NoAuthRedirect)
 
 
 def token() -> str:
-    path = Path(tempfile.gettempdir()) / "dsh_gh_token.txt"
-    if not path.is_file():
-        print(f"找不到 token 文件：{path}", file=sys.stderr)
-        raise SystemExit(2)
-    value = path.read_text(encoding="utf-8").strip()
-    if not value:
-        print(f"token 文件是空的：{path}", file=sys.stderr)
-        raise SystemExit(2)
-    return value
+    from gh_token import github_token
+
+    return github_token()
 
 
 def api_get(url: str, tok: str, accept: str = "application/vnd.github+json"):

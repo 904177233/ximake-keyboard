@@ -42,10 +42,12 @@ on:
   push:
     branches:
       - main
+      - redesign-v3
     paths:
       - "ios/**"
       - "scripts/gen_xcodeproj.py"
       - "scripts/validate_project.py"
+      - "tools/imecheck/**"
       - ".github/workflows/build.yml"
 
 # 同一分支只保留最新一次运行，避免多个 macOS 任务排队烧时长
@@ -68,7 +70,7 @@ env:
   # 之前所有构建都写死 `1.0.0 build 1`，导致装到手机上根本无法区分是哪一版 ——
   # 用户反馈「好像没更新」，我在设备侧和包里都拿不到版本证据。现在改为：
   #   设置 › 通用 › iPhone 储存空间 › 墨语 → 版本 1.5.0，构建号 = run 序号
-  MARKETING_VERSION: 2.5.0
+  MARKETING_VERSION: 3.0.0
   BUILD_NUMBER: ${{ github.run_number }}
 
 jobs:
@@ -150,7 +152,7 @@ jobs:
             echo "::error::ios/Shared/dict/ 不存在 —— 词库没落盘，拼音候选只能用内置极小词表。"
             exit 1
           fi
-          for f in base_dict.tsv phrases.tsv dict_meta.json; do
+          for f in moyu.dict phrases.tsv dict_meta.json; do
             if [ ! -f "ios/Shared/dict/$f" ]; then
               echo "::error::ios/Shared/dict/$f 缺失"
               exit 1
@@ -177,6 +179,29 @@ jobs:
       #      * 谁新加了 .swift 忘了重跑脚本，CI 会自动补上；
       #      * 生成结果与仓库里提交的 pbxproj 应当一致，否则说明有人手改了 pbxproj。
       # ---------------------------------------------------------------------
+      # ---------------------------------------------------------------------
+      # 内核回归：不依赖界面，直接编译拼音引擎，用真词库跑一遍
+      # 逐词选词、九宫格、简拼、整句转换都在这里验
+      # ---------------------------------------------------------------------
+      - name: IME core check
+        run: |
+          set -euo pipefail
+          mkdir -p "${BUILD_DIR}"
+          xcrun --sdk macosx swiftc -O -swift-version 5 \
+            -o "${BUILD_DIR}/imecheck" \
+            ios/Shared/IMECore/IMECandidate.swift \
+            ios/Shared/IMECore/MoyuDictionary.swift \
+            ios/Shared/IMECore/PinyinEngine.swift \
+            ios/Shared/IMECore/PinyinSyllables.swift \
+            ios/Shared/IMECore/PhraseSuggestion.swift \
+            ios/Shared/IMECore/FuzzyPinyin.swift \
+            ios/Shared/IMECore/TypoCorrector.swift \
+            ios/Shared/IMECore/UserLearningStore.swift \
+            ios/Shared/Storage/SharedStore.swift \
+            ios/Shared/Storage/SharedVault.swift \
+            tools/imecheck/main.swift
+          "${BUILD_DIR}/imecheck" ios/Shared/dict/moyu.dict
+
       - name: Regenerate Xcode project from source tree
         run: |
           set -euo pipefail
@@ -417,10 +442,10 @@ jobs:
           unzip -l "${BUILD_DIR}/AIKeyboard-unsigned.ipa" | grep -q 'Payload/AIKeyboard.app/Info.plist' \
             || { echo "::error::IPA 内没有 Payload/AIKeyboard.app/Info.plist"; exit 1; }
           # 词库必须以 dict/ 落到两个 bundle 的根下（iOS 27 installd 拒绝 bundle 根下的 Resources/）
-          unzip -l "${BUILD_DIR}/AIKeyboard-unsigned.ipa" | grep -q 'Payload/AIKeyboard.app/dict/base_dict.tsv' \
-            || { echo "::error::IPA 内没有 Payload/AIKeyboard.app/dict/base_dict.tsv"; exit 1; }
-          unzip -l "${BUILD_DIR}/AIKeyboard-unsigned.ipa" | grep -q 'Payload/AIKeyboard.app/PlugIns/AIKeyboardExtension.appex/dict/base_dict.tsv' \
-            || { echo "::error::IPA 内 appex 缺少 dict/base_dict.tsv"; exit 1; }
+          unzip -l "${BUILD_DIR}/AIKeyboard-unsigned.ipa" | grep -q 'Payload/AIKeyboard.app/dict/moyu.dict' \
+            || { echo "::error::IPA 内没有 Payload/AIKeyboard.app/dict/moyu.dict"; exit 1; }
+          unzip -l "${BUILD_DIR}/AIKeyboard-unsigned.ipa" | grep -q 'Payload/AIKeyboard.app/PlugIns/AIKeyboardExtension.appex/dict/moyu.dict' \
+            || { echo "::error::IPA 内 appex 缺少 dict/moyu.dict"; exit 1; }
           # 反向断言：绝不能出现 bundle 根下的 Resources/ 目录
           if unzip -l "${BUILD_DIR}/AIKeyboard-unsigned.ipa" | grep -qE 'Payload/AIKeyboard\.app/Resources/|Payload/AIKeyboard\.app/PlugIns/AIKeyboardExtension\.appex/Resources/'; then
             echo "::error::IPA 里出现了 bundle 根下的 Resources/ 目录 —— iOS 27 installd 会拒绝安装。"

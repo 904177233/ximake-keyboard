@@ -16,7 +16,7 @@ iOS 27 的 installd / IXPlaceholder 会拒绝安装（IXErrorDomain Code=13 Miss
 
 校验项:
     [L1] `Payload/<App>.app/Info.plist` 存在
-    [L2] `Payload/<App>.app/dict/{base_dict.tsv,phrases.tsv,dict_meta.json}` 三个齐全
+    [L2] `Payload/<App>.app/dict/{moyu.dict,phrases.tsv,dict_meta.json}` 三个齐全
     [L3] `Payload/<App>.app/PlugIns/<Ext>.appex/dict/` 三个齐全（缺 appex 为 P1 警告）
     [L4] 全包**没有任何路径含 `Resources/`**（旧的 Shared/Resources 布局残留）
     [L5] `Info.plist` 里有非空 `CFBundleIdentifier`（app + appex 各查一次）
@@ -51,7 +51,7 @@ except Exception:  # noqa: BLE001 - 输出流不可重配置时忽略
 
 EXPECTED_APP_NAME = "AIKeyboard"
 EXPECTED_EXT_NAME = "AIKeyboardExtension"
-DICT_FILES = ("base_dict.tsv", "phrases.tsv", "dict_meta.json")
+DICT_FILES = ("moyu.dict", "phrases.tsv", "dict_meta.json")
 
 SEVERITY_P0 = "P0"
 SEVERITY_P1 = "P1"

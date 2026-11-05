@@ -26,9 +26,9 @@ UA = "dsh-lead"
 
 
 def token() -> str:
-    path = os.path.join(os.environ.get("TEMP", "."), "dsh_gh_token.txt")
-    with open(path, "r", encoding="utf-8") as handle:
-        return handle.read().strip()
+    from gh_token import github_token
+
+    return github_token()
 
 
 class NoAuthRedirect(urllib.request.HTTPRedirectHandler):
@@ -59,10 +59,13 @@ def api(path: str) -> dict:
         return json.loads(resp.read().decode("utf-8"))
 
 
-def latest_run() -> dict:
-    data = api("/repos/%s/actions/runs?branch=main&per_page=1" % REPO)
-    runs = data.get("workflow_runs") or []
-    return runs[0] if runs else {}
+def latest_run(branch: str, sha: str) -> dict:
+    """某分支最近一次运行。给了 sha 时只认这个提交的运行，避免读到上一次的结果。"""
+    data = api("/repos/%s/actions/runs?branch=%s&per_page=5" % (REPO, branch))
+    for run in data.get("workflow_runs") or []:
+        if not sha or (run.get("head_sha") or "").startswith(sha):
+            return run
+    return {}
 
 
 def fetch_log(job_id: int) -> str:
@@ -96,12 +99,14 @@ def main() -> int:
     parser.add_argument("--run-id", type=int, default=0)
     parser.add_argument("--logs", action="store_true")
     parser.add_argument("--steps", action="store_true")
+    parser.add_argument("--branch", default="main")
+    parser.add_argument("--sha", default="", help="只认这个提交触发的运行")
     args = parser.parse_args()
 
     deadline = time.time() + args.timeout
     run = {}
     while True:
-        run = latest_run() if not args.run_id else api("/repos/%s/actions/runs/%d" % (REPO, args.run_id))
+        run = latest_run(args.branch, args.sha) if not args.run_id else api("/repos/%s/actions/runs/%d" % (REPO, args.run_id))
         status = run.get("status")
         if status == "completed":
             break

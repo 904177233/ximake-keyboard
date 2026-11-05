@@ -1,53 +1,19 @@
 {
-  "count": 33239,
-  "files": {
-    "base_dict.tsv": {
-      "bytes": 827895,
-      "sha256": "a8258bd776a9486132dfb8b8dbe4b2a1dc94adf0be23182fe8af1f012c7f7c43"
-    },
-    "phrases.tsv": {
-      "bytes": 21827,
-      "sha256": "178468c1261ae8eebb3e7a2a7d38877c81f806b72941b07cc3a36250ac3f751e"
-    }
-  },
-  "flags": {
-    "bless": 344,
-    "chat": 1840,
-    "core": 31628,
-    "emoji": 415,
-    "idiom": 120,
-    "net": 368,
-    "punct": 57
-  },
-  "generated_at": "2026-10-25",
-  "phrase_count": 755,
-  "pinyin": "pypinyin 0.55.0 (Style.NORMAL, 多音字取默认读音)",
+  "version": "3.0.0",
+  "generated_at": "2026-11-05",
+  "entries": 96080,
+  "keys": 67522,
+  "bytes": 4575961,
   "sources": [
     {
-      "license": "MIT",
       "name": "jieba dict.txt",
+      "license": "MIT",
       "url": "https://github.com/fxsjy/jieba"
     },
     {
-      "license": "项目内使用",
-      "name": "chat_supplement.py",
-      "url": "本项目原创"
-    },
-    {
-      "license": "项目内使用",
-      "name": "symbol_map.py",
-      "url": "本项目原创"
-    },
-    {
-      "license": "项目内使用",
-      "name": "phrase_pairs.py",
-      "url": "本项目原创"
-    },
-    {
-      "license": "项目内使用",
-      "name": "chat_priority.py",
-      "url": "本项目原创"
+      "name": "pypinyin",
+      "license": "MIT",
+      "url": "https://github.com/mozillazg/python-pinyin"
     }
-  ],
-  "version": "1.1.0"
+  ]
 }

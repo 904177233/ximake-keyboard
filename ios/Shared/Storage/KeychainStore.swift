@@ -66,6 +66,11 @@ public final class KeychainStore: @unchecked Sendable {
         return status == errSecSuccess || status == errSecDuplicateItem
     }
 
+    /// 保险箱里存 API Key 用的名字。
+    private static func vaultAccount(_ providerID: String) -> String {
+        "apikey.\(providerID)"
+    }
+
     // MARK: - 读
 
     /// 读取某个服务商的 API Key。
@@ -74,6 +79,10 @@ public final class KeychainStore: @unchecked Sendable {
     /// - Returns: 明文 Key；不存在或读取失败返回 nil。
     public func apiKey(for providerID: String) -> String? {
         guard !providerID.isEmpty else { return nil }
+        if let shared = SharedVault.shared.data(forKey: Self.vaultAccount(providerID)),
+           let key = String(data: shared, encoding: .utf8), !key.isEmpty {
+            return key
+        }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -115,6 +124,7 @@ public final class KeychainStore: @unchecked Sendable {
         guard let data = trimmed.data(using: .utf8) else {
             throw KeychainError.encodingFailed
         }
+        SharedVault.shared.set(data, forKey: Self.vaultAccount(providerID))
 
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -147,6 +157,7 @@ public final class KeychainStore: @unchecked Sendable {
     /// - Throws: `KeychainError.unexpectedStatus`（除「未找到」之外的非成功状态）。
     public func deleteAPIKey(for providerID: String) throws {
         guard !providerID.isEmpty else { return }
+        SharedVault.shared.set(nil, forKey: Self.vaultAccount(providerID))
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,

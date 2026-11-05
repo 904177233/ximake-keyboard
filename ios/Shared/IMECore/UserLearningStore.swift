@@ -1,279 +1,210 @@
 //
 //  UserLearningStore.swift
-//  墨语 · 输入法内核（IMECore）
+//  墨语 · 输入法内核
 //
-//  模块职责：记录用户的选词次数、最近使用短语与自造词，为候选排序提供个性化权重；
-//            通过 SharedStore 的四个基础方法完成持久化，不直接接触 UserDefaults。
-//  依赖：Foundation、SharedStore（同 target，仅使用公开方法）
-//  使用方：PinyinEngine、IMEKit、host-app-ui（学习记录清理入口）
+//  记住用户的习惯：选过哪些词、自己组出来的短语、哪个词后面常跟哪个词。
+//  数据只存在本机。写盘做了节流，不会每按一次键写一次。
 //
 
 import Foundation
 
 /// 用户学习记录（线程安全）。
-///
-/// 设计要点：
-/// - 选词计数只增不减，权重取 `log2(1 + count)`，使第 1 次选词即产生明显提升，
-///   随后边际递减，避免单个词被无限放大；
-/// - 最近使用采用环形缓冲（上限 200 条），命中时把词移到队首；
-/// - 自造词保存"文本 -> 全拼"，让用户新词也能被全拼/简拼检索到；
-/// - 持久化统一走 `SharedStore.setData(_:forKey:)`（JSON），兼容 App Group 不可用时的内存降级。
 public final class UserLearningStore {
 
-    // MARK: - 常量
+    /// 用户短语。
+    public struct Phrase: Codable, Sendable, Equatable {
+        public var text: String
+        public var key: String
 
-    /// 最近使用环形缓冲上限。
-    public static let recentCapacity = 200
-
-    /// 持久化键（版本后缀便于将来结构升级）。
-    private enum Keys {
-        static let learning = "moyu.ime.learning.v1"
-    }
-
-    // MARK: - 持久化载体
-
-    /// 落盘结构（JSON）。
-    private struct Persisted: Codable {
-        var counts: [String: Int]
-        var recent: [String]
-        var userPhrases: [UserPhrase]
-
-        struct UserPhrase: Codable {
-            var text: String
-            var pinyin: String
+        public init(text: String, key: String) {
+            self.text = text
+            self.key = key
         }
     }
 
-    // MARK: - 内存状态
+    private struct Persisted: Codable {
+        var counts: [String: Int]
+        var phrases: [Phrase]
+        var next: [String: [String: Int]]
+    }
+
+    private static let storageKey = "moyu.ime.learning.v3"
+    private static let maximumWords = 6000
+    private static let maximumPhrases = 3000
+    private static let maximumBigramHeads = 2500
+    private static let flushEvery = 6
 
     private let store: SharedStore
     private let lock = NSLock()
-
-    /// 词 -> 选词次数。
     private var counts: [String: Int]
+    private var phrases: [Phrase]
+    private var next: [String: [String: Int]]
+    private var phrasesByKey: [String: [String]] = [:]
+    private var phrasesByDigits: [String: [Phrase]] = [:]
+    private var pendingWrites = 0
 
-    /// 最近使用（队首最新）。
-    private var recent: [String]
+    /// 关闭后不再记录新内容（已有数据还在，由「清除」入口删除）。
+    public var isEnabled = true
 
-    /// 自造词（按加入顺序）。
-    private var userPhrases: [Persisted.UserPhrase]
-
-    /// 文本 -> 全拼（自造词 + 参与过选词的词）。
-    private var pinyinByText: [String: String]
-
-    /// 最近使用的快速定位表（文本 -> 队首距离），惰性重建。
-    private var recentRank: [String: Int]
-
-    /// 是否有未落盘的修改（用于减少无效写入）。
-    private var dirty = false
-
-    // MARK: - 初始化
-
-    /// 创建学习记录。
-    ///
-    /// - Parameter store: 共享存储容器（App 与键盘扩展共用）。
     public init(store: SharedStore) {
         self.store = store
-        var loaded = Persisted(counts: [:], recent: [], userPhrases: [])
-        if let data = store.data(forKey: Keys.learning),
+        var loaded = Persisted(counts: [:], phrases: [], next: [:])
+        if let data = store.data(forKey: Self.storageKey),
            let decoded = try? JSONDecoder().decode(Persisted.self, from: data) {
             loaded = decoded
         }
-        self.counts = loaded.counts
-        self.recent = Array(loaded.recent.prefix(Self.recentCapacity))
-        self.userPhrases = loaded.userPhrases
-        var map: [String: String] = [:]
-        for phrase in loaded.userPhrases {
-            map[phrase.text] = phrase.pinyin
+        counts = loaded.counts
+        phrases = loaded.phrases
+        next = loaded.next
+        rebuildPhraseIndex()
+    }
+
+    private func rebuildPhraseIndex() {
+        phrasesByKey = [:]
+        phrasesByDigits = [:]
+        for phrase in phrases {
+            phrasesByKey[phrase.key, default: []].append(phrase.text)
+            phrasesByDigits[MoyuDictionary.t9Digits(phrase.key), default: []].append(phrase)
         }
-        self.pinyinByText = map
-        self.recentRank = [:]
-        rebuildRecentRank()
     }
 
-    // MARK: - 契约 API
+    // MARK: - 查询
 
-    /// 记录一次选词。
-    ///
-    /// - Parameters:
-    ///   - candidate: 被选中的候选。
-    ///   - input: 选词时的输入串（用于将来做前缀纠错，当前仅作诊断用途）。
-    public func recordSelection(candidate: IMECandidate, input: String) {
-        lock.lock()
-        counts[candidate.text, default: 0] += 1
-        promoteRecent(candidate.text)
-        if !candidate.pinyin.isEmpty {
-            pinyinByText[candidate.text] = candidate.pinyin
-        }
-        dirty = true
-        lock.unlock()
-        persistIfNeeded()
-    }
-
-    /// 查询某词的个性化权重。
-    ///
-    /// 采用 `log2(1 + 选词次数)`：0 次为 0，1 次为 1.0，3 次为 2.0，7 次为 3.0。
-    /// - Parameter text: 候选文本。
-    /// - Returns: 权重（非负）。
-    public func weight(for text: String) -> Double {
-        lock.lock()
-        let count = counts[text] ?? 0
-        lock.unlock()
-        guard count > 0 else { return 0 }
-        return log2(Double(count) + 1.0)
-    }
-
-    /// 最近选择的词（队首最新）。
-    /// - Parameter limit: 最多返回条数。
-    /// - Returns: 文本数组。
-    public func recentPhrases(limit: Int) -> [String] {
-        guard limit > 0 else { return [] }
-        lock.lock()
-        let snapshot = Array(recent.prefix(limit))
-        lock.unlock()
-        return snapshot
-    }
-
-    /// 添加自造词。
-    ///
-    /// - Parameters:
-    ///   - text: 词文本（空白会被裁掉，空串忽略）。
-    ///   - pinyin: 无声调全拼（小写；传空串时不参与拼音检索）。
-    public func addUserPhrase(_ text: String, pinyin: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        let normalizedPinyin = Self.normalizePinyin(pinyin)
-        lock.lock()
-        if let existing = userPhrases.firstIndex(where: { $0.text == trimmed }) {
-            userPhrases[existing].pinyin = normalizedPinyin
-        } else {
-            userPhrases.append(Persisted.UserPhrase(text: trimmed, pinyin: normalizedPinyin))
-        }
-        if !normalizedPinyin.isEmpty {
-            pinyinByText[trimmed] = normalizedPinyin
-        }
-        // 自造词默认给一个较高权重，保证立刻能被优先看到
-        counts[trimmed, default: 0] = max(counts[trimmed] ?? 0, 3)
-        promoteRecent(trimmed)
-        dirty = true
-        lock.unlock()
-        persistIfNeeded()
-    }
-
-    // MARK: - 扩展 API（供引擎排序使用）
-
-    /// 最近使用带来的排序增益（0...1）。
-    ///
-    /// 队首为 1.0，越靠后越小，超出 `recentCapacity` 为 0。
-    /// - Parameter text: 候选文本。
-    /// - Returns: 增益值。
-    public func recentBoost(for text: String) -> Double {
-        lock.lock()
-        defer { lock.unlock() }
-        guard let rank = recentRank[text] else { return 0 }
-        let position = Double(max(0, rank))
-        let capacity = Double(Self.recentCapacity)
-        return max(0, 1.0 - position / capacity)
-    }
-
-    /// 全部自造词文本（按加入顺序）。
-    /// - Returns: 文本数组。
-    public func userPhraseTexts() -> [String] {
-        lock.lock()
-        defer { lock.unlock() }
-        return userPhrases.map { $0.text }
-    }
-
-    /// 自造词对应的全拼；不存在时返回 `nil`。
-    /// - Parameter text: 词文本。
-    /// - Returns: 全拼。
-    public func pinyin(forUserPhrase text: String) -> String? {
-        lock.lock()
-        defer { lock.unlock() }
-        return userPhrases.first { $0.text == text }?.pinyin
-    }
-
-    /// 某文本的选词次数。
-    /// - Parameter text: 词文本。
-    /// - Returns: 次数。
-    public func selectionCount(for text: String) -> Int {
+    /// 这个词被选过几次。
+    public func count(of text: String) -> Int {
         lock.lock()
         defer { lock.unlock() }
         return counts[text] ?? 0
     }
 
-    /// 清空全部学习数据（设置页"清除输入习惯"入口）。
-    public func reset() {
+    /// 拼音正好是 key 的用户短语。
+    public func phrases(forKey key: String) -> [String] {
         lock.lock()
-        counts = [:]
-        recent = []
-        userPhrases = []
-        pinyinByText = [:]
-        recentRank = [:]
-        dirty = true
+        defer { lock.unlock() }
+        return phrasesByKey[key] ?? []
+    }
+
+    /// 数字串正好是 digits 的用户短语。
+    public func phrases(forT9 digits: String) -> [Phrase] {
+        lock.lock()
+        defer { lock.unlock() }
+        return phrasesByDigits[digits] ?? []
+    }
+
+    /// 拼音以 prefix 开头的用户短语。
+    public func phrases(withPrefix prefix: String, limit: Int) -> [Phrase] {
+        lock.lock()
+        defer { lock.unlock() }
+        var result: [Phrase] = []
+        for phrase in phrases where phrase.key.count > prefix.count && phrase.key.hasPrefix(prefix) {
+            result.append(phrase)
+            if result.count >= limit { break }
+        }
+        return result
+    }
+
+    /// 这个词后面常跟的词。
+    public func next(after text: String, limit: Int) -> [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let followers = next[text] else { return [] }
+        return followers.sorted { $0.value > $1.value }.prefix(limit).map { $0.key }
+    }
+
+    /// 记住了多少词（设置页显示）。
+    public var learnedWordCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return counts.count
+    }
+
+    // MARK: - 记录
+
+    /// 记录一次上屏。
+    ///
+    /// 多段组成的句子会记成一条用户短语，下次打同样的拼音就直接出来。
+    /// - Parameter segments: 组成这次上屏的各段（词 + 拼音）。
+    public func record(segments: [(text: String, key: String)]) {
+        guard isEnabled, !segments.isEmpty else { return }
+        lock.lock()
+        for segment in segments {
+            counts[segment.text, default: 0] += 1
+        }
+        if segments.count >= 2 {
+            let text = segments.map { $0.text }.joined()
+            let key = segments.map { $0.key }.joined()
+            if text.count <= 16, !key.isEmpty, !phrases.contains(where: { $0.text == text }) {
+                phrases.append(Phrase(text: text, key: key))
+                phrasesByKey[key, default: []].append(text)
+                phrasesByDigits[MoyuDictionary.t9Digits(key), default: []].append(Phrase(text: text, key: key))
+                if phrases.count > Self.maximumPhrases {
+                    phrases.removeFirst(phrases.count - Self.maximumPhrases)
+                    rebuildPhraseIndex()
+                }
+            }
+            for index in 0..<(segments.count - 1) {
+                next[segments[index].text, default: [:]][segments[index + 1].text, default: 0] += 1
+            }
+        }
+        trimLocked()
+        pendingWrites += 1
+        let shouldFlush = pendingWrites >= Self.flushEvery
         lock.unlock()
-        persistIfNeeded(force: true)
+        if shouldFlush {
+            flush()
+        }
     }
 
-    // MARK: - 最近使用环形缓冲
-
-    /// 把文本提升到最近使用队首（已存在则先移除）。
-    /// 调用方必须已持有 `lock`。
-    /// - Parameter text: 词文本。
-    private func promoteRecent(_ text: String) {
-        if let existing = recent.firstIndex(of: text) {
-            recent.remove(at: existing)
-        }
-        recent.insert(text, at: 0)
-        if recent.count > Self.recentCapacity {
-            recent.removeLast(recent.count - Self.recentCapacity)
-        }
-        rebuildRecentRank()
-    }
-
-    /// 重建最近使用的位置索引。
-    /// 调用方必须已持有 `lock`。
-    private func rebuildRecentRank() {
-        var rank: [String: Int] = [:]
-        rank.reserveCapacity(recent.count)
-        for (index, text) in recent.enumerated() where rank[text] == nil {
-            rank[text] = index
-        }
-        recentRank = rank
-    }
-
-    // MARK: - 持久化
-
-    /// 有修改时落盘。
-    /// - Parameter force: 忽略 `dirty` 标记强制写入。
-    private func persistIfNeeded(force: Bool = false) {
+    /// 记录相邻两次上屏的先后关系（上一次上屏的词 -> 这一次）。
+    public func recordFollow(previous: String, current: String) {
+        guard isEnabled, !previous.isEmpty, !current.isEmpty, previous.count <= 8, current.count <= 8 else { return }
         lock.lock()
-        guard dirty || force else {
+        next[previous, default: [:]][current, default: 0] += 1
+        trimLocked()
+        pendingWrites += 1
+        lock.unlock()
+    }
+
+    private func trimLocked() {
+        if counts.count > Self.maximumWords {
+            // 丢掉只用过一次的词
+            let keep = counts.filter { $0.value > 1 }
+            if keep.count > Self.maximumWords / 2 {
+                counts = keep
+            } else {
+                counts = Dictionary(uniqueKeysWithValues: counts.prefix(Self.maximumWords / 2).map { ($0.key, $0.value) })
+            }
+        }
+        if next.count > Self.maximumBigramHeads {
+            next = Dictionary(uniqueKeysWithValues: next.prefix(Self.maximumBigramHeads / 2).map { ($0.key, $0.value) })
+        }
+    }
+
+    /// 写盘。键盘收起时也会调一次。
+    public func flush() {
+        lock.lock()
+        guard pendingWrites > 0 else {
             lock.unlock()
             return
         }
-        let snapshot = Persisted(counts: counts,
-                                 recent: recent,
-                                 userPhrases: userPhrases)
-        dirty = false
+        pendingWrites = 0
+        let snapshot = Persisted(counts: counts, phrases: phrases, next: next)
         lock.unlock()
-
         if let data = try? JSONEncoder().encode(snapshot) {
-            store.setData(data, forKey: Keys.learning)
+            store.setData(data, forKey: Self.storageKey)
         }
     }
 
-    // MARK: - 工具
-
-    /// 归一化拼音：小写、仅保留字母数字。
-    /// - Parameter pinyin: 原始拼音。
-    /// - Returns: 归一化结果。
-    static func normalizePinyin(_ pinyin: String) -> String {
-        var result = ""
-        result.reserveCapacity(pinyin.count)
-        for character in pinyin.lowercased() where character.isLetter || character.isNumber {
-            result.append(character)
-        }
-        return result
+    /// 清除全部学习数据。
+    public func reset() {
+        lock.lock()
+        counts = [:]
+        phrases = []
+        next = [:]
+        phrasesByKey = [:]
+        phrasesByDigits = [:]
+        pendingWrites = 0
+        lock.unlock()
+        store.setData(nil, forKey: Self.storageKey)
     }
 }

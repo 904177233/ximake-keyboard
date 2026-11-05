@@ -35,8 +35,9 @@ class NoAuthRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def token():
-    with io.open(TOKEN_FILE, "r", encoding="utf-8") as handle:
-        return handle.read().strip()
+    from gh_token import github_token
+
+    return github_token()
 
 
 def api(path):

@@ -71,6 +71,12 @@
 	<key>NSPasteboardUsageDescription</key>
 	<string>用于在「墨语」App 与键盘之间同步 AI 服务配置（不含 API Key）。</string>
 
+	<key>NSMicrophoneUsageDescription</key>
+	<string>墨语需要麦克风权限，这样你可以直接对着键盘说话，把说的话变成文字。</string>
+
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>墨语需要语音识别权限，把你说的话转成文字后插入到输入框。</string>
+
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>用于把 AI 生成的图片保存到你的相册。墨语只会在你点「保存到相册」时写入，不会读取你的照片。</string>
 

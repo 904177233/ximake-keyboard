@@ -42,6 +42,7 @@ from qa_common import (
 # ---------------------------------------------------------------------------
 
 SYSTEM_TYPES = frozenset("""
+TextInputAutocapitalization UITextAutocapitalizationType ObjectIdentifier NSData UInt32 UnsafeRawBufferPointer
 # ---- Swift 语言内置 ----
 Self Any AnyObject Void Never Type Optional Result Error Bool String Substring Character
 Int Int8 Int16 Int32 Int64 UInt UInt8 UInt16 UInt32 UInt64 Double Float CGFloat Decimal
@@ -206,7 +207,7 @@ QRCoder2
 """.split())
 
 # 上述集合里带后缀 2 的是为了排版占位，实际不存在，剔除避免污染
-SYSTEM_TYPES = frozenset(t for t in SYSTEM_TYPES if not t.endswith("2"))
+SYSTEM_TYPES = frozenset(t for t in SYSTEM_TYPES if not t.endswith("2") or t == "UInt32")
 
 # 这些是「看起来像类型」但其实是 Swift 关键字/语法糖，出现在 `X(`/`X.` 前不算未定义
 SYNTAX_WORDS = frozenset({

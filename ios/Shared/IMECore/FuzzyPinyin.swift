@@ -5,7 +5,7 @@
 //  模块职责：模糊音（fuzzy pinyin）——把「南方口音拼音」折叠成等价类，让 zh/z、ch/c、sh/s、
 //            in/ing、en/eng、l/n、an/ang、ian/iang、uan/uang 不分的用户也能打出正确候选。
 //            本文件只做字符串变换 + 词库命中收集，不改变候选打分公式（降权由引擎侧统一处理）。
-//  依赖：Foundation、PinyinSyllables（421 音节表与最少音节切分）、PinyinDictionary（只读查询）
+//  依赖：Foundation、PinyinSyllables（421 音节表与最少音节切分）
 //  使用方：PinyinEngine（候选生成时展开模糊变体）、IMEKit（门面暴露与诊断）、
 //          keyboard-ui 的 ExtensionSettingsSheet（设置页开关）
 //
@@ -248,39 +248,6 @@ public enum FuzzyPinyin {
         return results
     }
 
-    /// 收集模糊音在词库里的命中（精确命中 + 前缀预测，均只保留纯汉字词条）。
-    ///
-    /// - Parameters:
-    ///   - normalized: 已归一化的输入串（只含小写字母与数字）。
-    ///   - rules: 生效的规则集合。
-    ///   - dictionary: 词库（只读查询）。
-    /// - Returns: 命中列表，**不含**原文自身的正常候选（原文由引擎正常流程处理）。
-    public static func matches(for normalized: String,
-                               rules: Set<FuzzyPinyinRule>,
-                               dictionary: PinyinDictionary) -> [FuzzyMatch] {
-        let variants = expand(normalized, rules: rules, limit: maximumExpandedVariants)
-        guard variants.count > 1 else { return [] }
-        var results: [FuzzyMatch] = []
-        var seen: Set<String> = []
-        for variant in variants.dropFirst() {
-            for entry in dictionary.exactEntries(pinyin: variant, limit: maximumMatchesPerVariant) {
-                guard isCJKWord(entry.text), seen.insert(entry.text).inserted else { continue }
-                results.append(FuzzyMatch(text: entry.text, pinyin: variant,
-                                          frequency: entry.frequency, isExact: true, coverage: 1.0))
-            }
-            let keys = dictionary.pinyinKeys(prefix: variant, limit: maximumPrefixKeysPerVariant)
-            for key in keys where key != variant {
-                let coverage = Double(variant.count) / Double(max(key.count, 1))
-                for entry in dictionary.exactEntries(pinyin: key, limit: 2) {
-                    guard isCJKWord(entry.text), seen.insert(entry.text).inserted else { continue }
-                    results.append(FuzzyMatch(text: entry.text, pinyin: key,
-                                              frequency: entry.frequency, isExact: false, coverage: coverage))
-                }
-            }
-        }
-        return results
-    }
-
     // MARK: 内部实现：单音节变体
 
     /// 枚举单音节的全部候选（未校验、未去重）。
@@ -401,14 +368,6 @@ public enum FuzzyPinyin {
             enumerate(options, index: index + 1, remaining: remaining - 1, tail: tail,
                       buffer: buffer + alternative, into: &results, seen: &seen, limit: limit)
             if results.count >= limit { return }
-        }
-    }
-
-    /// 是否纯汉字词（排除 emoji / 标点 / ASCII 词条，避免模糊音把表情符号塞进候选栏）。
-    private static func isCJKWord(_ text: String) -> Bool {
-        guard !text.isEmpty else { return false }
-        return text.unicodeScalars.allSatisfy { scalar in
-            (0x4E00...0x9FFF).contains(scalar.value) || (0x3400...0x4DBF).contains(scalar.value)
         }
     }
 }

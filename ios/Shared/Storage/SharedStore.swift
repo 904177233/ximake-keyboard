@@ -15,8 +15,7 @@
 //  App 与键盘扩展**各自持有独立的 UserDefaults**。用户可走的路径有两条：
 //    1) 在宿主 App 里「导出配置」→ 复制到命名剪贴板 `com.moyu.config` → 键盘内「导入配置」；
 //    2) 购买付费开发者账号后补 App Group（`group.com.moyu.keyboard`），代码无需改动即自动升级到 ①。
-//  API Key 始终只存在 Keychain（且 Keychain 需要 App Group 才能跨进程共享，
-//  无 App Group 时同样需要靠剪贴板搬移配置，README 里有完整操作路径）。
+//  API Key 始终只存在 Keychain。
 //
 
 import Foundation
@@ -133,8 +132,13 @@ public final class SharedStore: @unchecked Sendable {
     }
 
     /// 读 Data。
+    ///
+    /// 配置类数据优先读保险箱：App 和键盘打通时，两边看到的是同一份。
     public func data(forKey key: String) -> Data? {
-        defaults.data(forKey: scopedKey(key))
+        if !isAppGroupAvailable, Self.vaultKeys.contains(key), let shared = SharedVault.shared.data(forKey: key) {
+            return shared
+        }
+        return defaults.data(forKey: scopedKey(key))
     }
 
     /// 写 Data。
@@ -144,7 +148,19 @@ public final class SharedStore: @unchecked Sendable {
         } else {
             defaults.removeObject(forKey: scopedKey(key))
         }
+        if !isAppGroupAvailable, Self.vaultKeys.contains(key) {
+            SharedVault.shared.set(value, forKey: key)
+        }
     }
+
+    /// 需要在 App 和键盘之间共享的数据（都是小数据，学习记录这种大的不放进来）。
+    public static let vaultKeys: Set<String> = [
+        SharedStoreKey.configSnapshot,
+        SharedStoreKey.customPrompts,
+        SharedStoreKey.phrases,
+        SharedStoreKey.keyboardPrefs,
+        SharedStoreKey.customMascot
+    ]
 
     /// 读 Bool（不存在时返回 `defaultValue`）。
     public func bool(forKey key: String, default defaultValue: Bool = false) -> Bool {
@@ -248,25 +264,8 @@ public enum SharedStoreKey {
     public static let lastChatProviderID = "moyu.settings.lastChatProviderID"
     /// 首次启动标记。
     public static let hasCompletedOnboarding = "moyu.host.hasCompletedOnboarding"
-    /// 当前主题 id。`moyu.theme.current`
-    ///
-    /// 值为 `AppTheme.Preset.rawValue`（`"ink"`/`"coral"`/…）或 `"custom"`；
-    /// 读不到或值非法时 `ThemeStore` 回退到 `AppTheme.default`（靛蓝）。
-    public static let themeCurrent = "moyu.theme.current"
-    /// 自定义小形象（512×512 PNG）。`moyu.theme.customMascot`
-    ///
-    /// 原始 PNG `Data`（已裁成正方形、缩到 512×512，约 100–300 KB）。
-    /// 无 App Group 时落在宿主 App 自己的 `UserDefaults.standard`，键盘扩展读不到
-    /// （设计上的已知降级，见 `ios/Shared/Storage/README.md` 与 design/05 §2.2）。
-    public static let themeCustomMascot = "moyu.theme.customMascot"
-    /// 自定义小形象的显示名。`moyu.theme.customMascotName`
-    ///
-    /// 用户可改，默认「我的形象」；只在 `themeCurrent == "custom"` 时参与显示。
-    public static let themeCustomMascotName = "moyu.theme.customMascotName"
-    /// 键盘右下角是否显示小形象。`moyu.theme.showsMascot`
-    ///
-    /// 默认 `true`。宿主 App 的「主题与小形象」设置页与键盘扩展共用同一个键：
-    /// 打开 App Group 后自动同步；无 App Group 时各自保存一份（已知降级）。
-    /// 统一通过 `ThemeStore.shared.showsMascot` 读写，业务代码不要手写字符串。
-    public static let themeShowsMascot = "moyu.theme.showsMascot"
+    /// 键盘偏好（主题、布局、高度、震动等），JSON。
+    public static let keyboardPrefs = "moyu.keyboard.prefs.v1"
+    /// 用户自己的小形象（96×96 PNG）。
+    public static let customMascot = "moyu.keyboard.mascot.v1"
 }

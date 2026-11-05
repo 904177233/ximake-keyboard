@@ -7,7 +7,7 @@
 //            本文件由 tools/dict/gen_swift_syllables.py 从 tools/dict/syllable_table.py
 //            自动生成，请勿手工编辑；修改音节表请改 Python 源后重新生成。
 //  依赖：Foundation
-//  使用方：PinyinDictionary（首字母索引）、PinyinEngine（多音节 DP 切分）
+//  使用方：PinyinEngine（九宫格音节表）、FuzzyPinyin（切分）
 //
 
 import Foundation
