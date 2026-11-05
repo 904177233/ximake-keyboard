@@ -38,6 +38,12 @@ struct StartView: View {
                 }
                 .padding(.top, 14)
 
+                #if MOYU_SIM_CHECK
+                SimCheckField()
+                    .frame(height: 40)
+                Text(SimCheckField.modesText)
+                    .font(.system(size: 11))
+                #endif
                 SectionLabel(text: "在这里试试")
                 TextField("点这里，切到墨语键盘，打一句话", text: $trial, axis: .vertical)
                     .font(.system(size: 15))
@@ -66,11 +72,6 @@ struct StartView: View {
                     StateText(text: model.versionText)
                 }
             }
-        }
-        .onAppear {
-            #if MOYU_SIM_CHECK
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { trialFocused = true }
-            #endif
         }
     }
 
@@ -114,3 +115,34 @@ struct StartView: View {
         }
     }
 }
+
+#if MOYU_SIM_CHECK
+/// 模拟器实测用：模拟器里点不了地球键，这个输入框直接指定用墨语键盘。只有实测版才有。
+struct SimCheckField: UIViewRepresentable {
+    final class Field: UITextField {
+        override var textInputMode: UITextInputMode? {
+            UITextInputMode.activeInputModes.first { SimCheckField.identifier(of: $0).contains("moyu") } ?? super.textInputMode
+        }
+    }
+
+    static func identifier(of mode: UITextInputMode) -> String {
+        guard mode.responds(to: NSSelectorFromString("identifier")) else { return mode.primaryLanguage ?? "?" }
+        return "\(mode.value(forKey: "identifier") ?? "?")"
+    }
+
+    static var modesText: String {
+        UITextInputMode.activeInputModes.map { identifier(of: $0) }.joined(separator: " | ")
+    }
+
+    func makeUIView(context: Context) -> Field {
+        let field = Field()
+        field.placeholder = "模拟器实测"
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            field.becomeFirstResponder()
+        }
+        return field
+    }
+
+    func updateUIView(_ uiView: Field, context: Context) {}
+}
+#endif
