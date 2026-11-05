@@ -29,7 +29,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [xcode-27, macos-26]
+        runner: [xcode-27]
     steps:
       - uses: actions/checkout@v4
         with:

@@ -17,14 +17,23 @@ import subprocess
 
 data = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "devices", "available", "-j"]))
 runtimes = [k for k in data["devices"] if "iOS" in k and data["devices"][k]]
-newest = sorted(runtimes, key=lambda k: [int(p) for p in k.rsplit("iOS-", 1)[1].split("-")])[-1]
-devices = [d for d in data["devices"][newest] if d["name"].startswith("iPhone")]
-pro = [d for d in devices if "Pro" in d["name"] and "Max" not in d["name"]]
-device = (pro or devices)[0]
-print(device["udid"])
+runtimes.sort(key=lambda k: [int(p) for p in k.rsplit("iOS-", 1)[1].split("-")], reverse=True)
+chosen = None
+for runtime in runtimes:
+    phones = [d for d in data["devices"][runtime] if d["name"].startswith("iPhone")]
+    pro = [d for d in phones if "Pro" in d["name"] and "Max" not in d["name"]]
+    if pro:
+        chosen = pro[0]
+        break
+    plain = [d for d in phones if "Duo" not in d["name"] and "Fold" not in d["name"]]
+    chosen = chosen or (plain[0] if plain else None)
+if chosen is None:
+    chosen = data["devices"][runtimes[0]][0]
+print(chosen["udid"])
 PY
 )
 echo "设备 $UDID"
+xcrun simctl list devices available > "$OUT/devices.txt"
 xcrun simctl list devices | grep "$UDID" | tee "$OUT/device.txt"
 
 xcrun simctl boot "$UDID"
@@ -46,16 +55,31 @@ $SPAWN defaults write com.apple.keyboard.preferences DidShowContinuousPathIntrod
 xcrun simctl shutdown "$UDID"
 xcrun simctl boot "$UDID"
 xcrun simctl bootstatus "$UDID" -b >/dev/null
-sleep 10
+# 没有窗口时截图可能拿不到画面，把模拟器窗口开出来
+open -a Simulator --args -CurrentDeviceUDID "$UDID" || true
+sleep 15
 
 $SPAWN defaults read .GlobalPreferences AppleKeyboards 2>&1 | tee "$OUT/keyboards.txt" || true
 xcrun simctl launch "$UDID" "$APP_ID" | tee "$OUT/launch.txt"
 sleep 15
 
 for index in $(seq -w 1 16); do
-  xcrun simctl io "$UDID" screenshot "$OUT/shot-$index.png" >/dev/null 2>&1
-  sleep 5
+  if ! xcrun simctl io "$UDID" screenshot --type=png "$OUT/shot-$index.png" 2>&1 | tee -a "$OUT/screenshot.txt"; then
+    echo "第 $index 张 simctl 失败"
+  fi
+  # simctl 截不到时退回截整个桌面
+  if [ ! -s "$OUT/shot-$index.png" ]; then
+    screencapture -x "$OUT/desktop-$index.png" 2>&1 | tee -a "$OUT/screenshot.txt" || true
+  fi
+  sleep 4
 done
+
+count=$(ls "$OUT" | grep -c "\.png$" || true)
+echo "截到 $count 张"
+if [ "$count" -eq 0 ]; then
+  echo "::error::一张截图都没有"
+  exit 1
+fi
 
 $SPAWN log show --last 3m --style compact --predicate 'process == "AIKeyboardExtension"' 2>/dev/null | tail -n 200 > "$OUT/keyboard.log" || true
 ls -la "$OUT"
