@@ -47,6 +47,11 @@ func texts(_ conversion: IMEConversion, _ limit: Int = 12) -> [String] {
     conversion.candidates.prefix(limit).map { $0.text }
 }
 
+print("单个字母")
+let firstForM = qwerty("m").candidates.first?.text ?? ""
+check("单打 m 首选不是嗯、唔、呣", !["嗯", "唔", "呣"].contains(firstForM), "\(texts(qwerty("m")))")
+check("wbzd 是我不知道", qwerty("wbzd").candidates.first?.text == "我不知道", "\(texts(qwerty("wbzd")))")
+
 print("整句和词")
 check("woxihuanni 首选是整句", qwerty("woxihuanni").candidates.first?.text == "我喜欢你", "\(texts(qwerty("woxihuanni")))")
 check("nihao 首选你好", qwerty("nihao").candidates.first?.text == "你好", "\(texts(qwerty("nihao")))")
@@ -129,11 +134,6 @@ learning.record(segments: [(text: "握", key: "wo")])
 learning.record(segments: [(text: "握", key: "wo")])
 let afterLearning = texts(qwerty("wo"), 6)
 check("常选的词往前排", afterLearning.contains("握"), "\(afterLearning)")
-
-print("单个字母")
-let firstForM = qwerty("m").candidates.first?.text ?? ""
-check("单打 m 首选不是嗯、唔、呣", !["嗯", "唔", "呣"].contains(firstForM), "\(texts(qwerty("m")))")
-check("wbzd 是我不知道", qwerty("wbzd").candidates.first?.text == "我不知道", "\(texts(qwerty("wbzd")))")
 
 print("个人词库")
 let beforeChoice = texts(qwerty("shiyong"), 10)
