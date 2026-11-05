@@ -110,6 +110,7 @@ public final class PinyinEngine {
         let count = input.count
         var range = 0..<dictionary.keyCount
         var position = start
+        var tailHasExact = false
 
         while position < min(count, start + Self.maxTileLength) {
             let depth = position - start
@@ -157,11 +158,13 @@ public final class PinyinEngine {
                                       score: score, syllables: nil, lastSyllable: nil))
                 }
             }
+            tailHasExact = matchedExact
             if query.breaks.contains(position) { return tiles }
         }
 
-        // 还没打完的词（只在末尾）：nih -> 你好
-        if position == count, count - start >= 2, !range.isEmpty,
+        // 还没打完的词（只在末尾）：nih -> 你好。
+        // 末尾已经是完整的词就不补，否则 jintianhenmang 会变成「今天很忙完」，多出一个没打的字。
+        if position == count, count - start >= 2, !range.isEmpty, !tailHasExact,
            !hasBreak(query, after: start, before: count),
            let top = bestPrefixKey(range: range, depth: count - start, dictionary: dictionary),
            let entry = bestWord(key: top, dictionary: dictionary) {
@@ -211,6 +214,7 @@ public final class PinyinEngine {
         let input = query.input
         let count = input.count
         var position = start + 1
+        var tailHasExact = false
         while position <= min(count, start + Self.maxTileLength) {
             let digits = Array(input[start..<position])
             for keyIndex in dictionary.t9Keys(digits, limit: 48) {
@@ -224,6 +228,9 @@ public final class PinyinEngine {
                                       text: entry.text)
                 tiles.append(Tile(end: position, text: entry.text, key: key, score: score,
                                   syllables: syllables, lastSyllable: syllables.last))
+                if position == count {
+                    tailHasExact = true
+                }
                 break
             }
             let digitString = String(decoding: digits, as: UTF8.self)
