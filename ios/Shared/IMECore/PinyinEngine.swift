@@ -431,7 +431,8 @@ public final class PinyinEngine {
         let path = solve(query: query, dictionary: dictionary)
 
         // 打头的是整句（或一整个词）
-        let singleAbbreviation = path?.count == 1 && path?.first?.syllables == nil
+        // 两个字母的简拼（wq、nh）歧义太大，首选交给按聊天习惯排的候选；三个字母以上用整句算出来的
+        let singleAbbreviation = path?.count == 1 && path?.first?.syllables == nil && count <= 2
         let typedString = String(decoding: query.input, as: UTF8.self)
         let onlyUnlikely = query.mode == .qwerty && Self.unlikelySyllables.contains(typedString)
         if let path, !singleAbbreviation, !onlyUnlikely {
