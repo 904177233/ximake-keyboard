@@ -14,18 +14,23 @@ struct AIServicesView: View {
     @State private var showsAdd = false
 
     private var chatProviders: [AIProviderConfig] { model.snapshot.providers.filter { $0.supportsChat } }
-    private var imageProviders: [AIProviderConfig] { model.snapshot.providers.filter { !$0.supportsChat && $0.supportsImage } }
+    /// 豆包这种写字画图都行的，正拿来画图时也列在这里。
+    private var imageProviders: [AIProviderConfig] {
+        model.snapshot.providers.filter { provider in
+            provider.supportsImage && (!provider.supportsChat || model.snapshot.imageProvider?.id == provider.id)
+        }
+    }
 
     var body: some View {
-        AppPage(title: "AI", subtitle: "填好后点「测试」，当场告诉你通没通。不通会把服务器的原话显示出来。") {
+        AppPage(title: "AI", subtitle: "选一家，把 Key 粘贴进去就能用。地址和模型都预设好了。") {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: "写字用哪家")
                 ForEach(chatProviders) { provider in
-                    row(provider, isDefault: model.snapshot.defaultProvider?.id == provider.id)
+                    row(provider, detail: provider.model, isDefault: model.snapshot.defaultProvider?.id == provider.id)
                 }
                 SectionLabel(text: "画图用哪家")
                 ForEach(imageProviders) { provider in
-                    row(provider, isDefault: model.snapshot.imageProvider?.id == provider.id)
+                    row(provider, detail: provider.imageModel ?? "", isDefault: model.snapshot.imageProvider?.id == provider.id)
                 }
                 PrimaryButton(title: "添加服务") { showsAdd = true }
                     .padding(.top, 16)
@@ -76,26 +81,22 @@ struct AIServicesView: View {
                 .environmentObject(model)
                 .environment(\.palette, palette)
         }
-        .confirmationDialog("添加哪一家", isPresented: $showsAdd, titleVisibility: .visible) {
-            ForEach(PresetProviders.all.filter { preset in
-                !model.snapshot.providers.contains { $0.id == preset.id }
-            }) { preset in
-                Button(preset.name) {
-                    editing = ProviderEditTarget(config: preset.makeProvider(), isNew: true, preset: preset)
-                }
+        .sheet(isPresented: $showsAdd) {
+            AddServiceView { target in
+                showsAdd = false
+                // 等这一页收起来再弹下一页
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { editing = target }
             }
-            Button("自定义（中转站、自建服务）") {
-                editing = ProviderEditTarget(config: AIProviderConfig(name: "自定义服务"), isNew: true, preset: nil)
-            }
-            Button("取消", role: .cancel) {}
+            .environmentObject(model)
+            .environment(\.palette, palette)
         }
     }
 
-    private func row(_ provider: AIProviderConfig, isDefault: Bool) -> some View {
+    private func row(_ provider: AIProviderConfig, detail: String, isDefault: Bool) -> some View {
         Button {
             editing = ProviderEditTarget(config: provider, isNew: false, preset: PresetProviders.preset(id: provider.id))
         } label: {
-            LineRow(title: provider.name, detail: provider.supportsChat ? provider.model : (provider.imageModel ?? "")) {
+            LineRow(title: provider.name, detail: detail) {
                 if !model.hasKey(provider) {
                     StateText(text: "没填 Key")
                 } else if isDefault {
@@ -105,6 +106,63 @@ struct AIServicesView: View {
                 }
                 Chevron()
             }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// 选一家服务。
+@MainActor
+struct AddServiceView: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.palette) private var palette
+    @Environment(\.dismiss) private var dismiss
+    let onPick: (ProviderEditTarget) -> Void
+
+    private func available(_ presets: [PresetProviders.Preset]) -> [PresetProviders.Preset] {
+        presets.filter { preset in !model.snapshot.providers.contains { $0.id == preset.id } }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    let chat = available(PresetProviders.chatPresetTemplates)
+                    if !chat.isEmpty {
+                        SectionLabel(text: "写字和聊天")
+                        ForEach(chat) { choice($0) }
+                    }
+                    let image = available(PresetProviders.imagePresetTemplates)
+                    if !image.isEmpty {
+                        SectionLabel(text: "画图")
+                        ForEach(image) { choice($0) }
+                    }
+                    SectionLabel(text: "其它")
+                    Button {
+                        onPick(ProviderEditTarget(config: AIProviderConfig(name: "自定义服务"), isNew: true, preset: nil))
+                    } label: {
+                        LineRow(title: "自定义", detail: "中转站、自建服务，地址和模型自己填") { Chevron() }
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(20)
+            }
+            .background(palette.page.color.ignoresSafeArea())
+            .navigationTitle("添加服务")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func choice(_ preset: PresetProviders.Preset) -> some View {
+        Button {
+            onPick(ProviderEditTarget(config: preset.makeProvider(), isNew: true, preset: preset))
+        } label: {
+            LineRow(title: PresetProviders.shortName(id: preset.id), detail: PresetProviders.tagline(id: preset.id)) { Chevron() }
         }
         .buttonStyle(.plain)
     }
@@ -133,8 +191,13 @@ struct ProviderEditorView: View {
     @State private var testFailed = false
     @State private var isTesting = false
     @State private var didLoad = false
+    @State private var showsAdvanced = false
+    /// 查出来的这家现在的模型。
+    @State private var liveModels: [String] = []
 
     private var isImageOnly: Bool { PresetProviders.isImageOnly(id: draft.id) }
+    /// 内置服务只露 Key 和模型，其余收进「高级设置」。
+    private var isPreset: Bool { target.preset != nil }
 
     var body: some View {
         NavigationStack {
@@ -152,28 +215,32 @@ struct ProviderEditorView: View {
                             .font(.system(size: 14, weight: .semibold))
                             .padding(.bottom, 8)
                     }
-                    field("名字", text: $draft.name, placeholder: "随便起")
-                    field("地址", text: $draft.baseURL, placeholder: "https://api.example.com/v1", isURL: true)
-                    if !isImageOnly {
-                        field("模型", text: $draft.model, placeholder: "deepseek-chat", isURL: true)
-                        modelChoices
-                    }
-                    if isImageOnly || draft.supportsImage {
-                        field("画图模型", text: Binding(get: { draft.imageModel ?? "" },
-                                                    set: { draft.imageModel = $0 }), placeholder: "", isURL: true)
-                    }
                     keyField
-                    SectionLabel(text: "额外请求头（中转站要的话才填，一行一个 名字: 值）")
-                    TextField("HTTP-Referer: https://example.com", text: $headers, axis: .vertical)
-                        .font(.system(size: 14))
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .lineLimit(2...5)
-                        .padding(10)
-                        .background(palette.surface.color)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    modelChoices
+                    if isPreset {
+                        Button {
+                            showsAdvanced.toggle()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text("高级设置")
+                                Image(systemName: showsAdvanced ? "chevron.up" : "chevron.down")
+                                    .font(.system(size: 11))
+                                Spacer(minLength: 0)
+                            }
+                            .font(.system(size: 13.5))
+                            .foregroundColor(palette.secondary.color)
+                            .frame(height: 40)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.top, 6)
+                    }
+                    if !isPreset || showsAdvanced {
+                        advancedFields
+                    }
 
-                    SecondaryButton(title: isTesting ? "测试中…" : "测试") { test() }
+                    PrimaryButton(title: isTesting ? "正在试…" : "试一下并保存") { testAndSave() }
+                        .disabled(isTesting)
                         .padding(.top, 18)
                     if let testMessage {
                         Text(testMessage)
@@ -181,6 +248,10 @@ struct ProviderEditorView: View {
                             .foregroundColor(testFailed ? palette.text.color : palette.accentText.color)
                             .lineSpacing(2)
                             .textSelection(.enabled)
+                            .padding(.top, 10)
+                    }
+                    if !target.isNew, !isCurrent, model.hasKey(draft) {
+                        SecondaryButton(title: isImageOnly ? "用它画图" : "用它写字") { useThis() }
                             .padding(.top, 10)
                     }
                     if !target.isNew {
@@ -223,6 +294,46 @@ struct ProviderEditorView: View {
         }
     }
 
+    @ViewBuilder
+    private var advancedFields: some View {
+        field("名字", text: $draft.name, placeholder: "随便起")
+        field("地址", text: $draft.baseURL, placeholder: "https://api.example.com/v1", isURL: true)
+        if !isImageOnly {
+            field("模型", text: $draft.model, placeholder: "模型名", isURL: true)
+        }
+        if isImageOnly || draft.supportsImage {
+            field("画图模型", text: Binding(get: { draft.imageModel ?? "" },
+                                        set: { draft.imageModel = $0 }), placeholder: "", isURL: true)
+        }
+        SectionLabel(text: "额外请求头（中转站要的话才填，一行一个 名字: 值）")
+        TextField("HTTP-Referer: https://example.com", text: $headers, axis: .vertical)
+            .font(.system(size: 14))
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .lineLimit(2...5)
+            .padding(10)
+            .background(palette.surface.color)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private var isCurrent: Bool {
+        isImageOnly ? model.snapshot.imageProvider?.id == draft.id : model.snapshot.defaultProvider?.id == draft.id
+    }
+
+    private func useThis() {
+        let id = draft.id
+        let image = isImageOnly
+        model.update { snapshot in
+            if image {
+                snapshot.imageProviderID = id
+            } else {
+                snapshot.defaultProviderID = id
+            }
+        }
+        model.showToast("已切换")
+        dismiss()
+    }
+
     private func field(_ title: String, text: Binding<String>, placeholder: String, isURL: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
@@ -240,22 +351,47 @@ struct ProviderEditorView: View {
         }
     }
 
+    /// 现在选中的模型。画图服务选的是画图模型。
+    private var currentModel: String { isImageOnly ? (draft.imageModel ?? "") : draft.model }
+
+    private func selectModel(_ name: String) {
+        if isImageOnly {
+            draft.imageModel = name
+        } else {
+            draft.model = name
+        }
+    }
+
+    /// 要给人选的模型：查到的优先，没查过就用预设。当前选中的总在里面。
+    private var modelNames: [String] {
+        let preset = target.preset?.availableModels.map(\.modelID) ?? PresetProviders.knownModels(forBaseURL: draft.baseURL)
+        var names = liveModels.isEmpty ? preset : liveModels
+        if !currentModel.isEmpty, !names.contains(currentModel) {
+            names.insert(currentModel, at: 0)
+        }
+        return names
+    }
+
     @ViewBuilder
     private var modelChoices: some View {
-        let models = PresetProviders.knownModels(forBaseURL: draft.baseURL)
+        let models = modelNames
         if !models.isEmpty {
+            Text("模型")
+                .font(.system(size: 12.5))
+                .foregroundColor(palette.secondary.color)
+                .padding(.top, 12)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     ForEach(models, id: \.self) { name in
                         Button {
-                            draft.model = name
+                            selectModel(name)
                         } label: {
                             Text(name)
                                 .font(.system(size: 12.5))
-                                .foregroundColor(draft.model == name ? palette.onAccent.color : palette.text.color)
+                                .foregroundColor(currentModel == name ? palette.onAccent.color : palette.text.color)
                                 .padding(.horizontal, 10)
                                 .frame(height: 28)
-                                .background(draft.model == name ? palette.accent.color : palette.surface.color)
+                                .background(currentModel == name ? palette.accent.color : palette.surface.color)
                                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                         }
                         .buttonStyle(.plain)
@@ -303,60 +439,48 @@ struct ProviderEditorView: View {
         return result
     }
 
-    private func test() {
+    /// 真发一次。通了就保存；不通留在这页，把原因写出来。
+    private func testAndSave() {
         var config = draft
         config.extraHeaders = parsedHeaders()
-        let apiKey = key.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !apiKey.isEmpty else {
-            testFailed = true
-            testMessage = "先填 Key"
-            return
-        }
         isTesting = true
         testMessage = nil
+        let apiKey = key
         Task {
-            let started = Date()
-            let request = ChatRequest(messages: [.user("hi")], temperature: 0, maxTokens: 1024, stream: false)
-            do {
-                let result = try await AIClientFactory.makeLLM(config: config, apiKey: apiKey).complete(request)
-                let ms = Int(Date().timeIntervalSince(started) * 1000)
-                let sample = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                testFailed = false
-                testMessage = sample.isEmpty
-                    ? "连上了（\(ms) 毫秒），但模型没有返回文字，换个模型名试试。"
-                    : "能用（\(ms) 毫秒）：\(String(sample.prefix(60)))"
-            } catch {
-                testFailed = true
-                testMessage = AIError.wrap(error).errorDescription ?? error.localizedDescription
-            }
+            let result = await ProviderCheck.run(config: config, apiKey: apiKey)
             isTesting = false
+            draft = result.config
+            liveModels = result.models
+            testFailed = !result.isUsable
+            testMessage = result.message
+            if result.isUsable {
+                save(toast: result.message)
+            }
         }
     }
 
-    private func save() {
+    private func save(toast: String = "已保存") {
         draft.extraHeaders = parsedHeaders()
         let saved = draft
+        let apiKey = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        var partner: AIProviderConfig?
         model.update { snapshot in
-            if let index = snapshot.providers.firstIndex(where: { $0.id == saved.id }) {
-                snapshot.providers[index] = saved
-            } else {
-                snapshot.providers.append(saved)
-            }
-            if snapshot.defaultProviderID == nil, saved.supportsChat {
-                snapshot.defaultProviderID = saved.id
-            }
-            if snapshot.imageProviderID == nil, saved.supportsImage {
-                snapshot.imageProviderID = saved.id
+            partner = PresetProviders.adopt(saved, keyIsSet: !apiKey.isEmpty, isNew: target.isNew, into: &snapshot) {
+                KeychainStore.shared.hasAPIKey(for: $0)
             }
         }
-        let apiKey = key.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
             if apiKey.isEmpty {
                 try KeychainStore.shared.deleteAPIKey(for: saved.id)
             } else {
                 try KeychainStore.shared.setAPIKey(apiKey, for: saved.id)
             }
-            model.showToast("已保存")
+            if let partner {
+                try KeychainStore.shared.setAPIKey(apiKey, for: partner.id)
+                model.showToast("已保存。同一个 Key 也配好了\(PresetProviders.shortName(id: partner.id))")
+            } else {
+                model.showToast(toast)
+            }
         } catch {
             model.showToast("Key 没存上：\(error.localizedDescription)")
         }

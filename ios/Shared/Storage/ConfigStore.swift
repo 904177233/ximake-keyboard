@@ -147,6 +147,13 @@ public final class ConfigStore: ConfigStoring, @unchecked Sendable {
             }
         }
 
+        // 已下线的模型：只换内置服务，自定义服务（中转站）的模型名可能另有含义
+        for index in migrated.providers.indices where PresetProviders.preset(id: migrated.providers[index].id) != nil {
+            if let next = PresetProviders.retiredModels[migrated.providers[index].model] {
+                migrated.providers[index].model = next
+            }
+        }
+
         // 通用收敛（任何版本都做，保证越界数据不会带进 UI）。
         migrated.replyCount = min(max(migrated.replyCount, 1), 5)
         if migrated.defaultTone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

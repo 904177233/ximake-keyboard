@@ -25,6 +25,9 @@ final class SettingsModel: ObservableObject {
     @Published var testMessage: String?
     @Published var testFailed = false
     @Published var isTesting = false
+    @Published var showsAdvanced = false
+    /// 查出来的这家现在的模型。
+    @Published var liveModels: [String] = []
 
     private unowned let session: KeyboardSession
     private var testTask: Task<Void, Never>?
@@ -45,6 +48,8 @@ final class SettingsModel: ObservableObject {
         keyDraft = KeychainStore.shared.apiKey(for: provider.id) ?? ""
         isNew = false
         testMessage = nil
+        showsAdvanced = false
+        liveModels = []
         session.settingsRoute = .provider
     }
 
@@ -58,36 +63,37 @@ final class SettingsModel: ObservableObject {
         keyDraft = ""
         isNew = true
         testMessage = nil
+        showsAdvanced = false
+        liveModels = []
         session.settingsRoute = .provider
     }
 
     /// 保存。
-    func save() {
+    func save(toast: String = "已保存") {
         var snapshot = session.snapshot
-        if let index = snapshot.providers.firstIndex(where: { $0.id == draft.id }) {
-            snapshot.providers[index] = draft
-        } else {
-            snapshot.providers.append(draft)
-        }
-        if snapshot.defaultProvider == nil || snapshot.defaultProviderID == nil, draft.supportsChat {
-            snapshot.defaultProviderID = draft.id
-        }
-        if snapshot.imageProviderID == nil, draft.supportsImage {
-            snapshot.imageProviderID = draft.id
+        let key = keyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let partner = PresetProviders.adopt(draft, keyIsSet: !key.isEmpty, isNew: isNew, into: &snapshot) {
+            KeychainStore.shared.hasAPIKey(for: $0)
         }
         session.saveConfig(snapshot)
-        let key = keyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         if key.isEmpty {
             try? KeychainStore.shared.deleteAPIKey(for: draft.id)
         } else {
             do {
                 try KeychainStore.shared.setAPIKey(key, for: draft.id)
+                if let partner {
+                    try KeychainStore.shared.setAPIKey(key, for: partner.id)
+                }
             } catch {
                 session.showToast("Key 没存上：\(error.localizedDescription)")
                 return
             }
         }
-        session.showToast("已保存")
+        if let partner {
+            session.showToast("已保存。同一个 Key 也配好了\(PresetProviders.shortName(id: partner.id))")
+        } else {
+            session.showToast(toast)
+        }
         session.settingsRoute = .providers
     }
 
@@ -117,36 +123,23 @@ final class SettingsModel: ObservableObject {
         session.saveConfig(snapshot)
     }
 
-    /// 测试：非流式发一句 hi。通不通当场说清楚，不通就把服务器原话显示出来。
-    func test() {
+    /// 真发一次。通了就保存；不通留在这页，把原因写出来。
+    func testAndSave() {
         testTask?.cancel()
         let config = draft
-        let key = keyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty else {
-            testFailed = true
-            testMessage = "先填 Key"
-            return
-        }
+        let key = keyDraft
         isTesting = true
         testMessage = nil
         testTask = Task { [weak self] in
-            let started = Date()
-            let request = ChatRequest(messages: [.user("hi")], temperature: 0, maxTokens: 1024, stream: false)
-            do {
-                let result = try await AIClientFactory.makeLLM(config: config, apiKey: key).complete(request)
-                guard let self, !Task.isCancelled else { return }
-                let ms = Int(Date().timeIntervalSince(started) * 1000)
-                self.isTesting = false
-                self.testFailed = false
-                let sample = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                self.testMessage = sample.isEmpty
-                    ? "连上了（\(ms) 毫秒），但模型没有返回文字，换个模型名试试。"
-                    : "能用（\(ms) 毫秒）：\(String(sample.prefix(40)))"
-            } catch {
-                guard let self, !Task.isCancelled else { return }
-                self.isTesting = false
-                self.testFailed = true
-                self.testMessage = AIError.wrap(error).errorDescription ?? error.localizedDescription
+            let result = await ProviderCheck.run(config: config, apiKey: key)
+            guard let self, !Task.isCancelled else { return }
+            self.isTesting = false
+            self.draft = result.config
+            self.liveModels = result.models
+            self.testFailed = !result.isUsable
+            self.testMessage = result.message
+            if result.isUsable {
+                self.save(toast: result.message)
             }
         }
     }
@@ -383,7 +376,21 @@ struct SettingsPanelView: View {
                 }
             }
 
-            Text("添加")
+            addRow("添加写字的", presets: PresetProviders.chatPresetTemplates, showsCustom: true)
+            addRow("添加画图的", presets: PresetProviders.imagePresetTemplates, showsCustom: false)
+            HStack {
+                Spacer(minLength: 0)
+                PanelButton(title: "导入 App 里的配置") { settings.importFromApp() }
+            }
+            .padding(.top, 10)
+        }
+    }
+
+    @ViewBuilder
+    private func addRow(_ title: String, presets: [PresetProviders.Preset], showsCustom: Bool) -> some View {
+        let rest = presets.filter { preset in !settings.providers.contains { $0.id == preset.id } }
+        if !rest.isEmpty || showsCustom {
+            Text(title)
                 .font(.system(size: 12))
                 .foregroundColor(palette.secondary.color)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -391,19 +398,14 @@ struct SettingsPanelView: View {
                 .padding(.bottom, 6)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
-                    ForEach(PresetProviders.all.filter { preset in
-                        !settings.providers.contains { $0.id == preset.id }
-                    }) { preset in
-                        PanelChip(title: preset.name, isSelected: false) { settings.add(preset: preset) }
+                    ForEach(rest) { preset in
+                        PanelChip(title: PresetProviders.shortName(id: preset.id), isSelected: false) { settings.add(preset: preset) }
                     }
-                    PanelChip(title: "自定义", isSelected: false) { settings.add(preset: nil) }
+                    if showsCustom {
+                        PanelChip(title: "自定义", isSelected: false) { settings.add(preset: nil) }
+                    }
                 }
             }
-            HStack {
-                Spacer(minLength: 0)
-                PanelButton(title: "导入 App 里的配置") { settings.importFromApp() }
-            }
-            .padding(.top, 10)
         }
     }
 
@@ -417,16 +419,38 @@ struct SettingsPanelView: View {
 
     private var providerEditor: some View {
         VStack(spacing: 0) {
-            fieldRow("名字", value: settings.draft.name, preferEnglish: false) { settings.draft.name = $0 }
-            fieldRow("地址", value: settings.draft.baseURL, preferEnglish: true) { settings.draft.baseURL = $0 }
-            if settings.draft.supportsImage || PresetProviders.isImageOnly(id: settings.draft.id) {
-                fieldRow("画图模型", value: settings.draft.imageModel ?? "", preferEnglish: true) { settings.draft.imageModel = $0 }
-            }
-            if !PresetProviders.isImageOnly(id: settings.draft.id) {
-                fieldRow("模型", value: settings.draft.model, preferEnglish: true) { settings.draft.model = $0 }
-                modelChips
+            if let preset = PresetProviders.preset(id: settings.draft.id) {
+                Text(preset.note)
+                    .font(.system(size: 12))
+                    .foregroundColor(palette.secondary.color)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 6)
             }
             keyRow
+            modelChips
+            if PresetProviders.preset(id: settings.draft.id) != nil {
+                Button {
+                    settings.showsAdvanced.toggle()
+                } label: {
+                    row("高级设置") {
+                        Image(systemName: settings.showsAdvanced ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 11))
+                            .foregroundColor(palette.secondary.color)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+            if PresetProviders.preset(id: settings.draft.id) == nil || settings.showsAdvanced {
+                fieldRow("名字", value: settings.draft.name, preferEnglish: false) { settings.draft.name = $0 }
+                fieldRow("地址", value: settings.draft.baseURL, preferEnglish: true) { settings.draft.baseURL = $0 }
+                if settings.draft.supportsImage || PresetProviders.isImageOnly(id: settings.draft.id) {
+                    fieldRow("画图模型", value: settings.draft.imageModel ?? "", preferEnglish: true) { settings.draft.imageModel = $0 }
+                }
+                if !PresetProviders.isImageOnly(id: settings.draft.id) {
+                    fieldRow("模型", value: settings.draft.model, preferEnglish: true) { settings.draft.model = $0 }
+                }
+            }
 
             if let message = settings.testMessage {
                 Text(message)
@@ -439,26 +463,37 @@ struct SettingsPanelView: View {
             }
 
             HStack(spacing: 8) {
-                PanelButton(title: settings.isTesting ? "测试中…" : "测试") { settings.test() }
                 if !settings.isNew {
                     PanelButton(title: "删除") { settings.delete() }
                 }
                 Spacer(minLength: 0)
-                PanelButton(title: "保存", isPrimary: true) { settings.save() }
+                PanelButton(title: "只保存") { settings.save() }
+                PanelButton(title: settings.isTesting ? "正在试…" : "试一下并保存", isPrimary: true) { settings.testAndSave() }
             }
             .padding(.top, 10)
         }
     }
 
     private var modelChips: some View {
-        let models = PresetProviders.knownModels(forBaseURL: settings.draft.baseURL)
+        let isImage = PresetProviders.isImageOnly(id: settings.draft.id)
+        let current = isImage ? (settings.draft.imageModel ?? "") : settings.draft.model
+        let preset = PresetProviders.preset(id: settings.draft.id)?.availableModels.map(\.modelID)
+            ?? PresetProviders.knownModels(forBaseURL: settings.draft.baseURL)
+        var models = settings.liveModels.isEmpty ? preset : settings.liveModels
+        if !current.isEmpty, !models.contains(current) {
+            models.insert(current, at: 0)
+        }
         return Group {
             if !models.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         ForEach(models, id: \.self) { model in
-                            PanelChip(title: model, isSelected: settings.draft.model == model) {
-                                settings.draft.model = model
+                            PanelChip(title: model, isSelected: current == model) {
+                                if isImage {
+                                    settings.draft.imageModel = model
+                                } else {
+                                    settings.draft.model = model
+                                }
                             }
                         }
                     }

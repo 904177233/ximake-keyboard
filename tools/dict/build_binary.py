@@ -56,10 +56,20 @@ BASE_V1 = HERE / "source" / "base_dict_v1.tsv"
 EXTRA = HERE / "extra_words.tsv"
 CHAT_PRIORITY = OUT_DIR / "chat_priority.tsv"
 NEXT_WORDS = HERE / "next_words.tsv"
+#: 这两份不进仓库，放在 .cache 里，下载地址见 docs/16-交接文档.md。
+ESSAY = HERE / ".cache" / "rime-essay" / "essay.txt"
+OPENCC = HERE / ".cache" / "opencc"
+#: essay 权重低于这个的基本是噪声（灌上、折箭），当它没有。
+ESSAY_MIN_WEIGHT = 500
+#: jieba 没有的词，essay 权重到这个数才收。
+ESSAY_NEW_WORD_MIN = 500
+#: 两边都有的词，词频里 essay 占多少（按对数算），其余是 jieba。
+ESSAY_BLEND = 1.0
+ESSAY_RAISE_V1 = True
 #: 词频低于这个的词不拿来推「后半截」联想。
 COMPOUND_MIN_FREQ = 200
 
-DICT_VERSION = "3.0.0"
+DICT_VERSION = "3.0.2"
 GENERATED_DATE = "2026-11-05"
 
 #: jieba 词频下限。词频再低的多是专名和噪声，收进来只会占地方。
@@ -210,6 +220,53 @@ def write_next_words(builder: Builder, path: Path) -> int:
     return len(lines)
 
 
+def load_essay(known: set[str]) -> dict[str, int]:
+    """读 essay.txt，转成简体、合并异体后返回 {词: 原始权重}。
+
+    essay 是繁体的。一个繁体字可能对应几个简体（乾 -> 干、乾），
+    这时优先选 known（jieba 词表）里有的那个组合。
+    """
+    from itertools import islice, product
+
+    def read_table(name: str) -> dict[str, list[str]]:
+        table = {}
+        for line in (OPENCC / name).read_text(encoding="utf-8").splitlines():
+            if line and not line.startswith("#") and "\t" in line:
+                head, rest = line.split("\t", 1)
+                table[head] = rest.split()
+        return table
+
+    chars = read_table("TSCharacters.txt")
+    phrases = read_table("TSPhrases.txt")
+
+    def simplify(word: str) -> str:
+        if word in phrases:
+            return phrases[word][0]
+        options = [chars.get(ch, [ch]) for ch in word]
+        first = "".join(row[0] for row in options)
+        if first in known or all(len(row) == 1 for row in options):
+            return first
+        for combo in islice(product(*options), 64):
+            text = "".join(combo)
+            if text in known:
+                return text
+        return first
+
+    merged: Counter[str] = Counter()
+    for line in ESSAY.read_text(encoding="utf-8").splitlines():
+        parts = line.split("\t")
+        if len(parts) == 2 and parts[1].isdigit() and CJK.match(parts[0]) and len(parts[0]) <= MAX_WORD_LEN:
+            merged[simplify(parts[0])] += int(parts[1])
+    return dict(merged)
+
+
+def essay_scale(essay: dict[str, int], jieba: dict[str, int]) -> float:
+    """essay 和 jieba 的刻度不一样：取常用词上两者比值的中位数，换算成 jieba 的刻度。"""
+    ratios = sorted(math.log(jieba[word] / weight) for word, weight in essay.items()
+                    if weight >= 1000 and jieba.get(word, 0) >= 100)
+    return math.exp(ratios[len(ratios) // 2])
+
+
 def collect() -> Builder:
     from pypinyin import Style, lazy_pinyin, pinyin
 
@@ -222,6 +279,7 @@ def collect() -> Builder:
 
     # ① 旧词库：聊天词、网络词、表情、标点，词频人工调过，优先保留
     v1_texts: dict[str, int] = {}
+    v1_chat: set[str] = set()
     for line in BASE_V1.read_text(encoding="utf-8").splitlines():
         if not line or line.startswith("#"):
             continue
@@ -231,7 +289,8 @@ def collect() -> Builder:
         key, word, freq = parts[0], parts[1], int(parts[2])
         tags = set((parts[3] if len(parts) > 3 else "").split(","))
         flags = chat_bits(word)
-        if "emoji" in tags:
+        # 旧词库把「累」「开心」「想吃」这些字也标成了 emoji，它们要参与整句转换
+        if "emoji" in tags and not CJK.match(word):
             flags |= FLAG_EMOJI
         if "punct" in tags:
             flags |= FLAG_PUNCT
@@ -245,6 +304,8 @@ def collect() -> Builder:
         syllables = segment(key, len(word) if CJK.match(word) else None)
         builder.add(key, syllables, word, freq, flags)
         v1_texts[word] = freq
+        if "chat" in tags:
+            v1_chat.add(word)
         builder.stats["v1"] += 1
 
     # ② jieba：补足十万级通用词
@@ -266,9 +327,25 @@ def collect() -> Builder:
                 support[ch] += 1
     keep_chars = {ch for ch, count in support.items() if count >= 2} | {c for c, f in single_freq.items() if f >= 80}
 
+    # essay 的词频来自网络文本，比 jieba 更接近聊天；两边都有的词用它重新算词频
+    jieba_freq = {word: freq for word, freq, _pos in rows}
+    essay = load_essay(set(jieba_freq))
+    scale = essay_scale(essay, jieba_freq)
+    essay = {word: weight for word, weight in essay.items() if weight >= ESSAY_MIN_WEIGHT}
+    builder.stats["essay_scale_x1000"] = int(scale * 1000)
+
+    def blended(word: str, freq: int) -> int:
+        weight = essay.get(word)
+        if not weight:
+            return freq
+        return max(1, int(math.exp(ESSAY_BLEND * math.log(weight * scale + 1) + (1 - ESSAY_BLEND) * math.log(freq + 1))))
+
     for word, freq, pos in rows:
         if not CJK.match(word) or len(word) > MAX_WORD_LEN or word in v1_texts:
             continue
+        if word in essay and ESSAY_BLEND > 0:
+            freq = blended(word, freq)
+            builder.stats["essay_reweight"] += 1
         if freq < MIN_FREQ or not all(ch in keep_chars for ch in word):
             builder.stats["jieba_skip"] += 1
             continue
@@ -281,6 +358,34 @@ def collect() -> Builder:
             continue
         builder.add("".join(syllables), syllables, word, freq, chat_bits(word))
         builder.stats["jieba"] += 1
+
+    # ②′ essay 里有、jieba 没有的词（微信、朋友圈这类新词）
+    for word, weight in essay.items():
+        if word in jieba_freq or word in v1_texts or weight < ESSAY_NEW_WORD_MIN or len(word) < 2:
+            continue
+        if not all(ch in keep_chars for ch in word):
+            continue
+        syllables = [s.lower() for s in lazy_pinyin(word)]
+        if not all(s in SYL_SET for s in syllables):
+            continue
+        builder.add("".join(syllables), syllables, word, max(MIN_FREQ, int(weight * scale)), chat_bits(word))
+        builder.stats["essay_new"] += 1
+
+    # ②″ 旧词库的词频也来自新闻语料（万 > 玩）。聊天词只抬不压，其余直接换。
+    # 单字只换默认读音：「还」的词频不能算到 huan 头上。
+    if ESSAY_RAISE_V1:
+        for (key, _mask), words in builder.table.items():
+            for word, row in words.items():
+                if word not in v1_texts or word not in essay or row[1] & (FLAG_EMOJI | FLAG_PUNCT):
+                    continue
+                if len(word) == 1 and lazy_pinyin(word)[0].lower() != key:
+                    continue
+                # 语气词的词频都来自句尾，算进来句子中间就全是它（我把 -> 我吧）。句尾有专门的规则。
+                if word in ENDING_PARTICLES.values():
+                    continue
+                scaled = int(essay[word] * scale)
+                row[0] = max(row[0], scaled) if word in v1_chat else scaled
+                builder.stats["essay_v1"] += 1
 
     # ③ 单字的其它读音
     for char, freq in single_freq.items():
@@ -409,6 +514,16 @@ HOLDOUT = """
 """.replace("\n", "|").strip("|").split("|")
 
 
+#: 换词频数据时写的另一组。看过一次结果，之后不要照着它调。
+UNSEEN = """
+我先去洗澡了|你今天吃药了吗|这周末我要搬家|我家的猫生病了|你帮我问问他|会议改到明天了|我下班去接你|今天的菜有点咸|这条裙子好看吗|我手机快没电了
+你什么时候回来|我在超市买东西|记得给妈妈打电话|我们去楼下吃吧|这个软件怎么下载|你的快递到了|我昨天没睡好|晚上一起看电影吗|天气太热了|我把钱转给你
+你别忘了带身份证|我们约个时间吧|我现在不方便说话|他还没有回复我|这道题我不会做|你能不能快一点|我肚子有点疼|今天公司放假|这个周末加班吗|我请你吃饭
+你最近在忙什么|我已经订好酒店了|飞机晚点了|我们打车过去吧|你吃早饭了吗|这个视频太搞笑了|给我发个定位|我在门口等你|钱包忘在家里了|明天记得叫我起床
+她今天请假了|这个密码不对|我要换个新手机|你的声音好好听|你能发个照片吗|快过年了|我们分开走吧|电脑又坏了|房租该交了|我马上下楼
+""".replace("\n", "|").strip("|").split("|")
+
+
 class Eval:
     def __init__(self, builder: Builder) -> None:
         self.by_key: dict[str, list[tuple[str, int, int, int]]] = defaultdict(list)
@@ -466,7 +581,7 @@ def evaluate(builder: Builder) -> None:
     from pypinyin import lazy_pinyin
 
     engine = Eval(builder)
-    for title, sentences in (("调词频用过的句子", SENTENCES), ("没用过的句子", HOLDOUT)):
+    for title, sentences in (("调词频用过的句子", SENTENCES), ("没用过的句子", HOLDOUT), ("后来写的句子", UNSEEN)):
         exact = 0
         total_chars = 0
         right_chars = 0
@@ -505,6 +620,8 @@ def main() -> int:
         "sources": [
             {"name": "jieba dict.txt", "license": "MIT", "url": "https://github.com/fxsjy/jieba"},
             {"name": "pypinyin", "license": "MIT", "url": "https://github.com/mozillazg/python-pinyin"},
+            {"name": "rime-essay essay.txt", "license": "LGPL-3.0", "url": "https://github.com/rime/rime-essay"},
+            {"name": "OpenCC TSCharacters / TSPhrases", "license": "Apache-2.0", "url": "https://github.com/BYVoid/OpenCC"},
         ],
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 

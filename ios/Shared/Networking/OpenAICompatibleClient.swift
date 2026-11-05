@@ -399,7 +399,7 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
         if sawReasoning {
             throw AIError.contentRejected(
                 "这是推理模型，本次回复全部用在思维链上了，正文没有产出。"
-                    + "请把「最大回复长度」调到 2048 以上，或改用非推理模型（如 deepseek-chat）。"
+                    + "请把「最大回复长度」调到 2048 以上，或改用非推理模型（如 deepseek-flash）。"
                     + snippet
             )
         }

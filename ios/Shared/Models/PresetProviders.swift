@@ -98,14 +98,14 @@ public enum PresetProviders {
             name: "DeepSeek 深度求索",
             kind: .openAICompatible,
             baseURL: "https://api.deepseek.com/v1",
-            model: "deepseek-chat",
+            model: "deepseek-flash",
             imageModel: nil,
             note: "在 platform.deepseek.com 注册后于「API keys」创建，价格低、中文好，默认推荐。",
             consoleURL: URL(string: "https://platform.deepseek.com/api_keys"),
             isImageOnly: false,
             availableModels: [
-                ModelRef(title: "DeepSeek Chat（通用）", modelID: "deepseek-chat"),
-                ModelRef(title: "DeepSeek Reasoner（推理）", modelID: "deepseek-reasoner")
+                ModelRef(title: "deepseek-flash（便宜够用）", modelID: "deepseek-flash"),
+                ModelRef(title: "deepseek-v4-pro（更强）", modelID: "deepseek-v4-pro")
             ]
         ),
         Preset(
@@ -113,15 +113,15 @@ public enum PresetProviders {
             name: "通义千问 · 阿里云百炼",
             kind: .openAICompatible,
             baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-            model: "qwen-plus",
+            model: "qwen3.8-flash",
             imageModel: nil,
             note: "在阿里云百炼控制台（bailian.console.aliyun.com）开通后创建 DashScope API Key；这里用的是它的 OpenAI 兼容模式地址。",
             consoleURL: URL(string: "https://bailian.console.aliyun.com/"),
             isImageOnly: false,
             availableModels: [
-                ModelRef(title: "qwen-plus（均衡）", modelID: "qwen-plus"),
-                ModelRef(title: "qwen-turbo（快速便宜）", modelID: "qwen-turbo"),
-                ModelRef(title: "qwen-max（最强）", modelID: "qwen-max")
+                ModelRef(title: "qwen3.8-flash（快、便宜）", modelID: "qwen3.8-flash"),
+                ModelRef(title: "qwen3.7-plus（均衡）", modelID: "qwen3.7-plus"),
+                ModelRef(title: "qwen3.8-max（最强）", modelID: "qwen3.8-max")
             ]
         ),
         Preset(
@@ -129,15 +129,14 @@ public enum PresetProviders {
             name: "Kimi · 月之暗面",
             kind: .openAICompatible,
             baseURL: "https://api.moonshot.cn/v1",
-            model: "moonshot-v1-8k",
+            model: "kimi-k3",
             imageModel: nil,
             note: "在 platform.moonshot.cn 的「API Key 管理」创建，新账号有体验额度。",
             consoleURL: URL(string: "https://platform.moonshot.cn/console/api-keys"),
             isImageOnly: false,
             availableModels: [
-                ModelRef(title: "moonshot-v1-8k", modelID: "moonshot-v1-8k"),
-                ModelRef(title: "moonshot-v1-32k", modelID: "moonshot-v1-32k"),
-                ModelRef(title: "moonshot-v1-128k", modelID: "moonshot-v1-128k")
+                ModelRef(title: "kimi-k3", modelID: "kimi-k3"),
+                ModelRef(title: "kimi-k3.1-pro（更强）", modelID: "kimi-k3.1-pro")
             ]
         ),
         Preset(
@@ -145,15 +144,15 @@ public enum PresetProviders {
             name: "智谱 GLM",
             kind: .openAICompatible,
             baseURL: "https://open.bigmodel.cn/api/paas/v4",
-            model: "glm-4-flash",
+            model: "glm-4.7-flash",
             imageModel: nil,
-            note: "在 open.bigmodel.cn 的「API Keys」创建；glm-4-flash 有免费额度，适合先跑通。",
+            note: "在 open.bigmodel.cn 的「API Keys」创建；glm-4.7-flash 免费，适合先跑通。",
             consoleURL: URL(string: "https://open.bigmodel.cn/usercenter/apikeys"),
             isImageOnly: false,
             availableModels: [
-                ModelRef(title: "glm-4-flash（免费额度）", modelID: "glm-4-flash"),
-                ModelRef(title: "glm-4-plus", modelID: "glm-4-plus"),
-                ModelRef(title: "glm-4-air", modelID: "glm-4-air")
+                ModelRef(title: "glm-4.7-flash（免费）", modelID: "glm-4.7-flash"),
+                ModelRef(title: "glm-5.3-flash", modelID: "glm-5.3-flash"),
+                ModelRef(title: "glm-5.3（最强）", modelID: "glm-5.3")
             ]
         ),
         Preset(
@@ -161,14 +160,14 @@ public enum PresetProviders {
             name: "火山方舟 · 豆包",
             kind: .openAICompatible,
             baseURL: "https://ark.cn-beijing.volces.com/api/v3",
-            model: "doubao-1-5-pro-32k",
+            model: "doubao-seed-2-1-lite-260915",
             imageModel: "doubao-seedream-3-0-t2i-250415",
             note: "在火山引擎控制台开通「方舟」，创建推理接入点 / API Key；豆包模型名也可填接入点 ID（ep-xxx）。生图走即梦（Seedream）。",
             consoleURL: URL(string: "https://console.volcengine.com/ark"),
             isImageOnly: false,
             availableModels: [
-                ModelRef(title: "doubao-1-5-pro-32k", modelID: "doubao-1-5-pro-32k"),
-                ModelRef(title: "doubao-1-5-lite-32k", modelID: "doubao-1-5-lite-32k")
+                ModelRef(title: "doubao-seed-2-1-lite（便宜）", modelID: "doubao-seed-2-1-lite-260915"),
+                ModelRef(title: "doubao-seed-2-1-pro（更强）", modelID: "doubao-seed-2-1-pro-260915")
             ]
         ),
         Preset(
@@ -222,14 +221,14 @@ public enum PresetProviders {
             name: "Anthropic Claude",
             kind: .anthropic,
             baseURL: "https://api.anthropic.com",
-            model: "claude-3-5-sonnet-latest",
+            model: "claude-haiku-5-5",
             imageModel: nil,
             note: "在 console.anthropic.com 的「API Keys」创建；baseURL 不要带 /v1，客户端会自动拼 /v1/messages。",
             consoleURL: URL(string: "https://console.anthropic.com/settings/keys"),
             isImageOnly: false,
             availableModels: [
-                ModelRef(title: "claude-3-5-sonnet-latest", modelID: "claude-3-5-sonnet-latest"),
-                ModelRef(title: "claude-3-5-haiku-latest", modelID: "claude-3-5-haiku-latest")
+                ModelRef(title: "Haiku 5.5（快、便宜）", modelID: "claude-haiku-5-5"),
+                ModelRef(title: "Sonnet 5.5（更强）", modelID: "claude-sonnet-5-5")
             ]
         )
     ]
@@ -326,19 +325,19 @@ public enum PresetProviders {
     }
 
     /// DeepSeek（官方 OpenAI 兼容端点）。
-    private static let deepSeekModels = ["deepseek-chat", "deepseek-reasoner"]
+    private static let deepSeekModels = ["deepseek-flash", "deepseek-v4-pro"]
 
     /// OpenAI 官方。
     private static let openAIModels = ["gpt-4o-mini", "gpt-4o", "o3-mini"]
 
     /// 通义千问（DashScope 兼容模式）。
-    private static let qwenModels = ["qwen-plus", "qwen-max", "qwen-turbo", "qvq-max"]
+    private static let qwenModels = ["qwen3.8-flash", "qwen3.7-plus", "qwen3.8-max"]
 
     /// Kimi（Moonshot）。
-    private static let kimiModels = ["kimi-latest", "moonshot-v1-8k"]
+    private static let kimiModels = ["kimi-k3", "kimi-k3.1-pro"]
 
     /// 智谱 GLM。
-    private static let glmModels = ["glm-4-plus", "glm-4-flash", "glm-z1-air"]
+    private static let glmModels = ["glm-4.7-flash", "glm-5.3-flash", "glm-5.3"]
 
     /// OpenRouter（模型名带 `厂商/` 前缀）。
     private static let openRouterModels = [

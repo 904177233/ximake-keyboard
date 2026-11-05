@@ -48,6 +48,7 @@
 		1F833D7A1CE72FACD3BB329A /* LLMClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CB4CD53E97635FD9FED639A /* LLMClient.swift */; };
 		9B217DE0ACEE23A259209A6D /* OpenAICompatibleClient+LenientParse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40D87E4B9F9115CDCE17A3C8 /* OpenAICompatibleClient+LenientParse.swift */; };
 		3AA1F4E3BFB3632A23817C96 /* OpenAICompatibleClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7347B5C9A6F79CBED82067DF /* OpenAICompatibleClient.swift */; };
+		4D9F504EF57410B68CB4A57B /* ProviderCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C8BDB416B8F85653BF008FD /* ProviderCheck.swift */; };
 		259A62E7BF92AEC45C9D6E67 /* SSEParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B8572C5F29622BB3CBB3DC2 /* SSEParser.swift */; };
 		40ACE589B19CF0CFAACAAB4D /* SeedreamImageClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 619269A44838E410D2B3EDE2 /* SeedreamImageClient.swift */; };
 		51209A0AA8CE2FB3C6929314 /* WanxImageClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E220FDDA98172094B34A78A /* WanxImageClient.swift */; };
@@ -111,6 +112,7 @@
 		A80D7734A1D104FAD02857CF /* LLMClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CB4CD53E97635FD9FED639A /* LLMClient.swift */; };
 		23B36C1A941F49E11F7312B9 /* OpenAICompatibleClient+LenientParse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40D87E4B9F9115CDCE17A3C8 /* OpenAICompatibleClient+LenientParse.swift */; };
 		BC4C4767F898848B1CB1E389 /* OpenAICompatibleClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7347B5C9A6F79CBED82067DF /* OpenAICompatibleClient.swift */; };
+		4FA007527B6EFF551E7903F3 /* ProviderCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C8BDB416B8F85653BF008FD /* ProviderCheck.swift */; };
 		BAD21D5B525FF5BFAC728380 /* SSEParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B8572C5F29622BB3CBB3DC2 /* SSEParser.swift */; };
 		494785F26EA9E53B60DEC3C4 /* SeedreamImageClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 619269A44838E410D2B3EDE2 /* SeedreamImageClient.swift */; };
 		DC578AA8DCDFED47F28454C0 /* WanxImageClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E220FDDA98172094B34A78A /* WanxImageClient.swift */; };
@@ -222,6 +224,7 @@
 		8CB4CD53E97635FD9FED639A /* LLMClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/Networking/LLMClient.swift; sourceTree = SOURCE_ROOT; };
 		40D87E4B9F9115CDCE17A3C8 /* OpenAICompatibleClient+LenientParse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/Networking/OpenAICompatibleClient+LenientParse.swift"; sourceTree = SOURCE_ROOT; };
 		7347B5C9A6F79CBED82067DF /* OpenAICompatibleClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/Networking/OpenAICompatibleClient.swift; sourceTree = SOURCE_ROOT; };
+		4C8BDB416B8F85653BF008FD /* ProviderCheck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/Networking/ProviderCheck.swift; sourceTree = SOURCE_ROOT; };
 		1B8572C5F29622BB3CBB3DC2 /* SSEParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/Networking/SSEParser.swift; sourceTree = SOURCE_ROOT; };
 		619269A44838E410D2B3EDE2 /* SeedreamImageClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/Networking/SeedreamImageClient.swift; sourceTree = SOURCE_ROOT; };
 		8E220FDDA98172094B34A78A /* WanxImageClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/Networking/WanxImageClient.swift; sourceTree = SOURCE_ROOT; };
@@ -441,6 +444,7 @@
 				8CB4CD53E97635FD9FED639A /* LLMClient.swift */,
 				40D87E4B9F9115CDCE17A3C8 /* OpenAICompatibleClient+LenientParse.swift */,
 				7347B5C9A6F79CBED82067DF /* OpenAICompatibleClient.swift */,
+				4C8BDB416B8F85653BF008FD /* ProviderCheck.swift */,
 				1B8572C5F29622BB3CBB3DC2 /* SSEParser.swift */,
 				619269A44838E410D2B3EDE2 /* SeedreamImageClient.swift */,
 				8E220FDDA98172094B34A78A /* WanxImageClient.swift */,
@@ -653,6 +657,7 @@
 				1F833D7A1CE72FACD3BB329A /* LLMClient.swift in Sources */,
 				9B217DE0ACEE23A259209A6D /* OpenAICompatibleClient+LenientParse.swift in Sources */,
 				3AA1F4E3BFB3632A23817C96 /* OpenAICompatibleClient.swift in Sources */,
+				4D9F504EF57410B68CB4A57B /* ProviderCheck.swift in Sources */,
 				259A62E7BF92AEC45C9D6E67 /* SSEParser.swift in Sources */,
 				40ACE589B19CF0CFAACAAB4D /* SeedreamImageClient.swift in Sources */,
 				51209A0AA8CE2FB3C6929314 /* WanxImageClient.swift in Sources */,
@@ -723,6 +728,7 @@
 				A80D7734A1D104FAD02857CF /* LLMClient.swift in Sources */,
 				23B36C1A941F49E11F7312B9 /* OpenAICompatibleClient+LenientParse.swift in Sources */,
 				BC4C4767F898848B1CB1E389 /* OpenAICompatibleClient.swift in Sources */,
+				4FA007527B6EFF551E7903F3 /* ProviderCheck.swift in Sources */,
 				BAD21D5B525FF5BFAC728380 /* SSEParser.swift in Sources */,
 				494785F26EA9E53B60DEC3C4 /* SeedreamImageClient.swift in Sources */,
 				DC578AA8DCDFED47F28454C0 /* WanxImageClient.swift in Sources */,

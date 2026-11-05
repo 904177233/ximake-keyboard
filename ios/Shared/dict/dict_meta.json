@@ -1,9 +1,9 @@
 {
-  "version": "3.0.0",
+  "version": "3.0.2",
   "generated_at": "2026-11-05",
-  "entries": 96080,
-  "keys": 67522,
-  "bytes": 4575961,
+  "entries": 143235,
+  "keys": 101283,
+  "bytes": 6948380,
   "sources": [
     {
       "name": "jieba dict.txt",
@@ -14,6 +14,16 @@
       "name": "pypinyin",
       "license": "MIT",
       "url": "https://github.com/mozillazg/python-pinyin"
+    },
+    {
+      "name": "rime-essay essay.txt",
+      "license": "LGPL-3.0",
+      "url": "https://github.com/rime/rime-essay"
+    },
+    {
+      "name": "OpenCC TSCharacters / TSPhrases",
+      "license": "Apache-2.0",
+      "url": "https://github.com/BYVoid/OpenCC"
     }
   ]
 }
