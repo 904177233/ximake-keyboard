@@ -77,7 +77,8 @@ env:
 jobs:
   build-unsigned-ipa:
     name: Build unsigned IPA (macOS)
-    runs-on: macos-14
+    # macos-14 在 2026-11 开始一启动就被取消（GitHub 在停用这个镜像），换到 macos-26
+    runs-on: macos-26
     timeout-minutes: 40
 
     steps:
