@@ -200,17 +200,27 @@ public final class PinyinEngine {
 
         // 还没打完的词（只在末尾）：nih -> 你好。
         // 末尾已经是完整的词就不补，否则 jintianhenmang 会变成「今天很忙完」，多出一个没打的字。
+        // 末尾能切成完整音节时也不补：huiba 是 hui'ba，不是没打完的 huibao。
+        // 这种词还会出现在候选列表里，只是不进整句。
         if position == count, count - start >= 2, !range.isEmpty, !tailHasExact,
+           !isCompleteSyllables(input[start..<count]),
            !hasBreak(query, after: start, before: count),
            let top = bestPrefixKey(range: range, depth: count - start, dictionary: dictionary),
            let entry = bestWord(key: top, dictionary: dictionary) {
+            // 没打的音节不算奖励，否则越长的词越占便宜
             let score = scoreWord(frequency: entry.frequency,
-                                  syllableCount: dictionary.syllableCount(key: top),
+                                  syllableCount: 1,
                                   text: entry.text) - Self.partialPenalty
             tiles.append(Tile(end: count, text: entry.text, key: dictionary.keyString(key: top),
                               score: score, syllables: nil, lastSyllable: nil, isLoose: true))
         }
         return tiles
+    }
+
+    /// 这段字母能不能切成完整的音节（嗯、呣这种不算）。
+    private func isCompleteSyllables(_ letters: ArraySlice<UInt8>) -> Bool {
+        guard let parts = PinyinSyllables.segment(String(decoding: letters, as: UTF8.self)) else { return false }
+        return !parts.contains { Self.unlikelySyllables.contains($0) }
     }
 
     private func hasBreak(_ query: IMEQuery, after start: Int, before end: Int) -> Bool {
@@ -306,7 +316,7 @@ public final class PinyinEngine {
             }
             if let best, let entry = bestWord(key: best, dictionary: dictionary) {
                 let score = scoreWord(frequency: entry.frequency,
-                                      syllableCount: dictionary.syllableCount(key: best),
+                                      syllableCount: 1,
                                       text: entry.text) - Self.partialPenalty
                 tiles.append(Tile(end: count, text: entry.text, key: dictionary.keyString(key: best),
                                   score: score, syllables: dictionary.syllables(key: best), lastSyllable: nil, isLoose: true))

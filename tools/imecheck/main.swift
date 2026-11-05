@@ -57,11 +57,12 @@ check("拼音分词显示", qwerty("woxihuanni").spelling == "wo'xi'huan'ni", qw
 
 print("拼音打完整时不多补字")
 for (input, expected) in [("nichifanlema", "你吃饭了吗"), ("jintianhenmang", "今天很忙"),
-                          ("zhegedongxihenhaoyong", "这个东西很好用"), ("meiguanxiwolaichuli", "没关系我来处理")] {
+                          ("zhegedongxihenhaoyong", "这个东西很好用"), ("meiguanxiwolaichuli", "没关系我来处理"),
+                          ("womenyiqikaihuiba", "我们一起开会吧")] {
     let got = qwerty(input).candidates.first?.text ?? ""
     check("\(input) 首选是\(expected)", got == expected, "得到「\(got)」")
 }
-for input in ["jintianhenmang", "womenmingtianzaijian", "zhegedongxihenhaoyong", "nichifanlema"] {
+for input in ["jintianhenmang", "womenmingtianzaijian", "zhegedongxihenhaoyong", "nichifanlema", "womenyiqikaihuiba"] {
     // 汉字数不能超过音节数：整句候选绝不能比打的拼音多字
     let syllableCount = PinyinSyllables.segment(input)?.count ?? input.count
     let got = qwerty(input).candidates.first?.text ?? ""
@@ -70,6 +71,10 @@ for input in ["jintianhenmang", "womenmingtianzaijian", "zhegedongxihenhaoyong",
 
 print("多音节词优先于单字")
 check("正常使用了", qwerty("zhengchangshiyongle").candidates.first?.text == "正常使用了", "\(texts(qwerty("zhengchangshiyongle")))")
+
+print("没打完的词还能出来")
+check("wom 有我们", texts(qwerty("wom"), 3).contains("我们"), "\(texts(qwerty("wom")))")
+check("woxih 首选我喜欢", qwerty("woxih").candidates.first?.text == "我喜欢", "\(texts(qwerty("woxih")))")
 
 print("打错字")
 let typo = typed("wozhem")
