@@ -177,7 +177,9 @@ public final class PinyinEngine {
             let depth = position - start
             range = dictionary.narrow(range, depth: depth, byte: input[position])
             position += 1
-            if range.isEmpty { break }
+            // 全拼对不上了（wb 不是任何拼音的开头），但简拼还能试：wbzd -> 我不知道、wcgl -> 我吃过了。
+            // 以前这里直接 break，多字母简拼一次都没试过，只能一个字母一个字地拼（我从个了）。
+            if range.isEmpty, position - start > 6 { break }
 
             let sub = Array(input[start..<position])
             let subString = String(decoding: sub, as: UTF8.self)
