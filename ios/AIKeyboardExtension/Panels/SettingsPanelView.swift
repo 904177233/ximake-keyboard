@@ -265,6 +265,7 @@ struct SettingsPanelView: View {
             row("键盘高度") {
                 segmented(KeyboardPrefs.Height.allCases.map { ($0.title, session.prefs.height == $0) }) { index in
                     session.updatePrefs { $0.height = KeyboardPrefs.Height.allCases[index] }
+                    session.showToast("收起键盘再打开后生效")
                 }
             }
             toggleRow("模糊音", isOn: session.prefs.fuzzyPinyin) { value in

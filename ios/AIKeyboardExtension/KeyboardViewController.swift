@@ -31,6 +31,10 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
     /// 正在布局回调里。这时候不能强制布局，否则会递归到栈溢出。
     private var isInLayoutPass = false
     private var isApplyingHeight = false
+    /// 这次弹出向系统要的高度。系统只在弹出时量一次，显示中再改它也不给，
+    /// 改了反而让键盘比系统给的地方高、下面被切掉。所以弹出前定好，显示中不动。
+    private var lockedHeight: CGFloat?
+    private var lockedLandscape: Bool?
     #if MOYU_SIM_CHECK
     private let simLabel = UILabel()
     private var simStarted = false
@@ -136,6 +140,11 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
         super.viewWillAppear(animated)
         syncTraits()
         session.activate()
+        // 读到最新的「低、标准、高」之后再定这次的高度
+        lockedHeight = nil
+        lockedHeight = contentHeight
+        lockedLandscape = session.isLandscape
+        applyHeight()
         feedback.prepare(level: session.prefs.haptics, sound: session.prefs.keySound)
     }
 
@@ -190,6 +199,12 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
         }
         session.setAppearance(dark: dark)
         session.setLandscape(traitCollection.verticalSizeClass == .compact)
+        // 转屏时系统会重新量，这时可以换高度
+        if let lockedLandscape, lockedLandscape != session.isLandscape {
+            lockedHeight = nil
+            lockedHeight = contentHeight
+            self.lockedLandscape = session.isLandscape
+        }
     }
 
     // MARK: - 布局
@@ -248,6 +263,9 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
             return simForcedHeight
         }
         #endif
+        if let lockedHeight {
+            return lockedHeight
+        }
         let metrics = nominalMetrics
         return metrics.topBarHeight + metrics.surfaceHeight
     }
@@ -426,45 +444,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
         simLabel.numberOfLines = 2
         view.addSubview(simLabel)
         let session = self.session
-        // 先试让系统改高度的几种写法，绿字里「给」变了就是有用
-        let setPriority: (UILayoutPriority) -> Void = { [weak self] priority in
-            guard let constraint = self?.heightConstraint else { return }
-            constraint.isActive = false
-            constraint.priority = priority
-            constraint.isActive = true
-        }
-        let force: (CGFloat) -> Void = { [weak self] height in
-            self?.simForcedHeight = height
-            self?.heightConstraint?.constant = height
-            self?.view.setNeedsLayout()
-            self?.view.layoutIfNeeded()
-        }
         let steps: [(String, () -> Void)] = [
-            ("基线 标准", { session.updatePrefs { $0.height = .standard } }),
-            ("基线 标准 再看", {}),
-            ("P0 999 要288", { force(288) }),
-            ("P2 selfSizing 要320", { [weak self] in
-                (self?.view as? UIInputView)?.allowsSelfSizing = true
-                (self?.inputView)?.allowsSelfSizing = true
-                force(320)
-            }),
-            ("P3 required 要340", { setPriority(.required); force(340) }),
-            ("P4 required 要261", { force(261) }),
-            ("P5 required 要400", { force(400) }),
-            ("P6 删约束再加 要300", { [weak self] in
-                guard let self, let old = self.heightConstraint else { return }
-                old.isActive = false
-                let fresh = self.view.heightAnchor.constraint(equalToConstant: 300)
-                fresh.priority = UILayoutPriority(999)
-                fresh.isActive = true
-                self.heightConstraint = fresh
-                force(300)
-            }),
-            ("P7 还原", { [weak self] in
-                self?.simForcedHeight = nil
-                (self?.inputView)?.allowsSelfSizing = false
-                session.updatePrefs { $0.height = .standard }
-            }),
             ("标准", { session.updatePrefs { $0.height = .standard }; session.setPage(.keys) }),
             ("高", { session.updatePrefs { $0.height = .tall }; session.setPage(.keys) }),
             ("低", { session.updatePrefs { $0.height = .low }; session.setPage(.keys) }),
