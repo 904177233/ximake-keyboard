@@ -31,7 +31,7 @@
   字符串池      拼音串和词文本
 
 用法
-  python tools/dict/build_binary.py          生成词库
+  python tools/dict/build_binary.py          生成词库和下一词表（next.tsv）
   python tools/dict/build_binary.py --eval   生成后用常见句子测一遍整句转换
 """
 from __future__ import annotations
@@ -55,6 +55,9 @@ JIEBA = HERE / ".cache" / "jieba_dict.txt"
 BASE_V1 = HERE / "source" / "base_dict_v1.tsv"
 EXTRA = HERE / "extra_words.tsv"
 CHAT_PRIORITY = OUT_DIR / "chat_priority.tsv"
+NEXT_WORDS = HERE / "next_words.tsv"
+#: 词频低于这个的词不拿来推「后半截」联想。
+COMPOUND_MIN_FREQ = 200
 
 DICT_VERSION = "3.0.0"
 GENERATED_DATE = "2026-11-05"
@@ -169,6 +172,42 @@ def load_chat_weights() -> dict[str, float]:
                 except ValueError:
                     pass
     return weights
+
+
+def load_next_words() -> dict[str, list[str]]:
+    table: dict[str, list[str]] = {}
+    for line in NEXT_WORDS.read_text(encoding="utf-8").splitlines():
+        if line.startswith("#") or "\t" not in line:
+            continue
+        head, rest = line.split("\t", 1)
+        table[head] = rest.split()
+    return table
+
+
+def write_next_words(builder: Builder, path: Path) -> int:
+    """手工表 + 从词库推出来的后半截（今 -> 天、年、晚），写成 next.tsv。"""
+    authored = load_next_words()
+    known = set()
+    weights: dict[str, Counter[str]] = defaultdict(Counter)
+    for (_key, _mask), words in builder.table.items():
+        for text, (freq, flags) in words.items():
+            if flags & (FLAG_EMOJI | FLAG_PUNCT | FLAG_ASCII) or not CJK.match(text):
+                continue
+            known.add(text)
+            if not 2 <= len(text) <= 4 or freq < COMPOUND_MIN_FREQ:
+                continue
+            for cut in range(1, len(text)):
+                # 后半截太长就不像「下一个词」了（今 -> 天天气）
+                if len(text) - cut <= 2:
+                    weights[text[:cut]][text[cut:]] += freq
+    lines = []
+    for head in sorted(set(authored) | {h for h in weights if len(h) == 1 or h in known}):
+        words = authored.get(head, [])
+        rest = [w for w, _ in weights[head].most_common(14) if w not in words][:10] if head in weights else []
+        if words or rest:
+            lines.append(f"{head}\t{' '.join(words)}\t{' '.join(rest)}")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    return len(lines)
 
 
 def collect() -> Builder:
@@ -344,7 +383,8 @@ def write_binary(builder: Builder, path: Path) -> dict:
 # 整句转换评测：算法和 Swift 内核（PinyinEngine.swift）保持一致
 # ---------------------------------------------------------------------------
 TILE_PENALTY = 14.0
-SYLLABLE_BONUS = 1.0
+SYLLABLE_BONUS = 2.0
+BIGRAM_BONUS = 3.0
 UNLIKELY_SINGLE = {"n", "m", "ng", "hm", "hng"}
 #: 整句最后一个字是这些音时，换成语气词。没有上下文模型时，这条规则最划算。
 ENDING_PARTICLES = {"ma": "吗", "ba": "吧", "ne": "呢", "a": "啊", "ya": "呀", "la": "啦", "le": "了"}
@@ -373,6 +413,7 @@ class Eval:
     def __init__(self, builder: Builder) -> None:
         self.by_key: dict[str, list[tuple[str, int, int, int]]] = defaultdict(list)
         self.init: dict[str, list[tuple[int, str, str]]] = defaultdict(list)
+        self.pairs = load_next_words()
         for (key, mask), words in builder.table.items():
             syllables = bin(mask).count("1") or 1
             for text, (freq, flags) in words.items():
@@ -396,11 +437,14 @@ class Eval:
             for j in range(i + 1, min(n, i + 24) + 1):
                 sub = query[i:j]
                 rows = self.by_key.get(sub)
-                if rows:
-                    text, freq, syllables, _ = rows[0]
-                    first = (segment(sub) or [sub])[0]
-                    extra = -20.0 if first in UNLIKELY_SINGLE else 0.0
-                    value = best[i] + math.log(freq + 1) - TILE_PENALTY + SYLLABLE_BONUS * (syllables - 1) + extra
+                if not rows:
+                    continue
+                first = (segment(sub) or [sub])[0]
+                extra = -20.0 if first in UNLIKELY_SINGLE else 0.0
+                previous = back[i][1] if back[i] else None
+                for text, freq, syllables, _ in rows[:8]:
+                    pair = BIGRAM_BONUS if previous and text in self.pairs.get(previous, ()) else 0.0
+                    value = best[i] + math.log(freq + 1) - TILE_PENALTY + SYLLABLE_BONUS * (syllables - 1) + extra + pair
                     if value > best[j]:
                         best[j] = value
                         back[j] = (i, text, sub)
@@ -450,6 +494,7 @@ def main() -> int:
     info = write_binary(builder, OUT_DIR / "moyu.dict")
     print(dict(builder.stats))
     print(info)
+    print("下一词表行数", write_next_words(builder, OUT_DIR / "next.tsv"))
 
     (OUT_DIR / "dict_meta.json").write_text(json.dumps({
         "version": DICT_VERSION,

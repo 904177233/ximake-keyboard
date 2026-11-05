@@ -50,7 +50,7 @@ enum ToolID: String, CaseIterable {
 /// 顶栏内容。
 enum TopBarContent: Equatable {
     case tools
-    case composing(selected: String, spelling: String, candidates: [String], rawIndex: Int?)
+    case composing(selected: String, spelling: String, candidates: [String], marks: [Int: String])
     case suggestions(words: [String], aiWords: [String])
     case hint(String)
 }
@@ -182,7 +182,7 @@ final class TopBarView: UIView {
         case .tools:
             showsTools = true
             showsKnob = true
-        case let .composing(selected, spelling, candidates, rawIndex):
+        case let .composing(selected, spelling, candidates, marks):
             showsExpand = true
             showsPreedit = true
             showsStrip = true
@@ -202,7 +202,7 @@ final class TopBarView: UIView {
             if changed {
                 layoutStrip(for: content)
                 strip.update(items: candidates.map { .init(text: $0, style: .candidate) },
-                             markFirst: true, rawIndex: rawIndex)
+                             markFirst: true, marks: marks)
             }
         case let .suggestions(words, aiWords):
             showsKnob = true
@@ -212,7 +212,7 @@ final class TopBarView: UIView {
                 layoutStrip(for: content)
                 let items = aiWords.map { CandidateStripView.Item(text: $0, style: .pill) }
                     + words.map { CandidateStripView.Item(text: $0, style: .plain) }
-                strip.update(items: items, markFirst: false, rawIndex: nil)
+                strip.update(items: items, markFirst: false, marks: [:])
             }
         case let .hint(text):
             hintLabel.text = text
@@ -323,8 +323,8 @@ final class CandidateStripView: UIScrollView {
     /// - Parameters:
     ///   - items: 要显示的词。
     ///   - markFirst: 是否标出首选。
-    ///   - rawIndex: 原文候选的下标，后面加「原样」小字。
-    func update(items: [Item], markFirst: Bool, rawIndex: Int?) {
+    ///   - marks: 候选后面的小字（原样、纠错），键是下标。
+    func update(items: [Item], markFirst: Bool, marks: [Int: String]) {
         ranges.removeAll(keepingCapacity: true)
         while labels.count < items.count {
             let label = UILabel()
@@ -353,8 +353,8 @@ final class CandidateStripView: UIScrollView {
             }
             let color = isFirst ? palette.accentText : palette.text
             let attributed = NSMutableAttributedString(string: item.text, attributes: [.font: font, .foregroundColor: color])
-            if index == rawIndex {
-                attributed.append(NSAttributedString(string: " 原样", attributes: [
+            if let mark = marks[index] {
+                attributed.append(NSAttributedString(string: " " + mark, attributes: [
                     .font: UIFont.systemFont(ofSize: 10), .foregroundColor: palette.secondary
                 ]))
             }

@@ -42,7 +42,7 @@ struct AIServicesView: View {
                                     .foregroundColor(model.snapshot.defaultTone == tone ? palette.onAccent.color : palette.text.color)
                                     .padding(.horizontal, 13)
                                     .frame(height: 34)
-                                    .background(model.snapshot.defaultTone == tone ? palette.accent.color : Color(uiColor: .secondarySystemBackground))
+                                    .background(model.snapshot.defaultTone == tone ? palette.accent.color : palette.surface.color)
                                     .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                             }
                             .buttonStyle(.plain)
@@ -170,7 +170,7 @@ struct ProviderEditorView: View {
                         .autocorrectionDisabled()
                         .lineLimit(2...5)
                         .padding(10)
-                        .background(Color(uiColor: .secondarySystemBackground))
+                        .background(palette.surface.color)
                         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                     SecondaryButton(title: isTesting ? "测试中…" : "测试") { test() }
@@ -198,6 +198,7 @@ struct ProviderEditorView: View {
                 .padding(20)
             }
             .scrollDismissesKeyboard(.interactively)
+            .background(palette.page.color.ignoresSafeArea())
             .navigationTitle(target.isNew ? "添加服务" : draft.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -254,7 +255,7 @@ struct ProviderEditorView: View {
                                 .foregroundColor(draft.model == name ? palette.onAccent.color : palette.text.color)
                                 .padding(.horizontal, 10)
                                 .frame(height: 28)
-                                .background(draft.model == name ? palette.accent.color : Color(uiColor: .secondarySystemBackground))
+                                .background(draft.model == name ? palette.accent.color : palette.surface.color)
                                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                         }
                         .buttonStyle(.plain)

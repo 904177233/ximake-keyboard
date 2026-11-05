@@ -1,257 +1,143 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""墨语 App 图标：一颗键帽，上面一滴墨。
+
+键帽代表输入法，墨滴对应名字，也和键盘里的 AI 圆钮、空格键上的小形象是同一个图案。
+配色用暖陶色系。图形尽量简单，桌面上缩到 60pt 也认得出来。
+
+输出 1024×1024 满幅方形、不透明（iOS 自己裁圆角，也不接受透明通道）。
+运行：python design/appicon/generate_icon.py
 """
-墨语（Moyu）App 图标生成器  v3
-================================
-输出：design/appicon/icon-1024.png（1024×1024 满幅方形，**不画圆角**：
-      iOS 在 SpringBoard 上自动裁切 superellipse 圆角，源图必须画满方形）
-
-设计概念：**一颗会说话的键帽（A keycap that talks）**
-  ┌─────────────────────────────┐
-  │  深色底 + 墨晕光             │
-  │      ╭──────────────╮  ✦    │   ← 右上 AI 星芒，压住键帽边角
-  │      │              │       │
-  │      │      墨      │       │   ← 键帽 = 输入法；「墨」= 中文书写
-  │      │              │       │
-  │      ╰───╮──────────╯       │
-  │          ╰─╮                │   ← 气泡尾巴 = 对话 / AI
-  └─────────────────────────────┘
-
-图层（由后至前）：
-  1. 深色底：#17171F → #09090E 垂直渐变
-  2. 墨晕：中心偏上的蓝紫径向光 #426ACC
-  3. 键帽 ∪ 气泡尾巴：**同一个 alpha mask** 一次性贴渐变 #FFFFFF → #D0D8E8，
-     外带落影 + 内侧 5px 白高光边（用 mask 减内缩形状得到边缘环）
-  4. 「墨」字：msyhbd 微软雅黑 Bold，深墨色 #13192D，柔和落影
-  5. AI 星芒：右上主星 + 左上/右下两颗小星，蓝渐变 #6AC6FF → #0A84FF
-  6. 顶部 46% 白色微高光（.ultraThinMaterial 平面化）+ 四角轻暗角
-
-安全区：可见主体外接 x∈[182,842]、y∈[182,940]，均在 iOS 图标 10% 安全边距内。
-依赖：Pillow（本机 11.1.0）
-运行：python generate_icon.py
-"""
-import os
 import math
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+import os
+
+from PIL import Image, ImageDraw, ImageFilter
 
 SIZE = 1024
-OUT_DIR = os.path.dirname(os.path.abspath(__file__))
+SCALE = 3
+S = SIZE * SCALE
+HERE = os.path.dirname(os.path.abspath(__file__))
+ASSET = os.path.join(HERE, "..", "..", "ios", "Resources", "Assets.xcassets", "AppIcon.appiconset", "AppIcon-1024.png")
 
-# ---------- 品牌配色（图标专用）----------
-BG_TOP = (23, 23, 31)          # #17171F
-BG_BOT = (9, 9, 14)            # #09090E
-GLOW = (66, 106, 204)          # 墨晕蓝
-TILE_TOP = (255, 255, 255)     # #FFFFFF
-TILE_BOT = (208, 216, 232)     # #D0D8E8
-INK = (19, 25, 45)             # #13192D
-ACCENT_A = (10, 132, 255)      # #0A84FF  ← tokens.json color.accent
-ACCENT_B = (106, 198, 255)     # #6AC6FF
-
-# ---------- 几何 ----------
-TILE = 660
-TILE_X0 = (SIZE - TILE) // 2       # 182
-TILE_Y0 = (SIZE - TILE) // 2       # 182
-TILE_R = 148                       # 148/660 ≈ 22.4%
-GLYPH_RATIO = 0.335                # 「墨」字号 = 1024 × 0.335 = 343px（约占键帽 52%）
-TAIL_W, TAIL_H, TAIL_ANGLE = 132, 118, 24
-
-FONT_CANDIDATES = [
-    r"C:\Windows\Fonts\msyhbd.ttc",
-    r"C:\Windows\Fonts\msyh.ttc",
-    r"C:\Windows\Fonts\simhei.ttf",
-    r"C:\Windows\Fonts\Dengb.ttf",
-    r"C:\Windows\Fonts\STSONG.TTF",
-]
+CLAY_TOP = (226, 139, 106)
+CLAY_BOTTOM = (193, 90, 56)
+CAP_TOP = (255, 252, 245)
+CAP_BOTTOM = (240, 233, 219)
+CAP_EDGE = (150, 66, 38)
+INK_TOP = (66, 58, 52)
+INK_BOTTOM = (28, 25, 23)
 
 
-# ---------- 工具 ----------
-def pick_font(px):
-    for p in FONT_CANDIDATES:
-        if os.path.exists(p):
-            try:
-                return ImageFont.truetype(p, px), p
-            except Exception:
-                continue
-    return ImageFont.load_default(), "<default>"
+def vertical_gradient(size, top, bottom):
+    width, height = size
+    column = Image.new("RGB", (1, height))
+    for y in range(height):
+        t = y / max(height - 1, 1)
+        column.putpixel((0, y), tuple(int(a + (b - a) * t) for a, b in zip(top, bottom)))
+    return column.resize((width, height))
 
 
-def vgrad(size, top, bottom):
-    w, h = size
-    img = Image.new("RGB", size)
-    d = ImageDraw.Draw(img)
-    for y in range(h):
-        t = y / max(1, h - 1)
-        d.line([(0, y), (w, y)],
-               fill=tuple(int(top[i] + (bottom[i] - top[i]) * t) for i in range(3)))
-    return img
+def squircle_mask(box, exponent=5.2):
+    """连续圆角（超椭圆和圆角矩形之间），比普通圆角更接近 iOS 的形状。"""
+    x0, y0, x1, y1 = box
+    width = x1 - x0
+    height = y1 - y0
+    half_w = width / 2
+    half_h = height / 2
+    points = []
+    for i in range(1440):
+        angle = i / 1440 * 2 * math.pi
+        cos, sin = math.cos(angle), math.sin(angle)
+        px = abs(cos) ** (2 / exponent) * half_w * (1 if cos >= 0 else -1)
+        py = abs(sin) ** (2 / exponent) * half_h * (1 if sin >= 0 else -1)
+        points.append((x0 + half_w + px, y0 + half_h + py))
+    mask = Image.new("L", (S, S), 0)
+    ImageDraw.Draw(mask).polygon(points, fill=255)
+    return mask
 
 
-def radial_glow(size, center, radius, color, max_alpha=150, power=2.0):
-    img = Image.new("RGBA", size, (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    cx, cy = center
-    r = radius
-    step = max(2, radius // 100)
-    while r > 0:
-        a = int(max_alpha * ((1.0 - r / radius) ** power))
-        if a > 0:
-            d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=color + (a,))
-        r -= step
-    return img.filter(ImageFilter.GaussianBlur(radius * 0.04))
-
-
-def sparkle_poly(cx, cy, r, spikes=4, thin=0.27):
-    """四角星多边形：长臂 r，短臂 r*thin（thin 0.27 让星形在小尺寸下也不过细）"""
-    pts, n = [], spikes * 2
-    for i in range(n):
-        ang = -math.pi / 2 + i * (2 * math.pi / n)
-        rr = r if i % 2 == 0 else r * thin
-        pts.append((cx + rr * math.cos(ang), cy + rr * math.sin(ang)))
-    return pts
-
-
-def build_body_mask():
-    """键帽 ∪ 气泡尾巴 —— 单一 alpha mask，保证无接缝"""
-    m = Image.new("L", (SIZE, SIZE), 0)
-    d = ImageDraw.Draw(m)
-    d.rounded_rectangle([TILE_X0, TILE_Y0, TILE_X0 + TILE, TILE_Y0 + TILE],
-                        radius=TILE_R, fill=255)
-    bx = TILE_X0 + 96
-    by = TILE_Y0 + TILE - 30
-    d.polygon([(bx, by),
-               (bx + TAIL_W, by - TAIL_ANGLE),
-               (bx + 26, by + TAIL_H)], fill=255)
-    # 磨圆尖角：模糊 + 阈值回二值
-    m = m.filter(ImageFilter.GaussianBlur(8))
-    m = m.point(lambda v: 255 if v > 128 else 0)
-    return m
-
-
-def composite_ring(base, mask, inset=5, alpha=232):
-    """在 mask 边缘画一圈 inset 像素宽的高光边"""
-    inner = Image.new("L", (SIZE, SIZE), 0)
-    ImageDraw.Draw(inner).rounded_rectangle(
-        [TILE_X0 + inset, TILE_Y0 + inset,
-         TILE_X0 + TILE - inset, TILE_Y0 + TILE - inset],
-        radius=max(0, TILE_R - inset), fill=255)
-    ring = Image.composite(mask, Image.new("L", (SIZE, SIZE), 0),
-                           Image.eval(inner, lambda v: 255 - v))
-    rim = Image.new("RGBA", (SIZE, SIZE), (255, 255, 255, 255))
-    rim.putalpha(ring.point(lambda v: alpha if v > 0 else 0))
-    return Image.alpha_composite(base, rim)
-
-
-def draw_star_blob(cx, cy, r, glow_alpha, blur):
-    """返回 (光晕层, 星形层)。星形带一圈深色描边，保证压在浅色键帽上也能分离。"""
-    m = Image.new("L", (SIZE, SIZE), 0)
-    ImageDraw.Draw(m).polygon(sparkle_poly(cx, cy, r), fill=255)
-    star = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
-    star.paste(vgrad((SIZE, SIZE), ACCENT_B, ACCENT_A).convert("RGBA"), (0, 0), m)
-    halo = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
-    halo.paste(Image.new("RGBA", (SIZE, SIZE), ACCENT_B + (glow_alpha,)), (0, 0), m)
-    halo = halo.filter(ImageFilter.GaussianBlur(blur))
-    return halo, star, m
-
-
-def star_with_rim(cx, cy, r, glow_alpha, blur, rim_px=5):
-    """星形 + 外发光 + 深色外描边（外描边 = 膨胀后的 mask 减原 mask）"""
-    halo, star, m = draw_star_blob(cx, cy, r, glow_alpha, blur)
-    grown = m.filter(ImageFilter.MaxFilter(rim_px * 2 + 1))
-    rim = Image.new("RGBA", (SIZE, SIZE), (6, 16, 38, 110))
-    rim.putalpha(Image.composite(
-        Image.new("L", (SIZE, SIZE), 110),
-        Image.new("L", (SIZE, SIZE), 0),
-        Image.composite(grown, Image.new("L", (SIZE, SIZE), 0),
-                        Image.eval(m, lambda v: 255 - v))))
-    return halo, rim, star
-
-
-# ---------- 主绘制 ----------
-def build():
-    S = SIZE
-    base = vgrad((S, S), BG_TOP, BG_BOT).convert("RGBA")
-
-    # 1) 墨晕
-    base = Image.alpha_composite(
-        base, radial_glow((S, S), (S * 0.50, S * 0.44), int(S * 0.68), GLOW, 170, 1.8))
-
-    # 2) 键帽 + 尾巴：单一 mask
-    mask = build_body_mask()
-
-    # 2a) 落影（mask 下移 22px、模糊）
-    shadow = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    shadow.paste(Image.new("RGBA", (S, S), (0, 0, 0, 190)), (0, 0), mask)
-    shadow = shadow.filter(ImageFilter.GaussianBlur(24))
-    shifted = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    shifted.paste(shadow, (0, 22))
-    base = Image.alpha_composite(base, shifted)
-
-    # 2b) 主体渐变
-    body = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    body.paste(vgrad((S, S), TILE_TOP, TILE_BOT).convert("RGB"), (0, 0), mask)
-    base = Image.alpha_composite(base, body)
-
-    # 2c) 内侧高光边
-    base = composite_ring(base, mask)
-
-    # 3) 「墨」字
-    px = int(S * GLYPH_RATIO)
-    f, font_path = pick_font(px)
-    glyph = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    dg = ImageDraw.Draw(glyph)
-    bb = dg.textbbox((0, 0), "墨", font=f)
-    gw, gh = bb[2] - bb[0], bb[3] - bb[1]
-    gx = (S - gw) / 2 - bb[0]
-    gy = (S * 0.470) - gh / 2 - bb[1]
-    # 落影
-    gsh = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    ImageDraw.Draw(gsh).text((gx + 4, gy + 9), "墨", font=f, fill=(26, 36, 66, 110))
-    base = Image.alpha_composite(base, gsh.filter(ImageFilter.GaussianBlur(11)))
-    dg.text((gx, gy), "墨", font=f, fill=INK + (255,))
-    base = Image.alpha_composite(base, glyph)
-
-    # 4) AI 星芒（收敛外发光 + 深色描边，保证在浅色键帽上有清晰剪影）
-    for cx, cy, r, ga, bl in [
-        (TILE_X0 + TILE - 22, TILE_Y0 + 30, 120, 175, 16),    # 主星
-        (TILE_X0 + TILE - 190, TILE_Y0 - 26, 40, 145, 9),     # 左上小星
-        (TILE_X0 + TILE + 16, TILE_Y0 + 214, 34, 135, 8),     # 右下小星
-    ]:
-        halo, rim, star = star_with_rim(cx, cy, r, ga, bl)
-        base = Image.alpha_composite(base, halo)
-        base = Image.alpha_composite(base, rim)
-        base = Image.alpha_composite(base, star)
-
-    # 5) 顶部 46% 高光
-    hl = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    dh = ImageDraw.Draw(hl)
-    for y in range(0, int(S * 0.46)):
-        t = 1 - (y / (S * 0.46))
-        dh.line([(0, y), (S, y)], fill=(255, 255, 255, int(20 * (t ** 1.7))))
-    base = Image.alpha_composite(base, hl)
-
-    # 6) 四角轻暗角
-    vig = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    dv = ImageDraw.Draw(vig)
-    for i in range(28):
-        a = int(32 * (1 - i / 28))
-        dv.rounded_rectangle([i, i, S - 1 - i, S - 1 - i],
-                             radius=max(0, 250 - i * 5), outline=(0, 0, 0, a), width=1)
-    base = Image.alpha_composite(base, vig.filter(ImageFilter.GaussianBlur(12)))
-
-    return base.convert("RGB"), font_path
+def drop_mask(center_x, tip_y, bottom_y, half_width):
+    """水滴：上尖下圆。整条轮廓是一条连续曲线，没有接缝。"""
+    height = bottom_y - tip_y
+    samples = []
+    for i in range(2400):
+        t = i / 2400 * 2 * math.pi
+        samples.append((math.sin(t) * math.sin(t / 2) ** 1.5, (1 - math.cos(t)) / 2))
+    widest = max(abs(x) for x, _ in samples)
+    points = [(center_x + x / widest * half_width, tip_y + y * height) for x, y in samples]
+    mask = Image.new("L", (S, S), 0)
+    ImageDraw.Draw(mask).polygon(points, fill=255)
+    return mask
 
 
 def main():
-    img, font_path = build()
-    assert img.size == (SIZE, SIZE), img.size
-    out = os.path.join(OUT_DIR, "icon-1024.png")
-    img.save(out, "PNG", optimize=True)
-    print(f"[ok] icon-1024.png  1024x1024  {os.path.getsize(out) / 1024:.1f} KB  "
-          f"font={os.path.basename(font_path)}")
-    for s in (180, 120, 80, 60, 40):
-        p = os.path.join(OUT_DIR, f"icon-{s}.png")
-        img.resize((s, s), Image.LANCZOS).save(p, "PNG", optimize=True)
-        print(f"[ok] icon-{s}.png")
+    canvas = vertical_gradient((S, S), CLAY_TOP, CLAY_BOTTOM).convert("RGB")
+
+    # 背景上一层很淡的顶光，让平面不至于死板
+    glow = Image.new("L", (S, S), 0)
+    draw = ImageDraw.Draw(glow)
+    draw.ellipse((-0.2 * S, -0.75 * S, 1.2 * S, 0.45 * S), fill=46)
+    glow = glow.filter(ImageFilter.GaussianBlur(0.09 * S))
+    canvas = Image.composite(Image.new("RGB", (S, S), (255, 236, 222)), canvas, glow)
+
+    # 键帽
+    margin = 0.205 * S
+    cap_box = (margin, margin - 0.012 * S, S - margin, S - margin - 0.024 * S)
+    depth = 0.030 * S
+
+    # 落在背景上的柔和阴影
+    shadow = squircle_mask((cap_box[0], cap_box[1] + depth * 2.4, cap_box[2], cap_box[3] + depth * 2.4))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(0.030 * S)).point(lambda v: int(v * 0.42))
+    canvas = Image.composite(Image.new("RGB", (S, S), (112, 44, 22)), canvas, shadow)
+
+    # 键帽的厚度（下沿）
+    edge = squircle_mask((cap_box[0], cap_box[1] + depth, cap_box[2], cap_box[3] + depth))
+    canvas = Image.composite(Image.new("RGB", (S, S), CAP_EDGE), canvas, edge)
+
+    # 键帽顶面
+    top = squircle_mask(cap_box)
+    canvas = Image.composite(vertical_gradient((S, S), CAP_TOP, CAP_BOTTOM), canvas, top)
+
+    # 墨滴
+    center_x = S / 2
+    cap_mid = (cap_box[1] + cap_box[3]) / 2
+    drop_height = 0.372 * S
+    tip_y = cap_mid - drop_height * 0.56
+    bottom_y = cap_mid + drop_height * 0.44
+    half_width = 0.128 * S
+    drop = drop_mask(center_x, tip_y, bottom_y, half_width)
+    canvas = Image.composite(vertical_gradient((S, S), INK_TOP, INK_BOTTOM), canvas, drop)
+
+    # 墨滴上的一笔高光，用主色，把两种颜色连起来
+    highlight = Image.new("L", (S, S), 0)
+    pen = ImageDraw.Draw(highlight)
+    arc_radius = half_width * 0.64
+    arc_x = center_x
+    arc_y = bottom_y - half_width * 0.98
+    stroke = 0.0165 * S
+    for i in range(241):
+        angle = math.radians(128 + 58 * i / 240)
+        x = arc_x + arc_radius * math.cos(angle)
+        y = arc_y + arc_radius * math.sin(angle)
+        pen.ellipse((x - stroke / 2, y - stroke / 2, x + stroke / 2, y + stroke / 2), fill=255)
+    canvas = Image.composite(Image.new("RGB", (S, S), (233, 150, 116)), canvas, highlight)
+
+    icon = canvas.resize((SIZE, SIZE), Image.LANCZOS).convert("RGB")
+    icon.save(os.path.join(HERE, "icon-1024.png"))
+    icon.save(os.path.normpath(ASSET))
+    for size in (180, 120, 80, 60, 40):
+        icon.resize((size, size), Image.LANCZOS).save(os.path.join(HERE, f"icon-{size}.png"))
+
+    # 小尺寸预览，核对缩到桌面大小还认不认得出来
+    sheet = Image.new("RGB", (560, 200), (242, 242, 245))
+    x = 20
+    for size in (180, 120, 80, 60, 40):
+        tile = icon.resize((size, size), Image.LANCZOS)
+        mask = Image.new("L", (size * 4, size * 4), 0)
+        ImageDraw.Draw(mask).rounded_rectangle((0, 0, size * 4, size * 4), radius=int(size * 4 * 0.225), fill=255)
+        sheet.paste(tile, (x, 10), mask.resize((size, size), Image.LANCZOS))
+        x += size + 14
+    sheet.save(os.path.join(os.environ.get("MOYU_SCRATCH", HERE), "icon_preview.png"))
 
 
 if __name__ == "__main__":

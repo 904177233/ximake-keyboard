@@ -266,10 +266,18 @@ final class KeyboardSession: ObservableObject {
     var topBarContent: TopBarContent {
         if isComposing {
             let cells = conversion.candidates.prefix(40)
+            var marks: [Int: String] = [:]
+            for (index, cell) in cells.enumerated() {
+                if cell.kind == .raw {
+                    marks[index] = "原样"
+                } else if cell.kind == .corrected {
+                    marks[index] = "纠错"
+                }
+            }
             return .composing(selected: selected.map { $0.text }.joined(),
                               spelling: conversion.spelling,
                               candidates: cells.map { $0.text },
-                              rawIndex: cells.firstIndex { $0.kind == .raw })
+                              marks: marks)
         }
         if page == .chat {
             return .hint("这里打的字只发给 AI，不会进聊天框")
@@ -615,7 +623,7 @@ final class KeyboardSession: ObservableObject {
             showingTools = true
             return
         }
-        predictions = kit.engine.predictions(after: text, limit: 10)
+        predictions = kit.engine.predictions(after: text, limit: 14)
         aiSuggestions = []
         showingTools = predictions.isEmpty
         suggest.schedule()
@@ -815,7 +823,7 @@ final class KeyboardSession: ObservableObject {
             return
         }
         guard KMVoiceInput.shared.isAuthorized else {
-            showToast("先到墨语 App 里允许麦克风和语音识别")
+            showToast("先到墨语 App 的「键盘」页允许麦克风和语音识别")
             return
         }
         setPage(.voice)

@@ -166,7 +166,7 @@ public final class KMVoiceInput: ObservableObject {
 
         guard isAuthorized else {
             state = .failed(
-                reason: "请先打开「墨语」App › 设置 › 语音输入，允许麦克风与语音识别，再回到键盘使用",
+                reason: "请先打开墨语 App 的「键盘」页，允许麦克风和语音识别，再回到键盘使用",
                 isPlatformUnsupported: false
             )
             return
@@ -214,63 +214,77 @@ public final class KMVoiceInput: ObservableObject {
     // MARK: 录音
 
     /// 配置音频会话并开始录音 + 识别。
+    ///
+    /// 键盘扩展里录音经常在启动音频单元这一步被系统拒绝（错误码 2003329396，kAUStartIO）。
+    /// 哪种会话配置能过和系统版本有关，所以逐个试，全都不行才报错。
     private func beginRecording() {
-        do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.record, mode: .measurement, options: [.duckOthers])
-            try session.setActive(true, options: [])
-        } catch {
-            state = .failed(
-                reason: "无法启动麦克风（键盘扩展内常被限制）。请到宿主 App 里使用语音输入",
-                isPlatformUnsupported: false
-            )
-            return
-        }
-
         guard let recognizer else {
             state = .failed(reason: "语音识别不可用", isPlatformUnsupported: true)
             return
         }
+        let attempts: [(AVAudioSession.Category, AVAudioSession.Mode, AVAudioSession.CategoryOptions)] = [
+            (.record, .measurement, [.duckOthers]),
+            (.playAndRecord, .default, [.mixWithOthers, .allowBluetooth]),
+            (.record, .default, [.mixWithOthers]),
+            (.playAndRecord, .voiceChat, [.allowBluetooth])
+        ]
+        var lastError: Error?
+        for attempt in attempts {
+            let session = AVAudioSession.sharedInstance()
+            do {
+                try session.setCategory(attempt.0, mode: attempt.1, options: attempt.2)
+                try session.setActive(true, options: [])
+            } catch {
+                lastError = error
+                continue
+            }
 
-        let request = SFSpeechAudioBufferRecognitionRequest()
-        request.shouldReportPartialResults = true
-        // 端侧识别优先：键盘扩展网络受限，且端侧更快更省流量。
-        if recognizer.supportsOnDeviceRecognition {
-            request.requiresOnDeviceRecognition = true
-        }
-        recognitionRequest = request
+            let engine = AVAudioEngine()
+            let inputNode = engine.inputNode
+            let format = inputNode.outputFormat(forBus: 0)
+            guard format.sampleRate > 0, format.channelCount > 0 else { continue }
 
-        let engine = AVAudioEngine()
-        audioEngine = engine
-        let inputNode = engine.inputNode
-        let format = inputNode.outputFormat(forBus: 0)
-        // 缓冲区 1024 帧（约 20ms）：既能算 RMS 又不至于太频繁。
-        // 注意：回调在音频线程，只捕获局部 `request`，不碰 @MainActor 状态。
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
-            request.append(buffer)
-            let level = Self.normalizedLevel(from: buffer)
-            Task { @MainActor [weak self] in self?.updateLevel(level) }
-        }
+            let request = SFSpeechAudioBufferRecognitionRequest()
+            request.shouldReportPartialResults = true
+            // 端侧识别优先：键盘扩展网络受限，且端侧更快更省流量。
+            if recognizer.supportsOnDeviceRecognition {
+                request.requiresOnDeviceRecognition = true
+            }
+            // 回调在音频线程，只捕获局部 `request`，不碰 @MainActor 状态。
+            inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
+                request.append(buffer)
+                let level = Self.normalizedLevel(from: buffer)
+                Task { @MainActor [weak self] in self?.updateLevel(level) }
+            }
+            do {
+                engine.prepare()
+                try engine.start()
+            } catch {
+                lastError = error
+                inputNode.removeTap(onBus: 0)
+                engine.stop()
+                continue
+            }
 
-        recognizer.recognitionTask(with: request) { [weak self] result, error in
-            Task { @MainActor [weak self] in self?.handleRecognition(result: result, error: error) }
-        }
-
-        do {
-            engine.prepare()
-            try engine.start()
-        } catch {
-            stopEngine()
-            state = .failed(reason: "麦克风启动失败：\(error.localizedDescription)",
-                            isPlatformUnsupported: false)
+            audioEngine = engine
+            recognitionRequest = request
+            recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
+                Task { @MainActor [weak self] in self?.handleRecognition(result: result, error: error) }
+            }
+            startedAt = Date()
+            partialText = ""
+            state = .recording(level: 0, elapsed: 0)
+            startTicking()
+            scheduleAutoStop()
             return
         }
 
-        startedAt = Date()
-        partialText = ""
-        state = .recording(level: 0, elapsed: 0)
-        startTicking()
-        scheduleAutoStop()
+        try? AVAudioSession.sharedInstance().setActive(false, options: [])
+        let code = (lastError as NSError?).map { "（错误码 \($0.code)）" } ?? ""
+        state = .failed(
+            reason: "系统不让键盘录音\(code)。可以到墨语 App 的「键盘」页打开「说话转文字」，说完自动复制，回来粘贴。",
+            isPlatformUnsupported: false
+        )
     }
 
     /// 停止音频引擎并释放麦克风。

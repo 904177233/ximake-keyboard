@@ -44,7 +44,7 @@ struct StartView: View {
                     .lineLimit(3...6)
                     .focused($trialFocused)
                     .padding(12)
-                    .background(Color(uiColor: .secondarySystemBackground))
+                    .background(palette.surface.color)
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                 SectionLabel(text: "这台手机")
@@ -79,7 +79,7 @@ struct StartView: View {
         HStack(alignment: .top, spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(isDone ? palette.accent.color : Color(uiColor: .secondarySystemBackground))
+                    .fill(isDone ? palette.accent.color : palette.surface.color)
                     .frame(width: 24, height: 24)
                 if isDone {
                     Image(systemName: "checkmark")

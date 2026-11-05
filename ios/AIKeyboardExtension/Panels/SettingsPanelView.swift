@@ -278,8 +278,10 @@ struct SettingsPanelView: View {
                 _ = FuzzyPinyinSettings.shared.setEnabled(value)
                 session.updatePrefs { $0.fuzzyPinyin = value }
             }
-            toggleRow("按键震动", isOn: session.prefs.haptics) { value in
-                session.updatePrefs { $0.haptics = value }
+            row("按键震动") {
+                segmented(KeyboardPrefs.HapticLevel.allCases.map { ($0.title, session.prefs.haptics == $0) }) { index in
+                    session.updatePrefs { $0.haptics = KeyboardPrefs.HapticLevel.allCases[index] }
+                }
             }
             toggleRow("按键声音", isOn: session.prefs.keySound) { value in
                 session.updatePrefs { $0.keySound = value }

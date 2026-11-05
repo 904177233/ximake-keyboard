@@ -20,6 +20,7 @@
 		401F57FDCBFD4E649E0DE63B /* IMECandidate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA65D00DC7F8200B400AA39F /* IMECandidate.swift */; };
 		D6ADE358CC38EA41FFFE888D /* IMEKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C1E2A3977B2545E4DC14E89 /* IMEKit.swift */; };
 		B380B2994F3D2F46F10D27B4 /* MoyuDictionary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FB2A125537A2058BD97E8CB /* MoyuDictionary.swift */; };
+		D64158ADD508F943176BA94B /* NextWordIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5385637445D4B0A099B2DE1 /* NextWordIndex.swift */; };
 		0B6B1315A6645668892DF49F /* PhraseLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28ADCD520AD33B6A9BF52586 /* PhraseLibrary.swift */; };
 		8E70D64FAEF71136C2A23418 /* PhraseSuggestion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1FF3A4955FF727E7D4B841 /* PhraseSuggestion.swift */; };
 		DE5A7C6ADB27BC3A17E70DEC /* PinyinEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D4E36CE045EC674511C8771 /* PinyinEngine.swift */; };
@@ -60,6 +61,7 @@
 		FF26266B8EDFC2E2EE34D46F /* SharedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 903ED970CC68D8E8C8A01350 /* SharedStore.swift */; };
 		BBB9BFEB6FCEE6733CA20980 /* SharedVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8E83541305D87C4BF301F8 /* SharedVault.swift */; };
 		2303027B037D55C407FA540D /* MoyuTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 349ED2582CE3A72240AE3E19 /* MoyuTheme.swift */; };
+		E726538021D8A35EEA67F5B3 /* KMVoiceInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BD466DEEFA3C32C61A3CF41 /* KMVoiceInput.swift */; };
 		5446F8F194DB47A83CC8DFDD /* AIPanelModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD6720E37C29F9B7322830AC /* AIPanelModel.swift */; };
 		85F8D037E1C0B4F5E8DDE522 /* ChatModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5716BEA91985B2AAED6FD94 /* ChatModel.swift */; };
 		52602BCF8F9671A5C924DFA3 /* SuggestEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D3E12D9F7ECCBEC2294C1D /* SuggestEngine.swift */; };
@@ -74,7 +76,6 @@
 		62D64240B2DA779BEAEF912D /* PanelRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6C60E76FF8724B3C919B29D /* PanelRootView.swift */; };
 		8E45630282DD93734E0DBA0E /* SettingsPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0645590BEA5C5ECBC6AB296E /* SettingsPanelView.swift */; };
 		07B639B4FA2A239FE72A8059 /* SymbolPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DB25E8AF940AE743C339B63 /* SymbolPanelView.swift */; };
-		982AC21B1690930E849C3788 /* KMVoiceInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = F92FCD603620265B50A40A9D /* KMVoiceInput.swift */; };
 		7E7ACB7EEB03ED7ABBD67DC8 /* AISuggestionPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0072B30A6D8C1B911E482BEF /* AISuggestionPrompt.swift */; };
 		2648174532A42FC94FECE735 /* ContextualSeedTemplates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9939316CA31AB3076553567F /* ContextualSeedTemplates.swift */; };
 		F8E8C4B0FEFCFBC236229136 /* ContextualSuggestion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80072FDA1FC064C72F38FC69 /* ContextualSuggestion.swift */; };
@@ -82,6 +83,7 @@
 		2779111CE1F0169FAB03EAC2 /* IMECandidate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA65D00DC7F8200B400AA39F /* IMECandidate.swift */; };
 		FF60CB0A36708D0082F0355D /* IMEKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C1E2A3977B2545E4DC14E89 /* IMEKit.swift */; };
 		F3D6D5B10B88886813F43C4A /* MoyuDictionary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FB2A125537A2058BD97E8CB /* MoyuDictionary.swift */; };
+		D9E5F5F4A1002EA75BBBA6D3 /* NextWordIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5385637445D4B0A099B2DE1 /* NextWordIndex.swift */; };
 		27E30A9408A3740478EECD3D /* PhraseLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28ADCD520AD33B6A9BF52586 /* PhraseLibrary.swift */; };
 		8AC449D978406F97ED9F6585 /* PhraseSuggestion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1FF3A4955FF727E7D4B841 /* PhraseSuggestion.swift */; };
 		B1212008B6DF4E85EB63C0FE /* PinyinEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D4E36CE045EC674511C8771 /* PinyinEngine.swift */; };
@@ -122,6 +124,7 @@
 		5D8D8CF5A75BBB5F67CE775C /* SharedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 903ED970CC68D8E8C8A01350 /* SharedStore.swift */; };
 		40AE84C659C09706AA4511A9 /* SharedVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8E83541305D87C4BF301F8 /* SharedVault.swift */; };
 		9F15F8CDB5CBD8D72EE430DA /* MoyuTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 349ED2582CE3A72240AE3E19 /* MoyuTheme.swift */; };
+		AC6570F2705CDEE3AEE3C0CB /* KMVoiceInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BD466DEEFA3C32C61A3CF41 /* KMVoiceInput.swift */; };
 		A7205DC885FD1A2B433B015E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2B8A8F20CB99CE391C782335 /* Assets.xcassets */; };
 		6D5418F5E2911D76ED1E1560 /* dict in Resources */ = {isa = PBXBuildFile; fileRef = BCF1297046D655F5D5CD1AD4 /* dict */; };
 		A78CF4230E5C4A9B871ABA77 /* dict in Resources */ = {isa = PBXBuildFile; fileRef = BCF1297046D655F5D5CD1AD4 /* dict */; };
@@ -173,7 +176,6 @@
 		C6C60E76FF8724B3C919B29D /* PanelRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Panels/PanelRootView.swift; sourceTree = SOURCE_ROOT; };
 		0645590BEA5C5ECBC6AB296E /* SettingsPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Panels/SettingsPanelView.swift; sourceTree = SOURCE_ROOT; };
 		3DB25E8AF940AE743C339B63 /* SymbolPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Panels/SymbolPanelView.swift; sourceTree = SOURCE_ROOT; };
-		F92FCD603620265B50A40A9D /* KMVoiceInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Voice/KMVoiceInput.swift; sourceTree = SOURCE_ROOT; };
 		5BF8D3C6D71553C5C1922FAB /* AIKeyboard.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Config/AIKeyboard.entitlements; sourceTree = SOURCE_ROOT; };
 		9B6DAD6C00AB87E499BAFDDE /* AIKeyboard.entitlements.appgroup.sample */ = {isa = PBXFileReference; lastKnownFileType = text; path = Config/AIKeyboard.entitlements.appgroup.sample; sourceTree = SOURCE_ROOT; };
 		3E134536DBA8DB36D0956383 /* AIKeyboardExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Config/AIKeyboardExtension.entitlements; sourceTree = SOURCE_ROOT; };
@@ -192,6 +194,7 @@
 		AA65D00DC7F8200B400AA39F /* IMECandidate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/IMECandidate.swift; sourceTree = SOURCE_ROOT; };
 		9C1E2A3977B2545E4DC14E89 /* IMEKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/IMEKit.swift; sourceTree = SOURCE_ROOT; };
 		2FB2A125537A2058BD97E8CB /* MoyuDictionary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/MoyuDictionary.swift; sourceTree = SOURCE_ROOT; };
+		C5385637445D4B0A099B2DE1 /* NextWordIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/NextWordIndex.swift; sourceTree = SOURCE_ROOT; };
 		28ADCD520AD33B6A9BF52586 /* PhraseLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/PhraseLibrary.swift; sourceTree = SOURCE_ROOT; };
 		2F1FF3A4955FF727E7D4B841 /* PhraseSuggestion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/PhraseSuggestion.swift; sourceTree = SOURCE_ROOT; };
 		3D4E36CE045EC674511C8771 /* PinyinEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/PinyinEngine.swift; sourceTree = SOURCE_ROOT; };
@@ -232,6 +235,7 @@
 		903ED970CC68D8E8C8A01350 /* SharedStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/Storage/SharedStore.swift; sourceTree = SOURCE_ROOT; };
 		5E8E83541305D87C4BF301F8 /* SharedVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/Storage/SharedVault.swift; sourceTree = SOURCE_ROOT; };
 		349ED2582CE3A72240AE3E19 /* MoyuTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/Theme/MoyuTheme.swift; sourceTree = SOURCE_ROOT; };
+		1BD466DEEFA3C32C61A3CF41 /* KMVoiceInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/Voice/KMVoiceInput.swift; sourceTree = SOURCE_ROOT; };
 		BCF1297046D655F5D5CD1AD4 /* dict */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Shared/dict; sourceTree = SOURCE_ROOT; };
 		07EBCCD66DCD2255A284303C /* AIKeyboard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AIKeyboard.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		37A168A98711B8B6B0ECAE41 /* AIKeyboardExtension.appex */ = {isa = PBXFileReference; explicitFileType = wrapper.app-extension; includeInIndex = 0; path = AIKeyboardExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -293,7 +297,6 @@
 				37FD94DA941DF715FB52DD24 /* Core */,
 				87C4012AD090DBD3DF50269D /* Keys */,
 				22455737867BB316E566044C /* Panels */,
-				963367485E2D1C36D28E8112 /* Voice */,
 			);
 			name = AIKeyboardExtension;
 			sourceTree = "<group>";
@@ -346,14 +349,6 @@
 			name = Panels;
 			sourceTree = "<group>";
 		};
-		963367485E2D1C36D28E8112 /* Voice */ = {
-			isa = PBXGroup;
-			children = (
-				F92FCD603620265B50A40A9D /* KMVoiceInput.swift */,
-			);
-			name = Voice;
-			sourceTree = "<group>";
-		};
 		078A189BB887EAA7C94E5E4E /* Config */ = {
 			isa = PBXGroup;
 			children = (
@@ -389,6 +384,7 @@
 				A9B437B0AF3C99E44819EC27 /* Prompts */,
 				8115E203EAF8CAB71461FE79 /* Storage */,
 				07B221469594EDF080C1A6AD /* Theme */,
+				1A8C43E1AD78B1D3617A02BC /* Voice */,
 			);
 			name = Shared;
 			sourceTree = "<group>";
@@ -403,6 +399,7 @@
 				AA65D00DC7F8200B400AA39F /* IMECandidate.swift */,
 				9C1E2A3977B2545E4DC14E89 /* IMEKit.swift */,
 				2FB2A125537A2058BD97E8CB /* MoyuDictionary.swift */,
+				C5385637445D4B0A099B2DE1 /* NextWordIndex.swift */,
 				28ADCD520AD33B6A9BF52586 /* PhraseLibrary.swift */,
 				2F1FF3A4955FF727E7D4B841 /* PhraseSuggestion.swift */,
 				3D4E36CE045EC674511C8771 /* PinyinEngine.swift */,
@@ -480,6 +477,14 @@
 				349ED2582CE3A72240AE3E19 /* MoyuTheme.swift */,
 			);
 			name = Theme;
+			sourceTree = "<group>";
+		};
+		1A8C43E1AD78B1D3617A02BC /* Voice */ = {
+			isa = PBXGroup;
+			children = (
+				1BD466DEEFA3C32C61A3CF41 /* KMVoiceInput.swift */,
+			);
+			name = Voice;
 			sourceTree = "<group>";
 		};
 		C5A4D1D651DB729DE38463FD /* Products */ = {
@@ -620,6 +625,7 @@
 				401F57FDCBFD4E649E0DE63B /* IMECandidate.swift in Sources */,
 				D6ADE358CC38EA41FFFE888D /* IMEKit.swift in Sources */,
 				B380B2994F3D2F46F10D27B4 /* MoyuDictionary.swift in Sources */,
+				D64158ADD508F943176BA94B /* NextWordIndex.swift in Sources */,
 				0B6B1315A6645668892DF49F /* PhraseLibrary.swift in Sources */,
 				8E70D64FAEF71136C2A23418 /* PhraseSuggestion.swift in Sources */,
 				DE5A7C6ADB27BC3A17E70DEC /* PinyinEngine.swift in Sources */,
@@ -660,6 +666,7 @@
 				FF26266B8EDFC2E2EE34D46F /* SharedStore.swift in Sources */,
 				BBB9BFEB6FCEE6733CA20980 /* SharedVault.swift in Sources */,
 				2303027B037D55C407FA540D /* MoyuTheme.swift in Sources */,
+				E726538021D8A35EEA67F5B3 /* KMVoiceInput.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -681,7 +688,6 @@
 				62D64240B2DA779BEAEF912D /* PanelRootView.swift in Sources */,
 				8E45630282DD93734E0DBA0E /* SettingsPanelView.swift in Sources */,
 				07B639B4FA2A239FE72A8059 /* SymbolPanelView.swift in Sources */,
-				982AC21B1690930E849C3788 /* KMVoiceInput.swift in Sources */,
 				7E7ACB7EEB03ED7ABBD67DC8 /* AISuggestionPrompt.swift in Sources */,
 				2648174532A42FC94FECE735 /* ContextualSeedTemplates.swift in Sources */,
 				F8E8C4B0FEFCFBC236229136 /* ContextualSuggestion.swift in Sources */,
@@ -689,6 +695,7 @@
 				2779111CE1F0169FAB03EAC2 /* IMECandidate.swift in Sources */,
 				FF60CB0A36708D0082F0355D /* IMEKit.swift in Sources */,
 				F3D6D5B10B88886813F43C4A /* MoyuDictionary.swift in Sources */,
+				D9E5F5F4A1002EA75BBBA6D3 /* NextWordIndex.swift in Sources */,
 				27E30A9408A3740478EECD3D /* PhraseLibrary.swift in Sources */,
 				8AC449D978406F97ED9F6585 /* PhraseSuggestion.swift in Sources */,
 				B1212008B6DF4E85EB63C0FE /* PinyinEngine.swift in Sources */,
@@ -729,6 +736,7 @@
 				5D8D8CF5A75BBB5F67CE775C /* SharedStore.swift in Sources */,
 				40AE84C659C09706AA4511A9 /* SharedVault.swift in Sources */,
 				9F15F8CDB5CBD8D72EE430DA /* MoyuTheme.swift in Sources */,
+				AC6570F2705CDEE3AEE3C0CB /* KMVoiceInput.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

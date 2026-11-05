@@ -66,7 +66,7 @@ final class AIPanelModel: ObservableObject {
     }
 
     static let tones = ["自然", "简洁", "礼貌", "正式", "热情", "幽默"]
-    static let replyTones = ["自然", "礼貌", "幽默", "婉拒"]
+    static let replyTones = ["自然", "答应", "婉拒", "追问", "安慰", "幽默", "礼貌"]
     static let languages = ["英文", "中文", "日语", "韩语", "法语"]
 
     @Published private(set) var feature: AIPanelFeature = .polish
@@ -83,6 +83,8 @@ final class AIPanelModel: ObservableObject {
     private var task: Task<Void, Never>?
     private var progressTask: Task<Void, Never>?
     private var imageData: Data?
+    /// 「重写」「换一批」时不要和这些重复。
+    private var avoidTexts: [String] = []
 
     /// 替换原文要删掉多少。
     private var sourceBeforeCount = 0
@@ -101,6 +103,7 @@ final class AIPanelModel: ObservableObject {
         cancel()
         self.feature = feature
         tone = session.snapshot.defaultTone
+        normalizeTone()
         sourceIsClipboard = false
         captureSource()
         if feature == .translate {
@@ -120,10 +123,16 @@ final class AIPanelModel: ObservableObject {
         if feature == .translate {
             targetLanguage = Self.containsChinese(source) ? "英文" : "中文"
         }
-        if feature == .reply, tone == "简洁" || tone == "正式" || tone == "热情" {
+        normalizeTone()
+        run()
+    }
+
+    /// 回复和润色的语气选项不同，切页签时选项里没有当前语气就回到「自然」。
+    private func normalizeTone() {
+        let options = feature == .reply ? Self.replyTones : Self.tones
+        if !options.contains(tone) {
             tone = "自然"
         }
-        run()
     }
 
     func setTone(_ value: String) {
@@ -181,9 +190,16 @@ final class AIPanelModel: ObservableObject {
 
     // MARK: - 请求
 
+    /// 再来一次，并且要求和刚才的结果不一样。
+    func regenerate() {
+        let previous = feature == .reply ? replies : (output.isEmpty ? [] : [output])
+        run(avoiding: previous)
+    }
+
     /// 发起请求（打开、切换语气、重写都走这里）。
-    func run() {
+    func run(avoiding previous: [String] = []) {
         cancel()
+        avoidTexts = previous
         output = ""
         replies = []
         image = nil
@@ -220,12 +236,18 @@ final class AIPanelModel: ObservableObject {
             return
         }
         let template = PromptLibrary.defaultTemplate(for: feature.feature) ?? BuiltInPrompts.custom
-        let request = PromptLibrary.makeRequest(template,
+        var request = PromptLibrary.makeRequest(template,
                                                 text: source,
                                                 context: "",
                                                 tone: tone,
                                                 targetLanguage: targetLanguage,
                                                 replyCount: max(snapshot.replyCount, 1))
+        if let last = request.messages.indices.last, let extra = extraInstruction() {
+            request.messages[last].content += "\n\n" + extra
+        }
+        if !avoidTexts.isEmpty {
+            request.temperature = 0.95
+        }
         let client = AIClientFactory.makeLLM(config: provider, apiKey: apiKey)
         phase = .waiting("正在想…")
 
@@ -251,6 +273,39 @@ final class AIPanelModel: ObservableObject {
                 self.fail(error)
             }
         }
+    }
+
+    /// 语气和「别重复」的要求。内置模板里没有语气这一项，要在这里补上，否则切语气结果不会变。
+    private func extraInstruction() -> String? {
+        var parts: [String] = []
+        if feature == .reply {
+            let descriptions = [
+                "答应": "全部是爽快答应对方，说法各不相同",
+                "婉拒": "全部是委婉拒绝对方，理由各不相同，不伤感情",
+                "追问": "全部是追问细节，问的角度各不相同",
+                "安慰": "全部是关心和安慰对方，语气温柔",
+                "幽默": "全部幽默俏皮，让人想笑",
+                "礼貌": "全部客气有礼貌"
+            ]
+            if let description = descriptions[tone] {
+                parts.append("这次的要求（优先于上面说的立场要有区分）：\(description)。")
+            }
+        } else if feature == .polish || feature == .expand {
+            let descriptions = [
+                "简洁": "简短利落，能省的字都省掉",
+                "礼貌": "客气有礼貌，可以用「您」「请」",
+                "正式": "正式、书面，适合工作场合",
+                "热情": "热情有活力",
+                "幽默": "幽默俏皮，让人想笑"
+            ]
+            if let description = descriptions[tone] {
+                parts.append("语气要求：\(description)。")
+            }
+        }
+        if !avoidTexts.isEmpty {
+            parts.append("不要和下面这些重复，换完全不同的说法：" + avoidTexts.joined(separator: " / "))
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: "\n")
     }
 
     private func finishText(_ text: String) {

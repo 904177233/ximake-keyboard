@@ -11,7 +11,7 @@ import UIKit
 
 /// 主题。
 public enum MoyuThemeID: String, CaseIterable, Codable, Sendable, Identifiable {
-    case ink, coral, indigo, violet, sky, pine
+    case coral, ink, indigo, violet, sky, pine
 
     public var id: String { rawValue }
 
@@ -19,7 +19,7 @@ public enum MoyuThemeID: String, CaseIterable, Codable, Sendable, Identifiable {
     public var title: String {
         switch self {
         case .ink: return "墨黑"
-        case .coral: return "珊瑚"
+        case .coral: return "Claude 橙"
         case .indigo: return "靛蓝"
         case .violet: return "星紫"
         case .sky: return "天青"
@@ -66,6 +66,10 @@ public struct MoyuPalette {
     public let line: UIColor
     /// 键帽下沿。
     public let edge: UIColor
+    /// App 页面底色。
+    public let page: UIColor
+    /// App 里输入框、按钮的底色。
+    public let surface: UIColor
 
     /// 计算颜色。
     /// - Parameters:
@@ -74,6 +78,41 @@ public struct MoyuPalette {
     public init(theme: MoyuThemeID, dark: Bool) {
         let base = UIColor(hex: theme.accentHex)
         let isInk = theme == .ink
+        if theme == .coral {
+            // Claude 的配色：暖灰底加陶土色，中性色都偏暖，不从主色混出来
+            accent = UIColor(hex: 0xD97757)
+            onAccent = .white
+            if dark {
+                accentText = UIColor(hex: 0xE8916F)
+                canvas = UIColor(hex: 0x262624)
+                function = UIColor(hex: 0x30302E)
+                key = UIColor(hex: 0x43423E)
+                keyPressed = UIColor(hex: 0x5A5852)
+                functionPressed = UIColor(hex: 0x43423E)
+                text = UIColor(hex: 0xFAF9F5)
+                secondary = UIColor(hex: 0xA6A498)
+                line = UIColor.white.withAlphaComponent(0.10)
+                edge = UIColor.black.withAlphaComponent(0.50)
+                page = UIColor(hex: 0x262624)
+                surface = UIColor(hex: 0x30302E)
+            } else {
+                accentText = UIColor(hex: 0xB85A38)
+                canvas = UIColor(hex: 0xE8E5DB)
+                function = UIColor(hex: 0xD3CFC1)
+                key = UIColor(hex: 0xFBFAF6)
+                keyPressed = UIColor(hex: 0xF3DFD3)
+                functionPressed = UIColor(hex: 0xFBFAF6)
+                text = UIColor(hex: 0x1F1E1D)
+                secondary = UIColor(hex: 0x73726C)
+                line = UIColor(hex: 0x1F1E1D).withAlphaComponent(0.13)
+                edge = UIColor(hex: 0x1F1E1D).withAlphaComponent(0.22)
+                page = UIColor(hex: 0xFAF9F5)
+                surface = UIColor(hex: 0xF0EEE6)
+            }
+            return
+        }
+        page = .systemBackground
+        surface = .secondarySystemBackground
         if dark {
             accent = isInk ? UIColor(hex: 0xF1F1EE) : base.mixed(with: .white, amount: 0.12)
             onAccent = isInk ? UIColor(hex: 0x111111) : .white
@@ -174,6 +213,20 @@ public struct KeyboardPrefs: Codable, Equatable, Sendable {
         public var title: String { self == .qwerty ? "26 键" : "九宫格" }
     }
 
+    /// 按键震动强度。
+    public enum HapticLevel: String, Codable, Sendable, CaseIterable {
+        case off, light, medium, strong
+
+        public var title: String {
+            switch self {
+            case .off: return "关"
+            case .light: return "轻"
+            case .medium: return "中"
+            case .strong: return "强"
+            }
+        }
+    }
+
     /// 键盘高度。
     public enum Height: String, Codable, Sendable, CaseIterable {
         case low, standard, tall
@@ -187,11 +240,11 @@ public struct KeyboardPrefs: Codable, Equatable, Sendable {
         }
     }
 
-    public var theme: MoyuThemeID = .ink
+    public var theme: MoyuThemeID = .coral
     public var mascot: MascotSymbol = .drop
     public var layout: Layout = .qwerty
     public var height: Height = .standard
-    public var haptics: Bool = true
+    public var haptics: HapticLevel = .light
     public var keySound: Bool = false
     public var fuzzyPinyin: Bool = true
 
@@ -204,11 +257,12 @@ public struct KeyboardPrefs: Codable, Equatable, Sendable {
     /// 容错解码：缺字段或值不认识都用默认值。
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        theme = (try? container.decodeIfPresent(MoyuThemeID.self, forKey: .theme)) ?? .ink
+        theme = (try? container.decodeIfPresent(MoyuThemeID.self, forKey: .theme)) ?? .coral
         mascot = (try? container.decodeIfPresent(MascotSymbol.self, forKey: .mascot)) ?? .drop
         layout = (try? container.decodeIfPresent(Layout.self, forKey: .layout)) ?? .qwerty
         height = (try? container.decodeIfPresent(Height.self, forKey: .height)) ?? .standard
-        haptics = (try? container.decodeIfPresent(Bool.self, forKey: .haptics)) ?? true
+        // 旧版这里存的是开关，读不出等级时用默认值
+        haptics = (try? container.decodeIfPresent(HapticLevel.self, forKey: .haptics)) ?? .light
         keySound = (try? container.decodeIfPresent(Bool.self, forKey: .keySound)) ?? false
         fuzzyPinyin = (try? container.decodeIfPresent(Bool.self, forKey: .fuzzyPinyin)) ?? true
     }

@@ -37,7 +37,7 @@ struct AppPage<Content: View>: View {
                 .padding(.bottom, 32)
             }
             .scrollDismissesKeyboard(.interactively)
-            .background(Color(uiColor: .systemBackground).ignoresSafeArea())
+            .background(palette.page.color.ignoresSafeArea())
             .overlay(alignment: .bottom) {
                 if let toast = model.toast {
                     AppToast(text: toast)
@@ -56,7 +56,7 @@ struct AppToast: View {
     var body: some View {
         Text(text)
             .font(.system(size: 14))
-            .foregroundColor(Color(uiColor: .systemBackground))
+            .foregroundColor(palette.page.color)
             .multilineTextAlignment(.center)
             .padding(.horizontal, 14)
             .padding(.vertical, 9)
@@ -171,7 +171,7 @@ struct SecondaryButton: View {
                 .foregroundColor(palette.text.color)
                 .frame(maxWidth: .infinity)
                 .frame(height: 44)
-                .background(Color(uiColor: .secondarySystemBackground))
+                .background(palette.surface.color)
                 .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
         }
         .buttonStyle(.plain)

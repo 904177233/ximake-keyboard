@@ -179,7 +179,7 @@ struct AIPanelView: View {
                         .foregroundColor(palette.text.color)
                         .multilineTextAlignment(.leading)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 7)
+                        .padding(.vertical, 5)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -237,17 +237,17 @@ struct AIPanelView: View {
     private var doneActions: some View {
         switch ai.feature {
         case .image:
-            PanelButton(title: "重画") { ai.run() }
+            PanelButton(title: "重画") { ai.regenerate() }
             Spacer(minLength: 0)
             PanelButton(title: "复制图片", isPrimary: true) { ai.copyImage() }
         case .reply:
-            PanelButton(title: "换一批") { ai.run() }
+            PanelButton(title: "换一批") { ai.regenerate() }
             if !ai.sourceIsClipboard {
                 PanelButton(title: "读我复制的那句") { ai.useClipboard() }
             }
             Spacer(minLength: 0)
         default:
-            PanelButton(title: "重写") { ai.run() }
+            PanelButton(title: "重写") { ai.regenerate() }
             PanelButton(title: "复制") { ai.copyResult() }
             Spacer(minLength: 0)
             PanelButton(title: ai.sourceIsClipboard ? "放进输入框" : "替换", isPrimary: true) { ai.replace() }

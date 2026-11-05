@@ -42,7 +42,7 @@ from qa_common import (
 # ---------------------------------------------------------------------------
 
 SYSTEM_TYPES = frozenset("""
-TextInputAutocapitalization UITextAutocapitalizationType ObjectIdentifier NSData UInt32 UnsafeRawBufferPointer
+SystemSoundID TextInputAutocapitalization UITextAutocapitalizationType ObjectIdentifier NSData UInt32 UnsafeRawBufferPointer
 # ---- Swift 语言内置 ----
 Self Any AnyObject Void Never Type Optional Result Error Bool String Substring Character
 Int Int8 Int16 Int32 Int64 UInt UInt8 UInt16 UInt32 UInt64 Double Float CGFloat Decimal

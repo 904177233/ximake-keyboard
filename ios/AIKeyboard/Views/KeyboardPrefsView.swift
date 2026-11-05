@@ -39,10 +39,10 @@ struct KeyboardPrefsView: View {
                 toggle("打错字时帮我猜", detail: "候选很少时，试着纠正打错的字母", isOn: model.snapshot.enableTypoCorrection) { value in
                     model.update { $0.enableTypoCorrection = value }
                 }
-                toggle("按键震动", detail: nil, isOn: model.prefs.haptics) { value in
-                    model.updatePrefs { $0.haptics = value }
+                pickerRow("按键震动", items: KeyboardPrefs.HapticLevel.allCases.map { ($0.title, model.prefs.haptics == $0) }) { index in
+                    model.updatePrefs { $0.haptics = KeyboardPrefs.HapticLevel.allCases[index] }
                 }
-                toggle("按键声音", detail: nil, isOn: model.prefs.keySound) { value in
+                toggle("按键声音", detail: "手机静音时听不到", isOn: model.prefs.keySound) { value in
                     model.updatePrefs { $0.keySound = value }
                 }
 
@@ -66,7 +66,17 @@ struct KeyboardPrefsView: View {
                 }
 
                 SectionLabel(text: "语音输入")
-                LineRow(title: "允许麦克风和语音识别", detail: voiceStatus.isEmpty ? "键盘里不能弹权限框，要在这里先允许。还没在真机上验证过。" : voiceStatus) {
+                NavigationLink {
+                    VoiceDictationView()
+                        .environmentObject(model)
+                        .environment(\.palette, palette)
+                } label: {
+                    LineRow(title: "说话转文字", detail: "键盘里录不了音时用这里。说完自动复制，回到聊天框粘贴。") {
+                        Chevron()
+                    }
+                }
+                .buttonStyle(.plain)
+                LineRow(title: "允许麦克风和语音识别", detail: voiceStatus.isEmpty ? "键盘里不能弹权限框，要在这里先允许。" : voiceStatus) {
                     Button("允许") { requestVoicePermission() }
                         .font(.system(size: 14, weight: .semibold))
                 }
@@ -126,7 +136,7 @@ struct KeyboardPrefsView: View {
                             .font(.system(size: 19))
                             .foregroundColor(palette.accentText.color)
                             .frame(width: 46, height: 46)
-                            .background(Color(uiColor: .secondarySystemBackground))
+                            .background(palette.surface.color)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 11, style: .continuous)
                                     .strokeBorder(palette.text.color, lineWidth: model.prefs.mascot == symbol ? 1.5 : 0)
@@ -151,7 +161,7 @@ struct KeyboardPrefsView: View {
                         }
                     }
                     .frame(width: 46, height: 46)
-                    .background(Color(uiColor: .secondarySystemBackground))
+                    .background(palette.surface.color)
                     .overlay(
                         RoundedRectangle(cornerRadius: 11, style: .continuous)
                             .strokeBorder(palette.text.color, lineWidth: model.prefs.mascot == .custom ? 1.5 : 0)
@@ -210,7 +220,7 @@ struct KeyboardPrefsView: View {
                 }
             }
             .padding(2)
-            .background(Color(uiColor: .secondarySystemBackground))
+            .background(palette.surface.color)
             .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
         }
     }
@@ -280,7 +290,7 @@ struct PhrasesView: View {
                     .font(.system(size: 15))
                     .lineLimit(1...4)
                     .padding(11)
-                    .background(Color(uiColor: .secondarySystemBackground))
+                    .background(palette.surface.color)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 HStack(spacing: 10) {
                     TextField("快捷字母（可不填），比如 dz", text: $newKey)
@@ -288,7 +298,7 @@ struct PhrasesView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .padding(11)
-                        .background(Color(uiColor: .secondarySystemBackground))
+                        .background(palette.surface.color)
                         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     Button("添加") {
                         let text = newText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -317,7 +327,88 @@ struct PhrasesView: View {
             }
             .padding(20)
         }
+        .background(palette.page.color.ignoresSafeArea())
         .navigationTitle("常用短语")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// 说话转文字：系统不让键盘录音时的备用入口。
+@MainActor
+struct VoiceDictationView: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.palette) private var palette
+    @ObservedObject private var voice = KMVoiceInput.shared
+
+    var body: some View {
+        VStack(spacing: 14) {
+            ScrollView {
+                Text(displayText)
+                    .font(.system(size: 18))
+                    .foregroundColor(isPlaceholder ? palette.secondary.color : palette.text.color)
+                    .lineSpacing(4)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(14)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(palette.surface.color)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            PrimaryButton(title: buttonTitle) { toggle() }
+        }
+        .padding(20)
+        .background(palette.page.color.ignoresSafeArea())
+        .navigationTitle("说话转文字")
+        .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: voice.state) { state in
+            if case let .finished(text) = state, !text.isEmpty {
+                UIPasteboard.general.string = text
+                model.showToast("已复制，回到聊天框粘贴")
+            }
+        }
+        .onDisappear { voice.cancel() }
+    }
+
+    private var isPlaceholder: Bool {
+        if case .finished = voice.state { return false }
+        return voice.partialText.isEmpty
+    }
+
+    private var displayText: String {
+        switch voice.state {
+        case let .finished(text):
+            return text
+        case let .failed(reason, _):
+            return reason
+        default:
+            return voice.partialText.isEmpty ? "点下面的按钮开始说话" : voice.partialText
+        }
+    }
+
+    private var buttonTitle: String {
+        if case .recording = voice.state { return "说完了" }
+        if case .transcribing = voice.state { return "正在转文字…" }
+        return "开始说话"
+    }
+
+    private func toggle() {
+        if case .recording = voice.state {
+            voice.stop()
+            return
+        }
+        guard !voice.state.isActive else { return }
+        AVAudioSession.sharedInstance().requestRecordPermission { granted in
+            SFSpeechRecognizer.requestAuthorization { status in
+                Task { @MainActor in
+                    guard granted, status == .authorized else {
+                        model.showToast("到 设置 › 墨语 里打开麦克风和语音识别")
+                        return
+                    }
+                    voice.reset()
+                    voice.start()
+                }
+            }
+        }
     }
 }

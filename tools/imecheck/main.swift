@@ -2,12 +2,12 @@
 //  main.swift
 //  内核回归测试：不依赖界面，直接跑拼音引擎。云编译时会先跑这个，失败就不往下编了。
 //
-//  用法：imecheck ios/Shared/dict/moyu.dict
+//  用法：imecheck ios/Shared/dict/moyu.dict ios/Shared/dict/next.tsv
 //
 
 import Foundation
 
-guard CommandLine.arguments.count >= 2,
+guard CommandLine.arguments.count >= 3,
       let dictionary = MoyuDictionary(url: URL(fileURLWithPath: CommandLine.arguments[1])) else {
     print("打不开词库")
     exit(2)
@@ -17,7 +17,8 @@ print("词库：\(dictionary.entryCount) 词，\(dictionary.keyCount) 个拼音"
 
 let store = SharedStore(forceMemory: true)
 let learning = UserLearningStore(store: store)
-let engine = PinyinEngine(dictionary: dictionary, learning: learning)
+let nextWords = NextWordIndex(url: URL(fileURLWithPath: CommandLine.arguments[2]))
+let engine = PinyinEngine(dictionary: dictionary, learning: learning, nextWords: nextWords)
 
 var failures = 0
 
@@ -32,6 +33,10 @@ func check(_ name: String, _ condition: Bool, _ detail: @autoclosure () -> Strin
 
 func qwerty(_ text: String) -> IMEConversion {
     engine.convert(IMEQuery(mode: .qwerty, input: Array(text.utf8)), rawText: text, fuzzy: .off, typoCorrection: false)
+}
+
+func typed(_ text: String) -> IMEConversion {
+    engine.convert(IMEQuery(mode: .qwerty, input: Array(text.utf8)), rawText: text, fuzzy: .off, typoCorrection: true)
 }
 
 func t9(_ digits: String, locks: [Int: UInt8] = [:]) -> IMEConversion {
@@ -62,6 +67,23 @@ for input in ["jintianhenmang", "womenmingtianzaijian", "zhegedongxihenhaoyong",
     let got = qwerty(input).candidates.first?.text ?? ""
     check("\(input) 没有多字", got.count <= syllableCount, "得到「\(got)」，音节数 \(syllableCount)")
 }
+
+print("多音节词优先于单字")
+check("正常使用了", qwerty("zhengchangshiyongle").candidates.first?.text == "正常使用了", "\(texts(qwerty("zhengchangshiyongle")))")
+
+print("打错字")
+let typo = typed("wozhem")
+check("wozhem 第二个候选是纠错后的我真", typo.candidates.dropFirst().first?.text == "我真" && typo.candidates.dropFirst().first?.kind == .corrected, "\(texts(typo))")
+let clean = typed("wozhen")
+check("拼对了不出纠错", !clean.candidates.prefix(3).contains { $0.kind == .corrected }, "\(texts(clean))")
+check("简拼不乱纠错", !typed("wq").candidates.prefix(4).contains { $0.kind == .corrected }, "\(texts(typed("wq")))")
+
+print("联想")
+let afterWo = engine.predictions(after: "我", limit: 14)
+check("我 后面有想、们", afterWo.contains("想") && afterWo.contains("们"), "\(afterWo)")
+let afterJin = engine.predictions(after: "今", limit: 14)
+check("今 后面有天", afterJin.contains("天"), "\(afterJin)")
+check("长句按结尾的词联想", engine.predictions(after: "我们今天", limit: 14).contains("晚上"), "\(engine.predictions(after: "我们今天", limit: 14))")
 
 print("逐词选词")
 let long = qwerty("woxihuanni")

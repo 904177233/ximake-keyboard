@@ -6,6 +6,7 @@
 //  平时只有顶栏和键区两个 UIKit 视图，SwiftUI 面板第一次打开时才创建，省内存。
 //
 
+import AudioToolbox
 import Combine
 import SwiftUI
 import UIKit
@@ -26,6 +27,10 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
     private var appliedDark: Bool?
     private var appliedLandscape: Bool?
     private var lastLayoutWidth: CGFloat = 0
+    private var appliedCapHeight: CGFloat = 0
+    /// 正在布局回调里。这时候不能强制布局，否则会递归到栈溢出。
+    private var isInLayoutPass = false
+    private var isApplyingHeight = false
 
     // MARK: - KeyboardHost
 
@@ -77,7 +82,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
         session.host = self
         session.onRender = { [weak self] in self?.render() }
 
-        let constraint = view.heightAnchor.constraint(equalToConstant: 261)
+        let constraint = view.heightAnchor.constraint(equalToConstant: contentHeight(for: .keys))
         constraint.priority = .required
         constraint.isActive = true
         heightConstraint = constraint
@@ -92,7 +97,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
         super.viewWillAppear(animated)
         syncTraits()
         session.activate()
-        feedback.prepare(enabled: session.prefs.haptics, sound: session.prefs.keySound, surface: surface)
+        feedback.prepare(level: session.prefs.haptics, sound: session.prefs.keySound)
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -103,6 +108,10 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
             $0.cancelsTouchesInView = false
         }
         session.render()
+        // 系统说键盘画出来之后才能改高度，这里再确认一次
+        DispatchQueue.main.async { [weak self] in
+            self?.applyHeight()
+        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -123,8 +132,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
 
     override func viewSafeAreaInsetsDidChange() {
         super.viewSafeAreaInsetsDidChange()
-        updateHeight()
-        view.setNeedsLayout()
+        applyHeight()
     }
 
     private func syncTraits() {
@@ -144,56 +152,93 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
 
     // MARK: - 布局
 
-    private var metrics: KeyboardMetrics {
+    /// 这一页应有的尺寸。
+    private var nominalMetrics: KeyboardMetrics {
         KeyboardMetrics(height: session.prefs.height, isLandscape: session.isLandscape)
     }
 
-    /// 面板区高度；0 表示这一页没有面板。
-    private func panelHeight(for page: KeyboardSession.Page) -> CGFloat {
-        let metrics = self.metrics
-        switch page {
-        case .keys, .numbers:
-            return 0
-        case .symbols, .candidates:
-            return metrics.surfaceHeight
-        case .ai, .settings, .voice:
-            return metrics.topBarHeight + metrics.surfaceHeight
+    /// 实际用的尺寸：系统给的高度不够时压缩键高，宁可矮一点也不切掉下面的键。
+    private var metrics: KeyboardMetrics {
+        let nominal = nominalMetrics
+        let height = view.bounds.height - view.safeAreaInsets.bottom
+        guard height >= 120 else { return nominal }
+        let reserved: CGFloat
+        switch session.page {
         case .chat:
-            return metrics.isLandscape ? 86 : 162
+            reserved = nominal.topBarHeight + 64
         case .field:
-            return 84
+            reserved = nominal.topBarHeight + 84
+        default:
+            reserved = nominal.topBarHeight
         }
+        return nominal.fitted(toSurfaceHeight: height - reserved)
     }
 
+    /// 这一页应有的总高度（不含底部安全区）。
     private func contentHeight(for page: KeyboardSession.Page) -> CGFloat {
-        let metrics = self.metrics
+        let metrics = nominalMetrics
+        let base = metrics.topBarHeight + metrics.surfaceHeight
         switch page {
-        case .keys, .numbers:
-            return metrics.topBarHeight + metrics.surfaceHeight
-        case .symbols, .candidates:
-            return metrics.topBarHeight + metrics.surfaceHeight
-        case .ai, .settings, .voice:
-            return metrics.topBarHeight + metrics.surfaceHeight
-        case .chat, .field:
-            return panelHeight(for: page) + metrics.topBarHeight + metrics.surfaceHeight
+        case .chat:
+            return base + (metrics.isLandscape ? 86 : 162)
+        case .field:
+            return base + 84
+        default:
+            return base
         }
     }
 
-    private func updateHeight() {
+    /// 把高度告诉系统。
+    ///
+    /// 只改约束常量不够：系统不一定重新量键盘，表现就是高度没变、下面的键被切掉。
+    /// 不在布局回调里时要强制布局一次。在布局回调里绝对不能强制，会递归到栈溢出。
+    private func applyHeight() {
+        guard isViewLoaded else { return }
         let target = contentHeight(for: session.page) + view.safeAreaInsets.bottom
-        if let constraint = heightConstraint, abs(constraint.constant - target) > 0.5 {
+        if heightConstraint == nil {
+            heightConstraint = view.heightAnchor.constraint(equalToConstant: target)
+        }
+        guard let constraint = heightConstraint else { return }
+        if !constraint.isActive {
+            constraint.isActive = true
+        }
+        let changed = abs(constraint.constant - target) > 0.5
+        if changed {
             constraint.constant = target
         }
+        // 布局回调里不能再要求布局，否则每一轮都会排下一轮，CPU 一直空转
+        guard !isInLayoutPass else { return }
+        view.setNeedsLayout()
+        guard !isApplyingHeight, changed || abs(view.bounds.height - target) > 0.5 else { return }
+        isApplyingHeight = true
+        defer { isApplyingHeight = false }
+        let selector = NSSelectorFromString("requestInputViewHeightUpdate")
+        if responds(to: selector) {
+            perform(selector)
+        }
+        view.layoutIfNeeded()
+    }
+
+    override func viewWillLayoutSubviews() {
+        super.viewWillLayoutSubviews()
+        // 键盘重建时系统可能把约束拿掉，这里兜底。只同步数值，不强制布局。
+        isInLayoutPass = true
+        applyHeight()
+        isInLayoutPass = false
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        isInLayoutPass = true
+        defer { isInLayoutPass = false }
         layoutContent()
-        // 只在宽度真的变了时重排键位。这里不能无条件刷新，否则会陷入布局循环。
-        if lastLayoutWidth != view.bounds.width {
+        // 只在宽度或键高真的变了时重排键位。这里不能无条件刷新，否则会陷入布局循环。
+        let keysVisible = !surface.isHidden
+        if lastLayoutWidth != view.bounds.width || (keysVisible && abs(metrics.capHeight - appliedCapHeight) > 0.25) {
             lastLayoutWidth = view.bounds.width
             appliedVisualState = nil
             render()
+            layoutContent()
         }
     }
 
@@ -201,25 +246,23 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
         let metrics = self.metrics
         let insets = view.safeAreaInsets
         let width = view.bounds.width - insets.left - insets.right
-        let page = session.page
-        let panel = panelHeight(for: page)
-        var y: CGFloat = 0
+        let height = max(view.bounds.height - insets.bottom, 0)
+        let bar = metrics.topBarHeight
 
-        switch page {
+        switch session.page {
         case .keys, .numbers:
-            topBar.frame = CGRect(x: insets.left, y: 0, width: width, height: metrics.topBarHeight)
-            surface.frame = CGRect(x: insets.left, y: metrics.topBarHeight, width: width, height: metrics.surfaceHeight)
+            topBar.frame = CGRect(x: insets.left, y: 0, width: width, height: bar)
+            surface.frame = CGRect(x: insets.left, y: bar, width: width, height: metrics.surfaceHeight)
         case .symbols, .candidates:
-            topBar.frame = CGRect(x: insets.left, y: 0, width: width, height: metrics.topBarHeight)
-            panelHost?.view.frame = CGRect(x: insets.left, y: metrics.topBarHeight, width: width, height: panel)
+            topBar.frame = CGRect(x: insets.left, y: 0, width: width, height: bar)
+            panelHost?.view.frame = CGRect(x: insets.left, y: bar, width: width, height: max(height - bar, 0))
         case .ai, .settings, .voice:
-            panelHost?.view.frame = CGRect(x: insets.left, y: 0, width: width, height: panel)
+            panelHost?.view.frame = CGRect(x: insets.left, y: 0, width: width, height: height)
         case .chat, .field:
+            let panel = max(height - bar - metrics.surfaceHeight, 0)
             panelHost?.view.frame = CGRect(x: insets.left, y: 0, width: width, height: panel)
-            y = panel
-            topBar.frame = CGRect(x: insets.left, y: y, width: width, height: metrics.topBarHeight)
-            y += metrics.topBarHeight
-            surface.frame = CGRect(x: insets.left, y: y, width: width, height: metrics.surfaceHeight)
+            topBar.frame = CGRect(x: insets.left, y: panel, width: width, height: bar)
+            surface.frame = CGRect(x: insets.left, y: panel + bar, width: width, height: metrics.surfaceHeight)
         }
 
         let toastWidth = min(width - 40, toastLabel.intrinsicContentSize.width)
@@ -236,7 +279,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
         let page = session.page
 
         // 面板
-        let needsPanel = panelHeight(for: page) > 0
+        let needsPanel = page != .keys && page != .numbers
         if needsPanel, panelHost == nil {
             createPanelHost()
         }
@@ -257,9 +300,10 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
         if showsSurface {
             let width = view.bounds.width - view.safeAreaInsets.left - view.safeAreaInsets.right
             let visual = session.visualState
+            let metrics = self.metrics
             if visual != appliedVisualState || width != appliedWidth || session.prefs != appliedPrefs
-                || session.isDark != appliedDark || session.isLandscape != appliedLandscape {
-                let metrics = self.metrics
+                || session.isDark != appliedDark || session.isLandscape != appliedLandscape
+                || abs(metrics.capHeight - appliedCapHeight) > 0.25 {
                 let layout = KeyLayoutBuilder.build(state: visual,
                                                     size: CGSize(width: width, height: metrics.surfaceHeight),
                                                     metrics: metrics)
@@ -269,7 +313,8 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
                 appliedPrefs = session.prefs
                 appliedDark = session.isDark
                 appliedLandscape = session.isLandscape
-                feedback.prepare(enabled: session.prefs.haptics, sound: session.prefs.keySound, surface: surface)
+                appliedCapHeight = metrics.capHeight
+                feedback.prepare(level: session.prefs.haptics, sound: session.prefs.keySound)
             }
             if visual.kind == .nineKey {
                 surface.sideStrip.update(items: session.sideStripItems, highlightFirst: false)
@@ -287,8 +332,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
             toastLabel.isHidden = true
         }
 
-        updateHeight()
-        view.setNeedsLayout()
+        applyHeight()
     }
 
     private func createPanelHost() {
@@ -318,38 +362,68 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
     }
 
     func keySurfaceDidPress(_ surface: KeySurfaceView, action: KeyAction) {
-        feedback.keyDown(surface: surface)
+        feedback.keyDown(action)
     }
 }
 
 /// 按键触感和按键音。没开完全访问时系统会忽略，不会出错。
 @MainActor
 final class KeyFeedback {
-    private let generator = UIImpactFeedbackGenerator(style: .light)
-    private var hapticsEnabled = true
+    private var generator = UIImpactFeedbackGenerator(style: .light)
+    private var level: KeyboardPrefs.HapticLevel = .light
     private var soundEnabled = false
 
-    func prepare(enabled: Bool, sound: Bool, surface: UIView) {
-        hapticsEnabled = enabled
+    func prepare(level: KeyboardPrefs.HapticLevel, sound: Bool) {
+        if level != self.level {
+            self.level = level
+            switch level {
+            case .off, .light:
+                generator = UIImpactFeedbackGenerator(style: .light)
+            case .medium:
+                generator = UIImpactFeedbackGenerator(style: .medium)
+            case .strong:
+                generator = UIImpactFeedbackGenerator(style: .heavy)
+            }
+        }
         soundEnabled = sound
-        if enabled {
+        if level != .off {
             generator.prepare()
         }
     }
 
-    func keyDown(surface: UIView) {
-        if hapticsEnabled {
-            generator.impactOccurred(intensity: 0.55)
+    private var intensity: CGFloat {
+        switch level {
+        case .off: return 0
+        case .light: return 0.5
+        case .medium: return 0.8
+        case .strong: return 1
+        }
+    }
+
+    func keyDown(_ action: KeyAction) {
+        if level != .off {
+            generator.impactOccurred(intensity: intensity)
             generator.prepare()
         }
         if soundEnabled {
-            UIDevice.current.playInputClick()
+            // 不用 playInputClick：它要求整个输入视图声明支持，而且受系统「键盘反馈」开关影响，
+            // 经常没声音。这几个是系统键盘自己用的按键音，受静音开关控制。
+            let sound: SystemSoundID
+            switch action {
+            case .backspace:
+                sound = 1155
+            case .shift, .space, .enter, .language, .showNumbers, .showLetters, .showSymbols, .toggleLayout, .nextKeyboard:
+                sound = 1156
+            default:
+                sound = 1104
+            }
+            AudioServicesPlaySystemSound(sound)
         }
     }
 
     func tapLight() {
-        if hapticsEnabled {
-            generator.impactOccurred(intensity: 0.4)
+        if level != .off {
+            generator.impactOccurred(intensity: intensity * 0.8)
         }
     }
 }
