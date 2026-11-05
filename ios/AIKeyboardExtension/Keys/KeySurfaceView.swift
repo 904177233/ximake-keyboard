@@ -370,6 +370,17 @@ final class KeySurfaceView: UIView, UIInputViewAudioFeedback {
         case .shift:
             delegate?.keySurface(self, didTrigger: .shift)
             press.didFire = true
+        case .enter:
+            // 长按回车：只换行，不发送。微信这类 App 收到 "\n" 就发送，"\r\n" 不等于它，就只是换行
+            press.holdTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 450_000_000)
+                guard !Task.isCancelled, let self, !press.didFire else { return }
+                press.didLongPress = true
+                press.didFire = true
+                self.delegate?.keySurface(self, didTrigger: .text("\r\n"))
+                self.showPopupText("换行", over: key)
+                self.redraw(keyIndex: press.keyIndex)
+            }
         case .space:
             // 按住不动 0.45 秒：说话。先滑动就是移光标，不会触发
             press.holdTask = Task { @MainActor [weak self] in
@@ -516,6 +527,11 @@ final class KeySurfaceView: UIView, UIInputViewAudioFeedback {
         if presses.isEmpty {
             popup.isHidden = true
         }
+    }
+
+    private func showPopupText(_ text: String, over key: KeyDef) {
+        guard let container = popup.superview else { return }
+        popup.show(text: text, above: convert(key.frame, to: container), within: container.bounds)
     }
 
     private func showPopup(for key: KeyDef, alternate: Bool) {

@@ -109,6 +109,22 @@ public struct AIPrefs: Codable, Equatable, Sendable {
         }
     }
 
+    /// 联网搜索。
+    public enum WebSearchMode: String, Codable, Sendable, CaseIterable {
+        case off, auto, always
+
+        public var title: String {
+            switch self {
+            case .off: return "关"
+            case .auto: return "自动"
+            case .always: return "总是"
+            }
+        }
+    }
+
+    public var webSearch: WebSearchMode = .auto
+    /// 画图失败时自动换别的模型。关掉就只用画图服务里选的那个（有的账号只有一个模型有额度）。
+    public var imageModelAuto: Bool = true
     public var reasoning: Reasoning = .auto
     public var length: Length = .medium
     /// 人设，写进系统提示。空的话用默认。
@@ -128,6 +144,7 @@ public struct AIPrefs: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case reasoning, length, persona, contextTurns, keepHistory, imageShape, imageStyle, polishImagePrompt, voiceKeepAliveMinutes
+        case webSearch, imageModelAuto
     }
 
     /// 容错解码：缺字段或值不认识都用默认值。
@@ -143,6 +160,8 @@ public struct AIPrefs: Codable, Equatable, Sendable {
         imageStyle = (try? container.decodeIfPresent(ImageStyle.self, forKey: .imageStyle)) ?? fallback.imageStyle
         polishImagePrompt = (try? container.decodeIfPresent(Bool.self, forKey: .polishImagePrompt)) ?? fallback.polishImagePrompt
         voiceKeepAliveMinutes = (try? container.decodeIfPresent(Int.self, forKey: .voiceKeepAliveMinutes)) ?? fallback.voiceKeepAliveMinutes
+        webSearch = (try? container.decodeIfPresent(WebSearchMode.self, forKey: .webSearch)) ?? fallback.webSearch
+        imageModelAuto = (try? container.decodeIfPresent(Bool.self, forKey: .imageModelAuto)) ?? fallback.imageModelAuto
     }
 
     private static let key = "moyu.ai.prefs.v1"

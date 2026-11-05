@@ -39,6 +39,9 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
     private var simStarted = false
     /// 试高度时临时指定的数。
     private var simForcedHeight: CGFloat?
+    /// 试「用内容撑高」：一根看不见的竖条，上下贴住 view，高度用 required 约束。
+    private var simSpacer: UIView?
+    private var simSpacerHeight: NSLayoutConstraint?
     #endif
 
     // MARK: - KeyboardHost
@@ -458,6 +461,40 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
     }
 
     #if MOYU_SIM_CHECK
+    private func simUseSpacer(height: CGFloat, keepConstraint: Bool) {
+        if simSpacer == nil {
+            let spacer = UIView()
+            spacer.translatesAutoresizingMaskIntoConstraints = false
+            spacer.isUserInteractionEnabled = false
+            view.addSubview(spacer)
+            let heightConstraint = spacer.heightAnchor.constraint(equalToConstant: height)
+            NSLayoutConstraint.activate([
+                spacer.topAnchor.constraint(equalTo: view.topAnchor),
+                spacer.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+                spacer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                spacer.widthAnchor.constraint(equalToConstant: 1),
+                heightConstraint
+            ])
+            simSpacer = spacer
+            simSpacerHeight = heightConstraint
+        }
+        simSpacerHeight?.constant = height
+        heightConstraint?.isActive = keepConstraint
+        simForcedHeight = keepConstraint ? height : nil
+        heightConstraint?.constant = height
+        view.setNeedsLayout()
+        view.layoutIfNeeded()
+    }
+
+    private func simRemoveSpacer() {
+        simSpacer?.removeFromSuperview()
+        simSpacer = nil
+        simSpacerHeight = nil
+        simForcedHeight = nil
+        heightConstraint?.isActive = true
+        applyHeight()
+    }
+
     /// 模拟器实测：自己走一遍各个高度和页面，CI 按时间截图。角上写着这一步和实际高度。
     private func startSimCheck() {
         guard !simStarted else { return }
@@ -470,6 +507,10 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
         let session = self.session
         let steps: [(String, () -> Void)] = [
             ("标准", { session.updatePrefs { $0.height = .standard }; session.setPage(.keys) }),
+            ("内容撑高 要340", { [weak self] in self?.simUseSpacer(height: 340, keepConstraint: false) }),
+            ("内容撑高 要400", { [weak self] in self?.simUseSpacer(height: 400, keepConstraint: false) }),
+            ("撑高+约束 要360", { [weak self] in self?.simUseSpacer(height: 360, keepConstraint: true) }),
+            ("去掉撑高", { [weak self] in self?.simRemoveSpacer() }),
             ("拖到 340", { session.beginResize(); session.resize(toSurfaceHeight: 340) }),
             ("恢复高度", { session.resetHeight(); session.endResize() }),
             ("对话打字", { session.openChat() }),

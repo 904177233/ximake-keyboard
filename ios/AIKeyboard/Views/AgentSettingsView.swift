@@ -53,11 +53,14 @@ struct AgentSettingsView: View {
                 Picker("回答长短", selection: $prefs.length) {
                     ForEach(AIPrefs.Length.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
+                Picker("联网搜索", selection: $prefs.webSearch) {
+                    ForEach(AIPrefs.WebSearchMode.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
                 Stepper("带上前面 \(prefs.contextTurns) 轮对话", value: $prefs.contextTurns, in: 0...20)
             } header: {
                 Text("回答")
             } footer: {
-                Text("深度思考会慢一些，适合难题；不支持的服务会自动按默认回答。带的轮数越多，越记得前面说过什么，也越费额度。")
+                Text("联网选「自动」时，问到新闻、价格、天气这类会先上网搜（用必应）。深度思考会慢一些，适合难题；不支持的服务会自动按默认回答。带的轮数越多，越记得前面说过什么，也越费额度。")
             }
 
             Section {
@@ -69,10 +72,12 @@ struct AgentSettingsView: View {
                 }
                 Toggle("画之前先把描述写具体", isOn: $prefs.polishImagePrompt)
                     .tint(palette.accent.color)
+                Toggle("画不出来时自动换别的模型", isOn: $prefs.imageModelAuto)
+                    .tint(palette.accent.color)
             } header: {
                 Text("画图")
             } footer: {
-                Text("对话里说「画一只猫」就会去画图，回答下面也有「画成图」。")
+                Text("对话里说「画一只猫」就会去画图，回答下面也有「画成图」。只有某个模型有额度时，关掉「自动换」，再到「AI」页的画图服务里选那个模型。")
             }
 
             Section {

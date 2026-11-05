@@ -243,6 +243,21 @@ public final class UserLearningStore {
         }
     }
 
+    /// 记住「打的是这几个字母，要的是这个词」。简拼（wcgl -> 我吃过了）下次直接排第一。
+    public func recordTyped(_ items: [(text: String, typed: String)]) {
+        guard isEnabled, !items.isEmpty else { return }
+        lock.lock()
+        for item in items where !item.typed.isEmpty && item.text.count <= 16 {
+            let isNew = userWords[item.typed]?[item.text] == nil
+            userWords[item.typed, default: [:]][item.text, default: 0] += 1
+            if isNew {
+                userWordsByDigits[MoyuDictionary.t9Digits(item.typed), default: []].append((item.typed, item.text))
+            }
+        }
+        pendingWrites += 1
+        lock.unlock()
+    }
+
     /// 记录相邻两次上屏的先后关系（上一次上屏的词 -> 这一次）。
     public func recordFollow(previous: String, current: String) {
         guard isEnabled, !previous.isEmpty, !current.isEmpty, previous.count <= 8, current.count <= 8 else { return }

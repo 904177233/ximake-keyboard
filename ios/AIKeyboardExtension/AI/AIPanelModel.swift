@@ -358,7 +358,7 @@ final class AIPanelModel: ObservableObject {
         let polish = prefs.polishImagePrompt
         let chatProvider = snapshot.defaultProvider
         let chatKey = chatProvider.flatMap { KeychainStore.shared.apiKey(for: $0.id) }
-        let client = AIClientFactory.makeImage(config: provider, apiKey: apiKey)
+        let client = AIClientFactory.makeImage(config: provider, apiKey: apiKey, onlyConfiguredModel: !prefs.imageModelAuto)
         phase = .waiting("正在画，一般要 5 到 20 秒…")
         startImageProgress()
 
@@ -428,6 +428,34 @@ final class AIPanelModel: ObservableObject {
 
     func setImageStyle(_ style: AIPrefs.ImageStyle) {
         prefs.imageStyle = style
+        prefs.save()
+    }
+
+    /// 画图服务能选的模型。
+    var imageModelChoices: [ModelRef] {
+        guard let provider = session.snapshot.imageProvider else { return [] }
+        if ImageClientRouter.route(for: provider) == .seedream {
+            return PresetProviders.preset(id: "preset-seedream")?.availableModels ?? []
+        }
+        return PresetProviders.preset(id: provider.id)?.availableModels ?? []
+    }
+
+    var currentImageModel: String? { session.snapshot.imageProvider?.imageModel }
+
+    /// 选一个模型并只用它；传 nil 表示失败时自动换。
+    func setImageModel(_ modelID: String?) {
+        if let modelID, let provider = session.snapshot.imageProvider {
+            var updated = session.snapshot
+            if let index = updated.providers.firstIndex(where: { $0.id == provider.id }) {
+                updated.providers[index].imageModel = modelID
+                session.saveConfig(updated)
+            }
+            prefs.imageModelAuto = false
+            session.showToast("只用这个模型画")
+        } else {
+            prefs.imageModelAuto = true
+            session.showToast("画不出来时自动换别的模型")
+        }
         prefs.save()
     }
 

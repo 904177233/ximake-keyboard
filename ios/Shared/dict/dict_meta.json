@@ -1,9 +1,9 @@
 {
-  "version": "3.0.2",
+  "version": "3.0.5",
   "generated_at": "2026-11-05",
-  "entries": 143235,
-  "keys": 101283,
-  "bytes": 6948380,
+  "entries": 275498,
+  "keys": 209944,
+  "bytes": 14498920,
   "sources": [
     {
       "name": "jieba dict.txt",
@@ -24,6 +24,11 @@
       "name": "OpenCC TSCharacters / TSPhrases",
       "license": "Apache-2.0",
       "url": "https://github.com/BYVoid/OpenCC"
+    },
+    {
+      "name": "rime-ice cn_dicts/base.dict.yaml",
+      "license": "GPL-3.0",
+      "url": "https://github.com/iDvel/rime-ice"
     }
   ]
 }

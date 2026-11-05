@@ -95,21 +95,44 @@ public final class SharedStore: @unchecked Sendable {
 
         var resolvedBacking: Backing = .standard
         var resolvedDefaults: UserDefaults = .standard
+        var resolvedGroup: String?
 
-        if let groupDefaults = UserDefaults(suiteName: appGroupIdentifier),
-           SharedStore.probe(groupDefaults) {
-            // `UserDefaults(suiteName:)` 在未配置 App Group 时也可能返回对象，
-            // 但写入后立刻读取会失败。`probe` 做一次写-读-删，确认真的可用。
+        // 只靠写一下再读一下判断不了：没有 App Group 权限时，UserDefaults(suiteName:) 会写进
+        // 自己沙盒里的同名文件，同一个进程读得回来，App 和键盘却各是各的。以前就是这样误判成「打通了」，
+        // 结果谁都不往钥匙串里写，两边永远不同步。要以系统给不给共享目录为准。
+        for name in Self.groupCandidates(preferred: appGroupIdentifier) {
+            guard FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: name) != nil,
+                  let groupDefaults = UserDefaults(suiteName: name),
+                  SharedStore.probe(groupDefaults) else { continue }
             resolvedBacking = .appGroup
             resolvedDefaults = groupDefaults
-        } else {
-            // `.standard` 在 App 与扩展里各自独立，是免费账号下的现实方案。
-            resolvedBacking = .standard
-            resolvedDefaults = .standard
+            resolvedGroup = name
+            break
         }
 
         self.backing = resolvedBacking
         self.defaults = resolvedDefaults
+        self.groupIdentifier = resolvedGroup
+    }
+
+    /// 实际打通的 App Group 名字。
+    public let groupIdentifier: String?
+
+    /// 要试的 App Group 名字。SideStore / AltStore 安装时会改名，并写进 Info.plist 的 ALTAppGroups；
+    /// 键盘扩展要去看外面那个 App 的 Info.plist。
+    static func groupCandidates(preferred: String) -> [String] {
+        var names: [String] = []
+        let ownBundle = Bundle.main.bundleURL
+        let containingApp = ownBundle.deletingLastPathComponent().deletingLastPathComponent()
+        for url in [ownBundle, containingApp] {
+            if let info = NSDictionary(contentsOf: url.appendingPathComponent("Info.plist")),
+               let groups = info["ALTAppGroups"] as? [String] {
+                names.append(contentsOf: groups)
+            }
+        }
+        names.append(preferred)
+        var seen = Set<String>()
+        return names.filter { seen.insert($0).inserted }
     }
 
     // MARK: - 读写 API（String / Data / Bool / Int / Double）

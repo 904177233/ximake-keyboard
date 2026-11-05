@@ -40,7 +40,7 @@ public enum AIClientFactory {
     /// - Parameters:
     ///   - config: 生图服务商配置（`imageModel` 必须非空）。
     ///   - apiKey: Keychain 中的明文 Key。
-    public static func makeImage(config: AIProviderConfig, apiKey: String) -> ImageGenerating {
-        ImageClientRouter.makeClient(config: config, apiKey: apiKey)
+    public static func makeImage(config: AIProviderConfig, apiKey: String, onlyConfiguredModel: Bool = false) -> ImageGenerating {
+        ImageClientRouter.makeClient(config: config, apiKey: apiKey, onlyConfiguredModel: onlyConfiguredModel)
     }
 }

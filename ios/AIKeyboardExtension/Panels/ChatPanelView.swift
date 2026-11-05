@@ -14,6 +14,7 @@ struct ChatPanelView: View {
     @ObservedObject var chat: ChatModel
     @Environment(\.palette) private var palette
     @State private var expandedReasoning: Set<UUID> = []
+    @State private var expandedSources: Set<UUID> = []
 
     var body: some View {
         GeometryReader { geometry in
@@ -63,7 +64,7 @@ struct ChatPanelView: View {
     private var providerLine: String {
         guard let provider = session.snapshot.defaultProvider else { return "还没配 AI 服务" }
         let name = PresetProviders.preset(id: provider.id) != nil ? PresetProviders.shortName(id: provider.id) : provider.name
-        return "\(name) · \(provider.model) · 推理\(chat.prefs.reasoning.title) · \(chat.prefs.length.title)"
+        return "\(name) · \(provider.model) · 联网\(chat.prefs.webSearch.title) · 推理\(chat.prefs.reasoning.title)"
     }
 
     private func iconButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
@@ -155,6 +156,9 @@ struct ChatPanelView: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 5) {
+                if !message.sources.isEmpty {
+                    sourcesView(message)
+                }
                 if !message.reasoning.isEmpty {
                     reasoningView(message)
                 }
@@ -198,6 +202,44 @@ struct ChatPanelView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// 联网搜到的网页，点开看。
+    private func sourcesView(_ message: ChatBubble) -> some View {
+        let expanded = expandedSources.contains(message.id)
+        return VStack(alignment: .leading, spacing: 3) {
+            Button {
+                if expandedSources.contains(message.id) {
+                    expandedSources.remove(message.id)
+                } else {
+                    expandedSources.insert(message.id)
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "globe")
+                        .font(.system(size: 10.5))
+                    Text("联网搜了 \(message.sources.count) 个网页")
+                        .font(.system(size: 11.5))
+                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 9))
+                }
+                .foregroundColor(palette.secondary.color)
+            }
+            .buttonStyle(.plain)
+            if expandedSources.contains(message.id) {
+                ForEach(Array(message.sources.enumerated()), id: \.offset) { pair in
+                    Button {
+                        chat.open(pair.element)
+                    } label: {
+                        Text("[\(pair.offset + 1)] \(pair.element.title)")
+                            .font(.system(size: 12))
+                            .foregroundColor(palette.accentText.color)
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
     }
 

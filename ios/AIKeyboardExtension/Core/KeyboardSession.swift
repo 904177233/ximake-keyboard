@@ -653,6 +653,20 @@ final class KeyboardSession: ObservableObject {
         resetComposition()
         insert(text)
         kit.engine.learn(segments: segments.filter { !$0.key.isEmpty }.map { (text: $0.text, key: $0.key) })
+        // 简拼时按打的字母也记一份，下次打同样的字母直接排第一
+        var typed: [(text: String, typed: String)] = []
+        for segment in segments {
+            let letters = String(segment.raw).lowercased()
+            if !letters.isEmpty, letters != segment.key, letters.allSatisfy({ $0.isASCII && $0.isLetter }) {
+                typed.append((segment.text, letters))
+            }
+        }
+        let allLetters = segments.map { String($0.raw) }.joined().lowercased()
+        if segments.count >= 2, allLetters.allSatisfy({ $0.isASCII && $0.isLetter }),
+           allLetters != segments.map(\.key).joined() {
+            typed.append((text, allLetters))
+        }
+        kit.learning.recordTyped(typed)
         didCommit(text)
     }
 

@@ -118,6 +118,50 @@ FakeServer.route = { _, _, _ in Reply(status: 401, body: #"{"error":{"message":"
 let wrongKey = await SeedreamImageClient.probe(config: seedream, apiKey: "k")
 check("Key 错时说 Key 错", wrongKey == .unauthorized, "\(wrongKey)")
 
+var only40 = seedream
+only40.imageModel = "doubao-seedream-4-0-250828"
+FakeServer.bodies = []
+FakeServer.route = { _, model, _ in
+    model == "doubao-seedream-4-0-250828" ? Reply(status: 200, body: okImage) : Reply(status: 404, body: notOpen)
+}
+do {
+    let images = try await SeedreamImageClient(config: only40, apiKey: "k", onlyConfiguredModel: true)
+        .generate(ImageRequest(prompt: "猫", size: "1024x1024"))
+    let asked = Set(FakeServer.bodies.compactMap { $0.body["model"] as? String })
+    check("只用选定的 4.0 时只请求 4.0", images.first?.model == "doubao-seedream-4-0-250828" && asked == ["doubao-seedream-4-0-250828"], "\(asked)")
+} catch {
+    check("只用选定的 4.0 时只请求 4.0", false, "\(error)")
+}
+FakeServer.route = { _, _, _ in
+    Reply(status: 403, body: #"{"error":{"code":"AccountOverdueError","message":"The request failed because your account has an overdue balance."}}"#)
+}
+do {
+    _ = try await SeedreamImageClient(config: only40, apiKey: "k", onlyConfiguredModel: true).generate(ImageRequest(prompt: "猫"))
+    check("没额度要报错", false)
+} catch {
+    let text = AIError.wrap(error).errorDescription ?? ""
+    check("没额度时说没额度", text.contains("没有额度"), text)
+}
+
+print("联网搜索")
+let bingPage = #"""
+<ol id="b_results"><li class="b_algo" data-tag=""><div class="b_tpcn"></div><h2><a href="https://www.bing.com/ck/a?!&amp;&amp;p=abc&amp;u=a1aHR0cHM6Ly9leGFtcGxlLmNvbS9uZXdz&amp;ntb=1" h="ID=SERP">今日<strong>新闻</strong> &amp; 头条</a></h2><div class="b_caption"><p class="b_lineclamp2">今天的<strong>重要</strong>新闻摘要&ensp;……</p></div></li>
+<li class="b_algo"><h2><a href="https://example.org/b">第二条</a></h2><p>第二条摘要</p></li></ol>
+"""#
+let parsed = WebSearch.parseBing(bingPage)
+check("必应结果解析出两条", parsed.count == 2, "\(parsed)")
+check("标题去掉标签和实体", parsed.first?.title == "今日新闻 & 头条", parsed.first?.title ?? "")
+check("跳转链接解出真实网址", parsed.first?.url == "https://example.com/news", parsed.first?.url ?? "")
+check("摘要", parsed.first?.snippet.hasPrefix("今天的重要新闻摘要") == true, parsed.first?.snippet ?? "")
+check("问新闻会联网", WebSearch.looksTimeSensitive("今天有什么新闻") && !WebSearch.looksTimeSensitive("帮我润色这句话"))
+
+print("系统通知通道")
+let message = Data("说完的话：今天下午三点开会".utf8)
+NotifyChannel.write(message, name: "com.moyu.apicheck.test")
+check("写进去读得回来", NotifyChannel.read(name: "com.moyu.apicheck.test") == message)
+NotifyChannel.write(nil, name: "com.moyu.apicheck.test")
+check("清掉以后读不到", NotifyChannel.read(name: "com.moyu.apicheck.test") == nil)
+
 print("写字")
 var deepseek = PresetProviders.preset(id: "preset-deepseek")!.makeProvider()
 deepseek.model = "deepseek-chat"

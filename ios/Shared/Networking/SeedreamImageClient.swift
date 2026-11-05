@@ -40,6 +40,8 @@ public final class SeedreamImageClient: ImageGenerating, @unchecked Sendable {
 
     private static let lastGoodKey = "moyu.seedream.lastGoodModel"
 
+    /// 只用配置里的模型，不自动换（有的账号只有某一个模型有额度）。
+    private let onlyConfiguredModel: Bool
     /// 服务商配置。
     private let config: AIProviderConfig
     /// 明文 API Key。
@@ -48,7 +50,8 @@ public final class SeedreamImageClient: ImageGenerating, @unchecked Sendable {
     private let session: URLSession
 
     /// 创建客户端。
-    public init(config: AIProviderConfig, apiKey: String, session: URLSession? = nil) {
+    public init(config: AIProviderConfig, apiKey: String, session: URLSession? = nil, onlyConfiguredModel: Bool = false) {
+        self.onlyConfiguredModel = onlyConfiguredModel
         self.config = config
         self.apiKey = apiKey
         self.session = session ?? HTTPTransport.makeSession(timeout: max(config.timeout, 120))
@@ -68,7 +71,10 @@ public final class SeedreamImageClient: ImageGenerating, @unchecked Sendable {
 
         let lastGood = UserDefaults.standard.string(forKey: Self.lastGoodKey)
         var attempts: [(model: String, error: AIError)] = []
-        for model in Self.candidates(configured: config.imageModel, lastGood: lastGood) {
+        let models = onlyConfiguredModel
+            ? [Self.candidates(configured: config.imageModel, lastGood: nil)[0]]
+            : Self.candidates(configured: config.imageModel, lastGood: lastGood)
+        for model in models {
             var body: [String: Any] = [
                 "model": model,
                 "prompt": prompt,
@@ -224,6 +230,12 @@ public final class SeedreamImageClient: ImageGenerating, @unchecked Sendable {
         return ([chosen, lastGood ?? ""] + modelChain).filter { !$0.isEmpty && seen.insert($0).inserted }
     }
 
+    /// 服务器说的是没额度、欠费。
+    static func isQuotaProblem(_ message: String?) -> Bool {
+        let lower = (message ?? "").lowercased()
+        return ["quota", "balance", "insufficient", "overdue", "arrear", "exceeded", "额度", "余额", "欠费"].contains { lower.contains($0) }
+    }
+
     /// 服务器说的是模型不存在或没开通。
     static func isModelMissing(_ message: String?) -> Bool {
         let lower = (message ?? "").lowercased()
@@ -244,6 +256,11 @@ public final class SeedreamImageClient: ImageGenerating, @unchecked Sendable {
     /// 全是没开通，就把试过的都列出来。
     static func allModelsFailed(_ attempts: [(model: String, error: AIError)]) -> AIError {
         guard !attempts.isEmpty else { return .notConfigured }
+        for attempt in attempts {
+            if case let .server(code, message) = attempt.error, isQuotaProblem(message) {
+                return .server(code: code, message: "\(displayName(attempt.model)) 没有额度了。到火山方舟控制台看看哪个模型还有额度，在画图设置里选它，并打开「只用这个模型」。服务器原话：\(message ?? "")")
+            }
+        }
         for attempt in attempts {
             if case let .server(code, message) = attempt.error, code != 404, !isModelMissing(message) {
                 return .server(code: code, message: "\(displayName(attempt.model))：\(message ?? "没有说明")")

@@ -27,6 +27,8 @@ struct ChatBubble: Identifiable, Equatable {
     /// 画出来的图（小图）和它在画图历史里的编号。
     var image: UIImage?
     var imageID: String?
+    /// 联网搜到的网页。
+    var sources: [WebSearchResult] = []
 }
 
 @MainActor
@@ -81,7 +83,8 @@ final class ChatModel: ObservableObject {
 
     /// 打字时候选栏位置显示的几个开关。
     var optionTitles: [String] {
-        ["推理：\(prefs.reasoning.title)",
+        ["联网：\(prefs.webSearch.title)",
+         "推理：\(prefs.reasoning.title)",
          "回答：\(prefs.length.title)",
          drawNext ? "下一句画图：开" : "下一句画图：关",
          "人设：\(personaTitle)"]
@@ -96,16 +99,19 @@ final class ChatModel: ObservableObject {
     func cycleOption(at index: Int) {
         switch index {
         case 0:
+            prefs.webSearch = Self.next(after: prefs.webSearch)
+            session.showToast(prefs.webSearch == .auto ? "问到新闻、价格、天气这类会联网搜" : "联网：\(prefs.webSearch.title)")
+        case 1:
             prefs.reasoning = Self.next(after: prefs.reasoning)
             session.showToast(prefs.reasoning == .deep ? "深度思考：慢一些，适合难题" : "推理：\(prefs.reasoning.title)")
-        case 1:
-            prefs.length = Self.next(after: prefs.length)
         case 2:
+            prefs.length = Self.next(after: prefs.length)
+        case 3:
             drawNext.toggle()
             session.showToast(drawNext ? "下一句会画成图" : "下一句正常回答")
             session.render()
             return
-        case 3:
+        case 4:
             let presets = AIPrefs.personaPresets
             let current = presets.firstIndex { $0.text == prefs.persona } ?? -1
             prefs.persona = presets[(current + 1) % presets.count].text
@@ -155,7 +161,28 @@ final class ChatModel: ObservableObject {
             messages.append(ChatBubble(role: .assistant, text: Self.notConfiguredText, isError: true))
             return
         }
-        start(userText: text)
+        if prefs.webSearch == .always || (prefs.webSearch == .auto && WebSearch.looksTimeSensitive(text)) {
+            searchThenAnswer(text)
+        } else {
+            start(userText: text)
+        }
+    }
+
+    /// 先联网搜，再带着结果回答。搜不到就照常回答。
+    private func searchThenAnswer(_ text: String) {
+        let bubble = ChatBubble(role: .assistant, text: "", isStreaming: true)
+        messages.append(bubble)
+        let placeholderID = bubble.id
+        phase = .thinking("正在联网搜索…")
+        task = Task { [weak self] in
+            let results = await WebSearch.search(text)
+            guard let self, !Task.isCancelled else { return }
+            self.messages.removeAll { $0.id == placeholderID }
+            if results.isEmpty {
+                self.session.showToast("没搜到，按已有知识回答")
+            }
+            self.start(userText: text, sources: results)
+        }
     }
 
     /// 「画一只猫」「帮我画……」这种直接去画图。
@@ -206,7 +233,7 @@ final class ChatModel: ObservableObject {
         }
     }
 
-    private func start(userText: String, reasoningAllowed: Bool = true) {
+    private func start(userText: String, reasoningAllowed: Bool = true, sources: [WebSearchResult] = []) {
         let snapshot = session.snapshot
         guard let provider = snapshot.defaultProvider, provider.supportsChat,
               let apiKey = KeychainStore.shared.apiKey(for: provider.id), !apiKey.isEmpty else {
@@ -220,8 +247,12 @@ final class ChatModel: ObservableObject {
                                                 history: history(excluding: userText),
                                                 maxTokens: nil)
         apply(prefs, to: &request, provider: provider, reasoningAllowed: reasoningAllowed)
+        if !sources.isEmpty, let index = request.messages.firstIndex(where: { $0.role == .system }) {
+            request.messages[index] = .system(request.messages[index].content + "\n\n" + WebSearch.promptBlock(sources))
+        }
         let client = AIClientFactory.makeLLM(config: provider, apiKey: apiKey, capturesReasoning: true)
-        let bubble = ChatBubble(role: .assistant, text: "", isStreaming: true)
+        var bubble = ChatBubble(role: .assistant, text: "", isStreaming: true)
+        bubble.sources = sources
         messages.append(bubble)
         let bubbleID = bubble.id
         phase = .thinking(request.reasoning == .deep ? "正在深度思考…" : "正在想…")
@@ -255,7 +286,7 @@ final class ChatModel: ObservableObject {
                     // 这家不认推理参数：记下来，去掉再发
                     self.markReasoningUnsupported(provider.id)
                     self.messages.removeAll { $0.id == bubbleID }
-                    self.start(userText: userText, reasoningAllowed: false)
+                    self.start(userText: userText, reasoningAllowed: false, sources: sources)
                 } else if !self.triedOtherModel, ProviderCheck.isModelProblem(mapped) {
                     self.triedOtherModel = true
                     self.switchModel(after: mapped, provider: provider, apiKey: apiKey, userText: userText, bubbleID: bubbleID)
@@ -383,7 +414,7 @@ final class ChatModel: ObservableObject {
         messages.append(bubble)
         let bubbleID = bubble.id
         phase = .thinking("正在画，一般要 5 到 20 秒…")
-        let client = AIClientFactory.makeImage(config: provider, apiKey: apiKey)
+        let client = AIClientFactory.makeImage(config: provider, apiKey: apiKey, onlyConfiguredModel: !prefs.imageModelAuto)
         let request = ImageRequest(prompt: prompt + prefs.imageStyle.promptSuffix, size: prefs.imageShape.size)
 
         task = Task { [weak self] in
@@ -477,6 +508,12 @@ final class ChatModel: ObservableObject {
         }
         UIPasteboard.general.image = picture
         session.showToast("已复制，到聊天框长按粘贴")
+    }
+
+    /// 打开参考的网页（用浏览器）。
+    func open(_ source: WebSearchResult) {
+        guard let url = URL(string: source.url) else { return }
+        session.host?.openContainingApp(url) { _ in }
     }
 
     /// 存到相册。

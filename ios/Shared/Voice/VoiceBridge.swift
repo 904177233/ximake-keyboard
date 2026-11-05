@@ -58,24 +58,27 @@ public enum VoiceBridge {
     private static let pasteboardMarker = "com.moyu.voice.result"
     private static let plainTextType = "public.utf8-plain-text"
 
-    /// 实时文字能不能传过去。
-    public static var canShareLive: Bool {
-        SharedStore.shared.isAppGroupAvailable || SharedVault.shared.isAvailable
-    }
+    /// 实时文字能不能传过去。打不通共享存储时还有系统通知的状态值，所以总是能。
+    public static var canShareLive: Bool { true }
 
+    /// 共享存储能用就写共享存储；另外总在系统通知的状态值里放一份，打不通时靠它。
     private static func write(_ data: Data?, forKey key: String) {
         if SharedStore.shared.isAppGroupAvailable {
             SharedStore.shared.setData(data, forKey: key)
         } else if SharedVault.shared.isAvailable {
             SharedVault.shared.set(data, forKey: key)
         }
+        NotifyChannel.write(data, name: key)
     }
 
     private static func read(forKey key: String) -> Data? {
-        if SharedStore.shared.isAppGroupAvailable {
-            return SharedStore.shared.data(forKey: key)
+        if SharedStore.shared.isAppGroupAvailable, let data = SharedStore.shared.data(forKey: key) {
+            return data
         }
-        return SharedVault.shared.data(forKey: key)
+        if SharedVault.shared.isAvailable, let data = SharedVault.shared.data(forKey: key) {
+            return data
+        }
+        return NotifyChannel.read(name: key)
     }
 
     // MARK: - App 写

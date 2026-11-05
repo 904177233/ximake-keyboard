@@ -73,7 +73,7 @@ done
 xcrun simctl launch "$UDID" "$APP_ID" | tee "$OUT/launch.txt"
 sleep 15
 
-for index in $(seq -w 1 26); do
+for index in $(seq -w 1 30); do
   if ! xcrun simctl io "$UDID" screenshot --type=png "$OUT/shot-$index.png" 2>&1 | tee -a "$OUT/screenshot.txt"; then
     echo "第 $index 张 simctl 失败"
   fi

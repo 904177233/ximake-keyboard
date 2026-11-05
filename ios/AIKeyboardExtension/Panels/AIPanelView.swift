@@ -76,6 +76,16 @@ struct AIPanelView: View {
     private var imageParams: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
+                if !ai.imageModelChoices.isEmpty {
+                    PanelChip(title: "自动换模型", isSelected: ai.prefs.imageModelAuto) { ai.setImageModel(nil) }
+                    ForEach(ai.imageModelChoices, id: \.modelID) { model in
+                        PanelChip(title: model.title,
+                                  isSelected: !ai.prefs.imageModelAuto && ai.currentImageModel == model.modelID) {
+                            ai.setImageModel(model.modelID)
+                        }
+                    }
+                    palette.line.color.frame(width: 1, height: 16)
+                }
                 ForEach(AIPrefs.ImageShape.allCases, id: \.self) { shape in
                     PanelChip(title: shape.title, isSelected: ai.prefs.imageShape == shape) { ai.setImageShape(shape) }
                 }

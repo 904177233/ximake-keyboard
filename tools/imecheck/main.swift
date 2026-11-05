@@ -130,12 +130,19 @@ learning.record(segments: [(text: "握", key: "wo")])
 let afterLearning = texts(qwerty("wo"), 6)
 check("常选的词往前排", afterLearning.contains("握"), "\(afterLearning)")
 
+print("单个字母")
+let firstForM = qwerty("m").candidates.first?.text ?? ""
+check("单打 m 首选不是嗯、唔、呣", !["嗯", "唔", "呣"].contains(firstForM), "\(texts(qwerty("m")))")
+check("wbzd 是我不知道", qwerty("wbzd").candidates.first?.text == "我不知道", "\(texts(qwerty("wbzd")))")
+
 print("个人词库")
 let beforeChoice = texts(qwerty("shiyong"), 10)
 learning.record(segments: [(text: "试用", key: "shiyong")])
 check("选过「试用」后 shiyong 首选是试用", qwerty("shiyong").candidates.first?.text == "试用", "\(beforeChoice) -> \(texts(qwerty("shiyong")))")
 learning.record(segments: [(text: "睡觉了", key: "shuijiaole")])
 check("选过的三字词整句也用它", qwerty("woyaoshuijiaole").candidates.first?.text.hasSuffix("睡觉了") == true, "\(texts(qwerty("woyaoshuijiaole")))")
+learning.recordTyped([(text: "我吃过了", typed: "wcgl")])
+check("简拼选过一次后排第一", qwerty("wcgl").candidates.first?.text == "我吃过了", "\(texts(qwerty("wcgl")))")
 learning.removeEntry(text: "试用", key: "shiyong")
 check("删掉以后不再排第一", qwerty("shiyong").candidates.first?.text != "试用", "\(texts(qwerty("shiyong")))")
 

@@ -313,6 +313,13 @@ struct SettingsPanelView: View {
                     .font(.system(size: 13))
                     .foregroundColor(palette.secondary.color)
             }
+            row("App 和键盘") {
+                Text(SharedBlob.statusText)
+                    .font(.system(size: 11))
+                    .foregroundColor(palette.secondary.color)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
             row("键盘高度情况") {
                 Text(session.host?.heightDiagnostic ?? "")
                     .font(.system(size: 11))

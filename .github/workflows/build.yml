@@ -71,7 +71,7 @@ env:
   # 之前所有构建都写死 `1.0.0 build 1`，导致装到手机上根本无法区分是哪一版 ——
   # 用户反馈「好像没更新」，我在设备侧和包里都拿不到版本证据。现在改为：
   #   设置 › 通用 › iPhone 储存空间 › 墨语 → 版本 1.5.0，构建号 = run 序号
-  MARKETING_VERSION: 3.0.4
+  MARKETING_VERSION: 3.0.5
   BUILD_NUMBER: ${{ github.run_number }}
 
 jobs:
@@ -214,6 +214,7 @@ jobs:
             -o "${BUILD_DIR}/apicheck" \
             ios/Shared/Models/*.swift \
             ios/Shared/Networking/*.swift \
+            ios/Shared/Voice/NotifyChannel.swift \
             tools/apicheck/main.swift
           "${BUILD_DIR}/apicheck"
 
@@ -444,6 +445,20 @@ jobs:
             exit 1
           fi
 
+      # 另出一个带 App Group 声明的包：SideStore / AltStore 重签时会据此注册 App Group，
+      # App 和键盘才能共用设置。有的工具用免费账号签不了 App Group，所以不带声明的包照常出。
+      - name: Package App Group variant
+        run: |
+          set -euo pipefail
+          rm -rf "${BUILD_DIR}/variant" && mkdir -p "${BUILD_DIR}/variant"
+          cp -R "${BUILD_DIR}/Payload" "${BUILD_DIR}/variant/"
+          APP="${BUILD_DIR}/variant/Payload/AIKeyboard.app"
+          codesign --force --sign - --entitlements ios/Config/Sideload-AppGroup.entitlements "${APP}/PlugIns/AIKeyboardExtension.appex"
+          codesign --force --sign - --entitlements ios/Config/Sideload-AppGroup.entitlements "${APP}"
+          codesign -d --entitlements :- "${APP}" 2>/dev/null | head -n 20 || true
+          ( cd "${BUILD_DIR}/variant" && ditto -c -k --sequesterRsrc --keepParent Payload ../AIKeyboard-appgroup-unsigned.ipa )
+          ls -lh "${BUILD_DIR}/AIKeyboard-appgroup-unsigned.ipa"
+
       - name: Verify IPA contents
         run: |
           set -euo pipefail
@@ -475,7 +490,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: AIKeyboard-unsigned-ipa
-          path: build/AIKeyboard-unsigned.ipa
+          path: |
+            build/AIKeyboard-unsigned.ipa
+            build/AIKeyboard-appgroup-unsigned.ipa
           if-no-files-found: error
           retention-days: 7
           compression-level: 0

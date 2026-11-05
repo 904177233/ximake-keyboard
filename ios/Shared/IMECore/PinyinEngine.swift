@@ -32,6 +32,12 @@ public final class PinyinEngine {
     static let singleInitialPenalty = 10.0
     /// 多个首字母代表一个词（xh -> 喜欢）的额外代价。
     static let initialsPenalty = 3.0
+    /// 简拼每一段试几个词（tools/dict/build_binary.py 的 INITIAL_TOP_K 要一起改）。
+    static let initialTopK = 3
+    /// 简拼每多一个字母加的分：一下对上四个字母的词比拆成两段可信得多。
+    static let initialsLengthBonus = 3.0
+    /// 前一个词的最后一个字和这个词的第一个字连起来是个常用词（吃 + 过了 -> 吃过），加分。
+    static let junctionBonus = 2.0
     /// 嗯、呣这类只有声母的音节，放在句子中间基本是错的。
     static let unlikelySyllables: Set<String> = ["n", "m", "ng", "hm", "hng"]
     static let unlikelyPenalty = 20.0
@@ -126,6 +132,20 @@ public final class PinyinEngine {
         return best
     }
 
+    /// 前一个词的最后一个字和这个词的第一个字连起来是不是个常用词。
+    private func junctionBonus(previous: String?, previousSyllable: String?, text: String,
+                               firstSyllable: String?, dictionary: MoyuDictionary) -> Double {
+        guard let previous, let last = previous.last, let first = text.first,
+              let previousSyllable, let firstSyllable else { return 0 }
+        let pair = String(last) + String(first)
+        for index in dictionary.exactRange(Array((previousSyllable + firstSyllable).utf8)) {
+            for entry in dictionary.entries(key: index, limit: 8) where entry.text == pair && entry.frequency >= 200 {
+                return Self.junctionBonus
+            }
+        }
+        return 0
+    }
+
     /// 个人词库里的词：比词库里很常用的词还高一点，选得越多越高。
     private static func userWordScore(syllables: Int, chosen: Int) -> Double {
         log(200_000.0) - tilePenalty + syllableBonus * Double(max(syllables - 1, 0)) + 1.5 * log2(Double(chosen) + 1)
@@ -144,7 +164,8 @@ public final class PinyinEngine {
     }
 
     /// 26 键：从 start 开始的所有词块。
-    private func qwertyTiles(query: IMEQuery, start: Int, previous: String?, dictionary: MoyuDictionary) -> [Tile] {
+    private func qwertyTiles(query: IMEQuery, start: Int, previous: String?, previousSyllable: String?,
+                             dictionary: MoyuDictionary) -> [Tile] {
         var tiles: [Tile] = []
         let input = query.input
         let count = input.count
@@ -199,14 +220,17 @@ public final class PinyinEngine {
 
             // 简拼：这一段没有全拼能对上时才试
             if !matchedExact, sub.count <= 6 {
-                if let top = dictionary.initialKeys(sub, limit: 1).first,
-                   let entry = bestWord(key: top, dictionary: dictionary) {
-                    let penalty = sub.count == 1 ? Self.singleInitialPenalty : Self.initialsPenalty
-                    let score = scoreWord(frequency: entry.frequency,
-                                          syllableCount: 1,
-                                          text: entry.text) - penalty
-                    tiles.append(Tile(end: position, text: entry.text, key: dictionary.keyString(key: top),
-                                      score: score, syllables: nil, lastSyllable: nil, isLoose: true))
+                let penalty = sub.count == 1 ? Self.singleInitialPenalty : Self.initialsPenalty
+                for index in dictionary.initialKeys(sub, limit: Self.initialTopK) {
+                    guard let entry = bestWord(key: index, dictionary: dictionary) else { continue }
+                    let syllables = dictionary.syllables(key: index)
+                    let score = scoreWord(frequency: entry.frequency, syllableCount: 1, text: entry.text, previous: previous)
+                        - penalty
+                        + Self.initialsLengthBonus * Double(sub.count - 1)
+                        + junctionBonus(previous: previous, previousSyllable: previousSyllable,
+                                        text: entry.text, firstSyllable: syllables.first, dictionary: dictionary)
+                    tiles.append(Tile(end: position, text: entry.text, key: dictionary.keyString(key: index),
+                                      score: score, syllables: nil, lastSyllable: syllables.last, isLoose: true))
                 }
             }
             tailHasExact = matchedExact
@@ -270,7 +294,8 @@ public final class PinyinEngine {
     }
 
     /// 九宫格：从 start 开始的所有词块。
-    private func t9Tiles(query: IMEQuery, start: Int, previous: String?, dictionary: MoyuDictionary) -> [Tile] {
+    private func t9Tiles(query: IMEQuery, start: Int, previous: String?, previousSyllable: String?,
+                         dictionary: MoyuDictionary) -> [Tile] {
         var tiles: [Tile] = []
         let input = query.input
         let count = input.count
@@ -310,13 +335,18 @@ public final class PinyinEngine {
                                   score: Self.userWordScore(syllables: syllables.count, chosen: word.count),
                                   syllables: syllables, lastSyllable: syllables.last))
             }
-            if query.locks.isEmpty, digits.count >= 2, digits.count <= 6,
-               let top = dictionary.t9InitialKeys(digits, limit: 1).first,
-               let entry = bestWord(key: top, dictionary: dictionary) {
-                let score = scoreWord(frequency: entry.frequency, syllableCount: 1, text: entry.text)
-                    - Self.initialsPenalty - 1
-                tiles.append(Tile(end: position, text: entry.text, key: dictionary.keyString(key: top),
-                                  score: score, syllables: nil, lastSyllable: nil, isLoose: true))
+            if query.locks.isEmpty, digits.count >= 2, digits.count <= 6 {
+                for index in dictionary.t9InitialKeys(digits, limit: Self.initialTopK) {
+                    guard let entry = bestWord(key: index, dictionary: dictionary) else { continue }
+                    let syllables = dictionary.syllables(key: index)
+                    let score = scoreWord(frequency: entry.frequency, syllableCount: 1, text: entry.text, previous: previous)
+                        - Self.initialsPenalty - 1
+                        + Self.initialsLengthBonus * Double(digits.count - 1)
+                        + junctionBonus(previous: previous, previousSyllable: previousSyllable,
+                                        text: entry.text, firstSyllable: syllables.first, dictionary: dictionary)
+                    tiles.append(Tile(end: position, text: entry.text, key: dictionary.keyString(key: index),
+                                      score: score, syllables: nil, lastSyllable: syllables.last, isLoose: true))
+                }
             }
             if query.breaks.contains(position) { return tiles }
             position += 1
@@ -356,9 +386,10 @@ public final class PinyinEngine {
         best[0] = 0
         for start in 0..<count where best[start] > -.infinity {
             let previous = back[start]?.tile.text
+            let previousSyllable = back[start]?.tile.lastSyllable
             let tiles = query.mode == .qwerty
-                ? qwertyTiles(query: query, start: start, previous: previous, dictionary: dictionary)
-                : t9Tiles(query: query, start: start, previous: previous, dictionary: dictionary)
+                ? qwertyTiles(query: query, start: start, previous: previous, previousSyllable: previousSyllable, dictionary: dictionary)
+                : t9Tiles(query: query, start: start, previous: previous, previousSyllable: previousSyllable, dictionary: dictionary)
             for tile in tiles {
                 let value = best[start] + tile.score
                 if value > best[tile.end] {
@@ -401,7 +432,9 @@ public final class PinyinEngine {
 
         // 打头的是整句（或一整个词）
         let singleAbbreviation = path?.count == 1 && path?.first?.syllables == nil
-        if let path, !singleAbbreviation {
+        let typedString = String(decoding: query.input, as: UTF8.self)
+        let onlyUnlikely = query.mode == .qwerty && Self.unlikelySyllables.contains(typedString)
+        if let path, !singleAbbreviation, !onlyUnlikely {
             builder.add(IMECandidate(text: sentenceText(path),
                                      key: path.map(\.key).joined(),
                                      consumed: count,
@@ -471,6 +504,11 @@ public final class PinyinEngine {
 
         for phrase in learning.phrases(forKey: inputString) {
             builder.add(IMECandidate(text: phrase, key: inputString, consumed: count))
+        }
+
+        // 单独一个 m、n：先给 m 开头的常用字（没、吗、们），嗯、呣排后面
+        if Self.unlikelySyllables.contains(inputString) {
+            addInitials(input: input, dictionary: dictionary, into: &builder)
         }
 
         // 整串对得上的词

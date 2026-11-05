@@ -65,11 +65,19 @@ ESSAY_MIN_WEIGHT = 500
 ESSAY_NEW_WORD_MIN = 500
 #: 两边都有的词，词频里 essay 占多少（按对数算），其余是 jieba。
 ESSAY_BLEND = 1.0
+#: rime-ice（雾凇拼音）基础词库，GPL-3.0，下载地址见 docs/16-交接文档.md。没有这个文件就跳过。
+RIME_ICE = HERE / ".cache" / "rime-ice" / "base.dict.yaml"
+#: 词库里没有的词，rime-ice 权重到这个数才收。
+RIME_NEW_MIN = 1000
+#: 两边都有的词，词频里 rime-ice 占多少（按对数算）。
+RIME_BLEND = 0.0
+#: 三个字以上的短语（我吃过了、你在干什么）权重普遍低，但简拼最需要它们，门槛单独放低。
+RIME_PHRASE_MIN = 1000
 ESSAY_RAISE_V1 = True
 #: 词频低于这个的词不拿来推「后半截」联想。
 COMPOUND_MIN_FREQ = 200
 
-DICT_VERSION = "3.0.2"
+DICT_VERSION = "3.0.5"
 GENERATED_DATE = "2026-11-05"
 
 #: jieba 词频下限。词频再低的多是专名和噪声，收进来只会占地方。
@@ -260,6 +268,28 @@ def load_essay(known: set[str]) -> dict[str, int]:
     return dict(merged)
 
 
+def load_rime_ice() -> dict[str, tuple[list[str], int]]:
+    """读 rime-ice 的 base.dict.yaml：词 -> (拼音, 权重)。同一个词有几个读音时留权重高的。"""
+    if not RIME_ICE.exists():
+        return {}
+    result: dict[str, tuple[list[str], int]] = {}
+    started = False
+    for line in RIME_ICE.read_text(encoding="utf-8").splitlines():
+        if not started:
+            started = line.strip() == "..."
+            continue
+        parts = line.split("\t")
+        if len(parts) != 3 or not parts[2].isdigit() or not CJK.match(parts[0]) or len(parts[0]) > MAX_WORD_LEN:
+            continue
+        syllables = parts[1].split()
+        if len(syllables) != len(parts[0]) or not all(s in SYL_SET for s in syllables):
+            continue
+        weight = int(parts[2])
+        if parts[0] not in result or result[parts[0]][1] < weight:
+            result[parts[0]] = (syllables, weight)
+    return result
+
+
 def essay_scale(essay: dict[str, int], jieba: dict[str, int]) -> float:
     """essay 和 jieba 的刻度不一样：取常用词上两者比值的中位数，换算成 jieba 的刻度。"""
     ratios = sorted(math.log(jieba[word] / weight) for word, weight in essay.items()
@@ -387,6 +417,36 @@ def collect() -> Builder:
                 row[0] = max(row[0], scaled) if word in v1_chat else scaled
                 builder.stats["essay_v1"] += 1
 
+    # ②⁗ rime-ice：带拼音和词频，聊天常用的组合多（吃过、我吃、过了、我吃过了）
+    rime = load_rime_ice()
+    if rime:
+        current: dict[str, int] = {}
+        for words in builder.table.values():
+            for text, (freq, _flags) in words.items():
+                current[text] = max(current.get(text, 0), freq)
+        ratios = sorted(math.log(current[text] / weight) for text, (_syl, weight) in rime.items()
+                        if weight >= 1000 and current.get(text, 0) >= 100)
+        rime_scale = math.exp(ratios[len(ratios) // 2]) if ratios else 1.0
+        builder.stats["rime_scale_x1000"] = int(rime_scale * 1000)
+        known_chars = {ch for text in current for ch in text}
+        if RIME_BLEND > 0:
+            for (key, mask), words in builder.table.items():
+                for text, row in words.items():
+                    entry = rime.get(text)
+                    if entry is None or "".join(entry[0]) != key or text in v1_chat or row[1] & (FLAG_EMOJI | FLAG_PUNCT):
+                        continue
+                    scaled = entry[1] * rime_scale + 1
+                    row[0] = max(1, int(math.exp(RIME_BLEND * math.log(scaled) + (1 - RIME_BLEND) * math.log(row[0] + 1))))
+                    builder.stats["rime_reweight"] += 1
+        for text, (syllables, weight) in rime.items():
+            threshold = RIME_PHRASE_MIN if len(text) >= 3 else RIME_NEW_MIN
+            if weight < threshold or text in current or len(text) < 2:
+                continue
+            if not all(ch in known_chars for ch in text):
+                continue
+            builder.add("".join(syllables), syllables, text, max(MIN_FREQ, int(weight * rime_scale)), chat_bits(text))
+            builder.stats["rime_new"] += 1
+
     # ③ 单字的其它读音
     for char, freq in single_freq.items():
         if char not in keep_chars:
@@ -488,6 +548,14 @@ def write_binary(builder: Builder, path: Path) -> dict:
 # 整句转换评测：算法和 Swift 内核（PinyinEngine.swift）保持一致
 # ---------------------------------------------------------------------------
 TILE_PENALTY = 14.0
+SINGLE_INITIAL_PENALTY = 10.0
+INITIALS_PENALTY = 3.0
+#: 简拼每一段试几个候选词（Swift 里同名常量要一起改）。
+INITIAL_TOP_K = 3
+#: 前一个词的最后一个字和这个词的第一个字连起来是个词（吃 + 过了 -> 吃过），加分。
+JUNCTION_BONUS = 2.0
+#: 简拼每多一个字母加的分：一下对上四个字母的词比拆成两段可信得多。
+INITIALS_LENGTH_BONUS = 3.0
 SYLLABLE_BONUS = 2.0
 BIGRAM_BONUS = 3.0
 UNLIKELY_SINGLE = {"n", "m", "ng", "hm", "hng"}
@@ -529,17 +597,24 @@ class Eval:
         self.by_key: dict[str, list[tuple[str, int, int, int]]] = defaultdict(list)
         self.init: dict[str, list[tuple[int, str, str]]] = defaultdict(list)
         self.pairs = load_next_words()
+        self.two_char: set[str] = set()
         for (key, mask), words in builder.table.items():
             syllables = bin(mask).count("1") or 1
             for text, (freq, flags) in words.items():
                 if flags & (FLAG_EMOJI | FLAG_PUNCT | FLAG_ASCII):
                     continue
                 self.by_key[key].append((text, freq, syllables, flags))
+                if len(text) == 2 and freq >= 200:
+                    self.two_char.add(text)
             if mask:
-                top = max(words.items(), key=lambda kv: kv[1][0])
-                self.init[initials_of(key, mask)].append((top[1][0], top[0], key))
+                clean = [(f, t) for t, (f, fl) in words.items() if not fl & (FLAG_EMOJI | FLAG_PUNCT | FLAG_ASCII)]
+                if clean:
+                    top = max(clean)
+                    self.init[initials_of(key, mask)].append((top[0], top[1], key))
         for key in self.by_key:
             self.by_key[key].sort(key=lambda row: -row[1])
+        for initials in self.init:
+            self.init[initials].sort(reverse=True)
 
     def convert(self, query: str) -> str:
         n = len(query)
@@ -552,11 +627,22 @@ class Eval:
             for j in range(i + 1, min(n, i + 24) + 1):
                 sub = query[i:j]
                 rows = self.by_key.get(sub)
+                previous = back[i][1] if back[i] else None
                 if not rows:
+                    # 简拼：这一段没有全拼能对上时才试
+                    if len(sub) <= 6:
+                        penalty = SINGLE_INITIAL_PENALTY if len(sub) == 1 else INITIALS_PENALTY
+                        for freq, text, key in self.init.get(sub, [])[:INITIAL_TOP_K]:
+                            junction = JUNCTION_BONUS if previous and previous[-1] + text[0] in self.two_char else 0.0
+                            pair = BIGRAM_BONUS if previous and text in self.pairs.get(previous, ()) else 0.0
+                            value = (best[i] + math.log(freq + 1) - TILE_PENALTY - penalty + junction + pair
+                                     + INITIALS_LENGTH_BONUS * (len(sub) - 1))
+                            if value > best[j]:
+                                best[j] = value
+                                back[j] = (i, text, key)
                     continue
                 first = (segment(sub) or [sub])[0]
                 extra = -20.0 if first in UNLIKELY_SINGLE else 0.0
-                previous = back[i][1] if back[i] else None
                 for text, freq, syllables, _ in rows[:8]:
                     pair = BIGRAM_BONUS if previous and text in self.pairs.get(previous, ()) else 0.0
                     value = best[i] + math.log(freq + 1) - TILE_PENALTY + SYLLABLE_BONUS * (syllables - 1) + extra + pair
@@ -622,6 +708,7 @@ def main() -> int:
             {"name": "pypinyin", "license": "MIT", "url": "https://github.com/mozillazg/python-pinyin"},
             {"name": "rime-essay essay.txt", "license": "LGPL-3.0", "url": "https://github.com/rime/rime-essay"},
             {"name": "OpenCC TSCharacters / TSPhrases", "license": "Apache-2.0", "url": "https://github.com/BYVoid/OpenCC"},
+            {"name": "rime-ice cn_dicts/base.dict.yaml", "license": "GPL-3.0", "url": "https://github.com/iDvel/rime-ice"},
         ],
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 

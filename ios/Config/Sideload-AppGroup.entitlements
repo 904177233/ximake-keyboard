@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!--
+  只给 CI 打「带 App Group 声明」的那个安装包用（AIKeyboard-appgroup-unsigned.ipa）。
+  SideStore / AltStore 这类工具重签时会读这里，替你注册 App Group，
+  并把实际的组名写进 Info.plist 的 ALTAppGroups（SharedStore 会去读）。
+  有的工具用免费账号签不了 App Group，装不上的话用不带声明的那个包。
+-->
+<dict>
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.moyu.keyboard</string>
+	</array>
+</dict>
+</plist>

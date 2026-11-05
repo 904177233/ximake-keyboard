@@ -21,6 +21,17 @@ public struct SharedBlob: Sendable {
         self.useVault = store.backing != .memory && !store.isAppGroupAvailable
     }
 
+    /// 给人看的打通情况（设置页显示，出问题时截图回来）。
+    public static var statusText: String {
+        if let group = SharedStore.shared.groupIdentifier {
+            return "App Group 已打通（\(group)）"
+        }
+        if SharedVault.shared.isAvailable {
+            return "钥匙串共享已打通"
+        }
+        return "没打通（App Group 和钥匙串共享都不可用）"
+    }
+
     /// App 和键盘看到的是不是同一份。
     public var isShared: Bool {
         store.isAppGroupAvailable || (useVault && SharedVault.shared.isAvailable)

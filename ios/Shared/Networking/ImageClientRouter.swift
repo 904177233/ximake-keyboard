@@ -44,11 +44,12 @@ public enum ImageClientRouter {
         config: AIProviderConfig,
         apiKey: String,
         session: URLSession? = nil,
-        path: String? = nil
+        path: String? = nil,
+        onlyConfiguredModel: Bool = false
     ) -> ImageGenerating {
         switch route(for: config) {
         case .seedream:
-            return SeedreamImageClient(config: config, apiKey: apiKey, session: session)
+            return SeedreamImageClient(config: config, apiKey: apiKey, session: session, onlyConfiguredModel: onlyConfiguredModel)
         case .wanx:
             return WanxImageClient(config: config, apiKey: apiKey, session: session)
         case .openAICompatible:
