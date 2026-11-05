@@ -90,6 +90,7 @@ public final class SharedStore: @unchecked Sendable {
             // ③ 内存兜底：仅测试或极端情况下显式启用（不落盘）。
             self.backing = .memory
             self.defaults = SharedStore.makeMemoryDefaults()
+            self.groupIdentifier = nil
             return
         }
 
