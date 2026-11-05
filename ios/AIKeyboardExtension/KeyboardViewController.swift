@@ -440,11 +440,9 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
             self?.view.layoutIfNeeded()
         }
         let steps: [(String, () -> Void)] = [
+            ("基线 标准", { session.updatePrefs { $0.height = .standard } }),
+            ("基线 标准 再看", {}),
             ("P0 999 要288", { force(288) }),
-            ("P1 关自动约束 要300", { [weak self] in
-                self?.view.translatesAutoresizingMaskIntoConstraints = false
-                force(300)
-            }),
             ("P2 selfSizing 要320", { [weak self] in
                 (self?.view as? UIInputView)?.allowsSelfSizing = true
                 (self?.inputView)?.allowsSelfSizing = true
@@ -464,7 +462,6 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
             }),
             ("P7 还原", { [weak self] in
                 self?.simForcedHeight = nil
-                self?.view.translatesAutoresizingMaskIntoConstraints = true
                 (self?.inputView)?.allowsSelfSizing = false
                 session.updatePrefs { $0.height = .standard }
             }),
