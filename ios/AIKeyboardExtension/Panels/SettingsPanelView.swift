@@ -311,6 +311,13 @@ struct SettingsPanelView: View {
                     .font(.system(size: 13))
                     .foregroundColor(palette.secondary.color)
             }
+            row("键盘高度情况") {
+                Text(session.host?.heightDiagnostic ?? "")
+                    .font(.system(size: 11))
+                    .foregroundColor(palette.secondary.color)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
         }
     }
 
@@ -646,11 +653,10 @@ struct FieldEditView: View {
     }
 }
 
-/// 语音输入面板。
+/// 语音输入面板。录音在 App 里，这里显示听到的字。
 @MainActor
 struct VoicePanelView: View {
     @ObservedObject var session: KeyboardSession
-    @ObservedObject var voice: KMVoiceInput
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -669,7 +675,8 @@ struct VoicePanelView: View {
             ScrollView(.vertical, showsIndicators: false) {
                 Text(bodyText)
                     .font(.system(size: 16))
-                    .foregroundColor(isPlaceholder ? palette.secondary.color : palette.text.color)
+                    .foregroundColor(session.voiceText.isEmpty ? palette.secondary.color : palette.text.color)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(12)
             }
@@ -680,50 +687,32 @@ struct VoicePanelView: View {
 
             HStack(spacing: 8) {
                 Spacer(minLength: 0)
-                switch voice.state {
-                case let .finished(text):
-                    PanelButton(title: "重说") {
-                        voice.reset()
-                        voice.start()
-                    }
-                    PanelButton(title: "放进输入框", isPrimary: true) {
-                        session.host?.documentProxy.insertText(text)
-                        voice.reset()
-                        session.setPage(.keys)
-                    }
+                switch session.voiceState {
+                case .listening:
+                    PanelButton(title: "说完了", isPrimary: true) { session.finishVoice() }
                 case .failed:
-                    PanelButton(title: "再试一次", isPrimary: true) {
-                        voice.reset()
-                        voice.start()
-                    }
-                case .recording:
-                    PanelButton(title: "说完了", isPrimary: true) { voice.stop() }
+                    PanelButton(title: "再试一次", isPrimary: true) { session.openVoice() }
                 default:
                     EmptyView()
                 }
             }
             .padding(.horizontal, 8)
-            .frame(height: 50)
+            .frame(height: 44)
         }
     }
 
-    private var isPlaceholder: Bool {
-        if case .finished = voice.state { return false }
-        return voice.partialText.isEmpty
-    }
-
     private var bodyText: String {
-        switch voice.state {
-        case let .finished(text):
-            return text
-        case let .failed(reason, _):
-            return reason
-        case .requestingPermission:
-            return "正在准备…"
+        switch session.voiceState {
+        case .opening:
+            return "正在打开墨语…"
+        case .listening:
+            return session.voiceText.isEmpty ? "正在听，说吧…" : session.voiceText
         case .transcribing:
-            return voice.partialText.isEmpty ? "正在转文字…" : voice.partialText
-        default:
-            return voice.partialText.isEmpty ? "请说话…" : voice.partialText
+            return session.voiceText.isEmpty ? "正在转文字…" : session.voiceText
+        case .waitingInApp:
+            return "在墨语里说完点「说完了」，回到这里文字会自动放进输入框。"
+        case let .failed(reason):
+            return reason
         }
     }
 }

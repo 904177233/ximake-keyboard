@@ -67,6 +67,11 @@ struct StartView: View {
                 }
             }
         }
+        .onAppear {
+            #if MOYU_SIM_CHECK
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { trialFocused = true }
+            #endif
+        }
     }
 
     private var subtitle: String {

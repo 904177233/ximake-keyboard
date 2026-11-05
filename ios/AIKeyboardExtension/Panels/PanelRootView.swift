@@ -32,7 +32,7 @@ struct PanelRootView: View {
             case .field:
                 FieldEditView(session: session)
             case .voice:
-                VoicePanelView(session: session, voice: KMVoiceInput.shared)
+                VoicePanelView(session: session)
             case .keys, .numbers:
                 EmptyView()
             }

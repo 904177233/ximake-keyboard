@@ -31,6 +31,10 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
     /// 正在布局回调里。这时候不能强制布局，否则会递归到栈溢出。
     private var isInLayoutPass = false
     private var isApplyingHeight = false
+    #if MOYU_SIM_CHECK
+    private let simLabel = UILabel()
+    private var simStarted = false
+    #endif
 
     // MARK: - KeyboardHost
 
@@ -40,6 +44,37 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
 
     func goToNextKeyboard() {
         advanceToNextInputMode()
+    }
+
+    /// 高度对不对的证据，设置页最下面显示。
+    var heightDiagnostic: String {
+        let window = view.window.map { "\(Int($0.bounds.height))" } ?? "-"
+        return "要 \(Int(contentHeight)) 给 \(Int(view.bounds.height)) 可用 \(Int(usableHeight)) 底 \(Int(view.safeAreaInsets.bottom)) 窗 \(window)"
+    }
+
+    /// 从键盘打开墨语 App。键盘没有公开的办法，只能顺着响应链找到能打开链接的那个对象（应用本身）。
+    func openContainingApp(_ url: URL, completion: @escaping (Bool) -> Void) {
+        let selector = NSSelectorFromString("openURL:options:completionHandler:")
+        var responder: UIResponder? = self
+        while let current = responder {
+            if current.responds(to: selector) {
+                typealias OpenFunction = @convention(c) (AnyObject, Selector, NSURL, NSDictionary, (@convention(block) (Bool) -> Void)?) -> Void
+                let function = unsafeBitCast(current.method(for: selector), to: OpenFunction.self)
+                let done: @convention(block) (Bool) -> Void = { success in
+                    DispatchQueue.main.async { completion(success) }
+                }
+                function(current, selector, url as NSURL, NSDictionary(), done)
+                return
+            }
+            responder = current.next
+        }
+        if let context = extensionContext {
+            context.open(url) { success in
+                DispatchQueue.main.async { completion(success) }
+            }
+        } else {
+            completion(false)
+        }
     }
 
     // MARK: - 生命周期
@@ -82,8 +117,10 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
         session.host = self
         session.onRender = { [weak self] in self?.render() }
 
-        let constraint = view.heightAnchor.constraint(equalToConstant: contentHeight(for: .keys))
-        constraint.priority = .required
+        // 不能用 required：系统自己也有一条 required 的高度约束，两条冲突时 view 比系统给的窗口还高，
+        // 下面的键就被系统底栏盖住。999 让系统说了算，layoutContent 按实际高度排。
+        let constraint = view.heightAnchor.constraint(equalToConstant: contentHeight)
+        constraint.priority = UILayoutPriority(999)
         constraint.isActive = true
         heightConstraint = constraint
     }
@@ -112,6 +149,9 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
         DispatchQueue.main.async { [weak self] in
             self?.applyHeight()
         }
+        #if MOYU_SIM_CHECK
+        startSimCheck()
+        #endif
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -157,35 +197,52 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
         KeyboardMetrics(height: session.prefs.height, isLandscape: session.isLandscape)
     }
 
-    /// 实际用的尺寸：系统给的高度不够时压缩键高，宁可矮一点也不切掉下面的键。
+    /// 真正能用来画的高度。view 比窗口还高时，多出去的部分是看不见的。
+    private var usableHeight: CGFloat {
+        var height = view.bounds.height
+        if let window = view.window {
+            let visible = window.bounds.intersection(view.convert(view.bounds, to: window)).height
+            if visible > 100 {
+                height = min(height, visible)
+            }
+        }
+        return max(height - view.safeAreaInsets.bottom, 0)
+    }
+
+    /// 填写设置项时要不要候选栏：只有打中文才用得到，打英文时把这块让给键区。
+    private var fieldShowsTopBar: Bool {
+        session.page != .field || session.isChinese
+    }
+
+    /// 对话时正在看回答：整个键盘都给消息，没有键区。
+    private var isChatReading: Bool {
+        session.page == .chat && !session.chatTyping
+    }
+
+    /// 实际用的尺寸：跟着系统给的高度走，宁可矮一点也不切掉下面的键。
     private var metrics: KeyboardMetrics {
         let nominal = nominalMetrics
-        let height = view.bounds.height - view.safeAreaInsets.bottom
+        let height = usableHeight
         guard height >= 120 else { return nominal }
         let reserved: CGFloat
         switch session.page {
         case .chat:
-            reserved = nominal.topBarHeight + 64
+            reserved = nominal.topBarHeight + 44
         case .field:
-            reserved = nominal.topBarHeight + 84
+            reserved = (fieldShowsTopBar ? nominal.topBarHeight : 0) + 84
         default:
             reserved = nominal.topBarHeight
         }
         return nominal.fitted(toSurfaceHeight: height - reserved)
     }
 
-    /// 这一页应有的总高度（不含底部安全区）。
-    private func contentHeight(for page: KeyboardSession.Page) -> CGFloat {
+    /// 向系统要的总高度（不含底部安全区）。
+    ///
+    /// 每一页都一样，只跟「低、标准、高」有关。系统不保证键盘显示时跟着改高度，
+    /// 所以对话页不靠长高，靠在打字和看回答之间切换。
+    private var contentHeight: CGFloat {
         let metrics = nominalMetrics
-        let base = metrics.topBarHeight + metrics.surfaceHeight
-        switch page {
-        case .chat:
-            return base + (metrics.isLandscape ? 86 : 162)
-        case .field:
-            return base + 84
-        default:
-            return base
-        }
+        return metrics.topBarHeight + metrics.surfaceHeight
     }
 
     /// 把高度告诉系统。
@@ -194,9 +251,11 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
     /// 不在布局回调里时要强制布局一次。在布局回调里绝对不能强制，会递归到栈溢出。
     private func applyHeight() {
         guard isViewLoaded else { return }
-        let target = contentHeight(for: session.page) + view.safeAreaInsets.bottom
+        let target = contentHeight + view.safeAreaInsets.bottom
         if heightConstraint == nil {
-            heightConstraint = view.heightAnchor.constraint(equalToConstant: target)
+            let constraint = view.heightAnchor.constraint(equalToConstant: target)
+            constraint.priority = UILayoutPriority(999)
+            heightConstraint = constraint
         }
         guard let constraint = heightConstraint else { return }
         if !constraint.isActive {
@@ -212,10 +271,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
         guard !isApplyingHeight, changed || abs(view.bounds.height - target) > 0.5 else { return }
         isApplyingHeight = true
         defer { isApplyingHeight = false }
-        let selector = NSSelectorFromString("requestInputViewHeightUpdate")
-        if responds(to: selector) {
-            perform(selector)
-        }
+        view.setNeedsUpdateConstraints()
         view.layoutIfNeeded()
     }
 
@@ -246,7 +302,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
         let metrics = self.metrics
         let insets = view.safeAreaInsets
         let width = view.bounds.width - insets.left - insets.right
-        let height = max(view.bounds.height - insets.bottom, 0)
+        let height = usableHeight
         let bar = metrics.topBarHeight
 
         switch session.page {
@@ -259,10 +315,15 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
         case .ai, .settings, .voice:
             panelHost?.view.frame = CGRect(x: insets.left, y: 0, width: width, height: height)
         case .chat, .field:
-            let panel = max(height - bar - metrics.surfaceHeight, 0)
-            panelHost?.view.frame = CGRect(x: insets.left, y: 0, width: width, height: panel)
-            topBar.frame = CGRect(x: insets.left, y: panel, width: width, height: bar)
-            surface.frame = CGRect(x: insets.left, y: panel + bar, width: width, height: metrics.surfaceHeight)
+            if isChatReading {
+                panelHost?.view.frame = CGRect(x: insets.left, y: 0, width: width, height: height)
+            } else {
+                let barHeight = fieldShowsTopBar ? bar : 0
+                let panel = max(height - barHeight - metrics.surfaceHeight, 0)
+                panelHost?.view.frame = CGRect(x: insets.left, y: 0, width: width, height: panel)
+                topBar.frame = CGRect(x: insets.left, y: panel, width: width, height: barHeight)
+                surface.frame = CGRect(x: insets.left, y: panel + barHeight, width: width, height: metrics.surfaceHeight)
+            }
         }
 
         let toastWidth = min(width - 40, toastLabel.intrinsicContentSize.width)
@@ -286,8 +347,8 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
         panelHost?.view.isHidden = !needsPanel
 
         // 顶栏和键区
-        let showsTopBar = page != .ai && page != .settings && page != .voice
-        let showsSurface = page == .keys || page == .numbers || page == .chat || page == .field
+        let showsTopBar = page != .ai && page != .settings && page != .voice && !isChatReading && fieldShowsTopBar
+        let showsSurface = page == .keys || page == .numbers || (page == .chat && !isChatReading) || page == .field
         topBar.isHidden = !showsTopBar
         surface.isHidden = !showsSurface
 
@@ -346,6 +407,43 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
         host.didMove(toParent: self)
         panelHost = host
     }
+
+    #if MOYU_SIM_CHECK
+    /// 模拟器实测：自己走一遍各个高度和页面，CI 按时间截图。角上写着这一步和实际高度。
+    private func startSimCheck() {
+        guard !simStarted else { return }
+        simStarted = true
+        simLabel.font = .monospacedSystemFont(ofSize: 11, weight: .bold)
+        simLabel.textColor = .green
+        simLabel.backgroundColor = .black
+        simLabel.numberOfLines = 2
+        view.addSubview(simLabel)
+        let session = self.session
+        let steps: [(String, () -> Void)] = [
+            ("标准", { session.updatePrefs { $0.height = .standard }; session.setPage(.keys) }),
+            ("高", { session.updatePrefs { $0.height = .tall }; session.setPage(.keys) }),
+            ("低", { session.updatePrefs { $0.height = .low }; session.setPage(.keys) }),
+            ("标准-对话打字", { session.updatePrefs { $0.height = .standard }; session.openChat() }),
+            ("对话看回答", { session.chat.fillForSimCheck(); session.setChatTyping(false) }),
+            ("填设置项", { session.setPage(.keys); session.beginField(title: "API Key", value: "", isSecret: true, preferEnglish: true) { _ in } }),
+            ("设置", { session.finishField(save: false); session.openSettings() }),
+            ("语音", { session.showVoicePanelForSimCheck() })
+        ]
+        Task { @MainActor [weak self] in
+            var index = 0
+            while let self {
+                let step = steps[index % steps.count]
+                step.1()
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                self.simLabel.text = "S\(index % steps.count) \(step.0)\n\(self.heightDiagnostic)"
+                self.simLabel.frame = CGRect(x: 0, y: 0, width: self.view.bounds.width, height: 30)
+                self.view.bringSubviewToFront(self.simLabel)
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                index += 1
+            }
+        }
+    }
+    #endif
 
     // MARK: - KeySurfaceDelegate
 

@@ -13,6 +13,7 @@
 		3EA2CA8046C4BA07E715BAC7 /* AppStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD694C9E39CDE1F87A696A2F /* AppStyle.swift */; };
 		B64EA0CCAD1F4B6E4882DECA /* KeyboardPrefsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F245D4A71FA1940961B24B0 /* KeyboardPrefsView.swift */; };
 		EEDFD8E08289CC30C11E3D6A /* StartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5DB5B3FB43356FDF16FEFD8 /* StartView.swift */; };
+		9CA6BA87A27BAB51297D2469 /* VoiceSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 889A79DF32EF3C5280B1378F /* VoiceSessionView.swift */; };
 		10F0A718116F7ECC50E30CEB /* AISuggestionPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0072B30A6D8C1B911E482BEF /* AISuggestionPrompt.swift */; };
 		3EFAC17AD45DE3F75A743760 /* ContextualSeedTemplates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9939316CA31AB3076553567F /* ContextualSeedTemplates.swift */; };
 		95D7CA40851062E930CDE30F /* ContextualSuggestion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80072FDA1FC064C72F38FC69 /* ContextualSuggestion.swift */; };
@@ -63,6 +64,7 @@
 		BBB9BFEB6FCEE6733CA20980 /* SharedVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8E83541305D87C4BF301F8 /* SharedVault.swift */; };
 		2303027B037D55C407FA540D /* MoyuTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 349ED2582CE3A72240AE3E19 /* MoyuTheme.swift */; };
 		E726538021D8A35EEA67F5B3 /* KMVoiceInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BD466DEEFA3C32C61A3CF41 /* KMVoiceInput.swift */; };
+		416C5AF99950728D179028D4 /* VoiceBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83B418620D1CB8C7D1C583FD /* VoiceBridge.swift */; };
 		5446F8F194DB47A83CC8DFDD /* AIPanelModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD6720E37C29F9B7322830AC /* AIPanelModel.swift */; };
 		85F8D037E1C0B4F5E8DDE522 /* ChatModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5716BEA91985B2AAED6FD94 /* ChatModel.swift */; };
 		52602BCF8F9671A5C924DFA3 /* SuggestEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D3E12D9F7ECCBEC2294C1D /* SuggestEngine.swift */; };
@@ -127,6 +129,7 @@
 		40AE84C659C09706AA4511A9 /* SharedVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8E83541305D87C4BF301F8 /* SharedVault.swift */; };
 		9F15F8CDB5CBD8D72EE430DA /* MoyuTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 349ED2582CE3A72240AE3E19 /* MoyuTheme.swift */; };
 		AC6570F2705CDEE3AEE3C0CB /* KMVoiceInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BD466DEEFA3C32C61A3CF41 /* KMVoiceInput.swift */; };
+		05CD8F0223E35B38FFBD9B5C /* VoiceBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83B418620D1CB8C7D1C583FD /* VoiceBridge.swift */; };
 		A7205DC885FD1A2B433B015E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2B8A8F20CB99CE391C782335 /* Assets.xcassets */; };
 		6D5418F5E2911D76ED1E1560 /* dict in Resources */ = {isa = PBXBuildFile; fileRef = BCF1297046D655F5D5CD1AD4 /* dict */; };
 		A78CF4230E5C4A9B871ABA77 /* dict in Resources */ = {isa = PBXBuildFile; fileRef = BCF1297046D655F5D5CD1AD4 /* dict */; };
@@ -164,6 +167,7 @@
 		CD694C9E39CDE1F87A696A2F /* AppStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboard/Views/AppStyle.swift; sourceTree = SOURCE_ROOT; };
 		0F245D4A71FA1940961B24B0 /* KeyboardPrefsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboard/Views/KeyboardPrefsView.swift; sourceTree = SOURCE_ROOT; };
 		B5DB5B3FB43356FDF16FEFD8 /* StartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboard/Views/StartView.swift; sourceTree = SOURCE_ROOT; };
+		889A79DF32EF3C5280B1378F /* VoiceSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboard/Views/VoiceSessionView.swift; sourceTree = SOURCE_ROOT; };
 		CD6720E37C29F9B7322830AC /* AIPanelModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/AI/AIPanelModel.swift; sourceTree = SOURCE_ROOT; };
 		B5716BEA91985B2AAED6FD94 /* ChatModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/AI/ChatModel.swift; sourceTree = SOURCE_ROOT; };
 		09D3E12D9F7ECCBEC2294C1D /* SuggestEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/AI/SuggestEngine.swift; sourceTree = SOURCE_ROOT; };
@@ -239,6 +243,7 @@
 		5E8E83541305D87C4BF301F8 /* SharedVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/Storage/SharedVault.swift; sourceTree = SOURCE_ROOT; };
 		349ED2582CE3A72240AE3E19 /* MoyuTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/Theme/MoyuTheme.swift; sourceTree = SOURCE_ROOT; };
 		1BD466DEEFA3C32C61A3CF41 /* KMVoiceInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/Voice/KMVoiceInput.swift; sourceTree = SOURCE_ROOT; };
+		83B418620D1CB8C7D1C583FD /* VoiceBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/Voice/VoiceBridge.swift; sourceTree = SOURCE_ROOT; };
 		BCF1297046D655F5D5CD1AD4 /* dict */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Shared/dict; sourceTree = SOURCE_ROOT; };
 		07EBCCD66DCD2255A284303C /* AIKeyboard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AIKeyboard.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		37A168A98711B8B6B0ECAE41 /* AIKeyboardExtension.appex */ = {isa = PBXFileReference; explicitFileType = wrapper.app-extension; includeInIndex = 0; path = AIKeyboardExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -287,6 +292,7 @@
 				CD694C9E39CDE1F87A696A2F /* AppStyle.swift */,
 				0F245D4A71FA1940961B24B0 /* KeyboardPrefsView.swift */,
 				B5DB5B3FB43356FDF16FEFD8 /* StartView.swift */,
+				889A79DF32EF3C5280B1378F /* VoiceSessionView.swift */,
 			);
 			name = Views;
 			sourceTree = "<group>";
@@ -487,6 +493,7 @@
 			isa = PBXGroup;
 			children = (
 				1BD466DEEFA3C32C61A3CF41 /* KMVoiceInput.swift */,
+				83B418620D1CB8C7D1C583FD /* VoiceBridge.swift */,
 			);
 			name = Voice;
 			sourceTree = "<group>";
@@ -622,6 +629,7 @@
 				3EA2CA8046C4BA07E715BAC7 /* AppStyle.swift in Sources */,
 				B64EA0CCAD1F4B6E4882DECA /* KeyboardPrefsView.swift in Sources */,
 				EEDFD8E08289CC30C11E3D6A /* StartView.swift in Sources */,
+				9CA6BA87A27BAB51297D2469 /* VoiceSessionView.swift in Sources */,
 				10F0A718116F7ECC50E30CEB /* AISuggestionPrompt.swift in Sources */,
 				3EFAC17AD45DE3F75A743760 /* ContextualSeedTemplates.swift in Sources */,
 				95D7CA40851062E930CDE30F /* ContextualSuggestion.swift in Sources */,
@@ -672,6 +680,7 @@
 				BBB9BFEB6FCEE6733CA20980 /* SharedVault.swift in Sources */,
 				2303027B037D55C407FA540D /* MoyuTheme.swift in Sources */,
 				E726538021D8A35EEA67F5B3 /* KMVoiceInput.swift in Sources */,
+				416C5AF99950728D179028D4 /* VoiceBridge.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -743,6 +752,7 @@
 				40AE84C659C09706AA4511A9 /* SharedVault.swift in Sources */,
 				9F15F8CDB5CBD8D72EE430DA /* MoyuTheme.swift in Sources */,
 				AC6570F2705CDEE3AEE3C0CB /* KMVoiceInput.swift in Sources */,
+				05CD8F0223E35B38FFBD9B5C /* VoiceBridge.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

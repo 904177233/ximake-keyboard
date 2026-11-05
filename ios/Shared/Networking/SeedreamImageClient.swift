@@ -12,23 +12,24 @@ import Foundation
 
 /// 即梦 · 火山方舟（Seedream）生图客户端。
 ///
-/// 请求约定：
-/// - `POST https://ark.cn-beijing.volces.com/api/v3/images/generations`
-/// - Header：`Authorization: Bearer <ARK_API_KEY>`、`Content-Type: application/json`
-/// - Body：`{"model":"doubao-seedream-3-0-t2i-250415","prompt":"...","size":"1024x1024","response_format":"url","watermark":false}`
-/// - 响应：`{"data":[{"url":"https://..."}],"usage":{"generated_images":1},"created":1730000000}`
-///
-/// 说明：
-/// - 返回的 url 有效期约 24 小时，客户端会立即下载为 Data（≤ 4 MB）并保留 `remoteURL`；
-/// - 可用尺寸：`1024x1024`、`864x1152`、`1152x864`、`1280x720`、`720x1280`；
+/// - 各版本的模型名和尺寸下限不一样（4.5、5.0 lite 最小 2560x1440），每个账号开通的模型也不一样。
+///   所以按「用户选的 -> 上次成功的 -> 新到旧」逐个试，模型不可用时换下一个。不出图不收费。
 /// - `watermark: false` 需要账号具备无水印权限，否则服务端会忽略该字段。
 public final class SeedreamImageClient: ImageGenerating, @unchecked Sendable {
 
-    /// 即梦默认生图模型（3.0）。
-    public static let defaultModel = "doubao-seedream-3-0-t2i-250415"
-    /// 即梦备选生图模型（4.0）。
+    /// 默认生图模型。
+    public static let defaultModel = "doubao-seedream-5-0-pro-260628"
+    /// 备选生图模型。
     public static let fallbackModel = "doubao-seedream-4-0-250828"
-    /// 即梦支持的尺寸（API 只接受这几档）。
+    /// 从新到旧试。
+    static let modelChain = [
+        "doubao-seedream-5-0-pro-260628",
+        "doubao-seedream-5-0-lite-260128",
+        "doubao-seedream-4-5-251128",
+        "doubao-seedream-4-0-250828",
+        "doubao-seedream-3-0-t2i-250415"
+    ]
+    /// 尺寸档位。
     public static let supportedSizes: [String] = [
         "1024x1024",
         "864x1152",
@@ -36,6 +37,8 @@ public final class SeedreamImageClient: ImageGenerating, @unchecked Sendable {
         "1280x720",
         "720x1280"
     ]
+
+    private static let lastGoodKey = "moyu.seedream.lastGoodModel"
 
     /// 服务商配置。
     private let config: AIProviderConfig
@@ -48,7 +51,7 @@ public final class SeedreamImageClient: ImageGenerating, @unchecked Sendable {
     public init(config: AIProviderConfig, apiKey: String, session: URLSession? = nil) {
         self.config = config
         self.apiKey = apiKey
-        self.session = session ?? HTTPTransport.makeSession(timeout: max(config.timeout, 60))
+        self.session = session ?? HTTPTransport.makeSession(timeout: max(config.timeout, 120))
     }
 
     // MARK: - ImageGenerating
@@ -63,27 +66,91 @@ public final class SeedreamImageClient: ImageGenerating, @unchecked Sendable {
         guard !prompt.isEmpty else { throw AIError.contentRejected("提示词不能为空") }
         guard let url = generationURL() else { throw AIError.notConfigured }
 
-        let model = SeedreamImageClient.resolvedModel(config.imageModel)
-        var body: [String: Any] = [
-            "model": model,
-            "prompt": prompt,
-            "size": SeedreamImageClient.resolvedSize(request.size),
-            "response_format": "url",
-            "watermark": false
-        ]
-        // 部分接入点接受 n，1 张即可；保持在 body 里便于服务端计量。
-        if request.count > 1 {
-            body["n"] = min(request.count, 4)
+        let lastGood = UserDefaults.standard.string(forKey: Self.lastGoodKey)
+        var firstError: AIError?
+        for model in Self.candidates(configured: config.imageModel, lastGood: lastGood) {
+            var body: [String: Any] = [
+                "model": model,
+                "prompt": prompt,
+                "size": Self.resolvedSize(request.size, model: model),
+                "response_format": "url",
+                "watermark": false
+            ]
+            if request.count > 1 {
+                body["n"] = min(request.count, 4)
+            }
+            let urlRequest = try HTTPTransport.makeJSONRequest(
+                url: url,
+                auth: .bearer(apiKey),
+                extraHeaders: config.extraHeaders,
+                timeout: max(config.timeout, 120),
+                body: body
+            )
+            do {
+                let data = try await performWithRetry(urlRequest, attempt: 1)
+                let images = try await decodeImages(data: data)
+                UserDefaults.standard.set(model, forKey: Self.lastGoodKey)
+                return images
+            } catch let error as AIError where Self.shouldTryNextModel(error) {
+                if firstError == nil {
+                    firstError = error
+                }
+            }
         }
-        let urlRequest = try HTTPTransport.makeJSONRequest(
-            url: url,
-            auth: .bearer(apiKey),
-            extraHeaders: config.extraHeaders,
-            timeout: max(config.timeout, 60),
-            body: body
-        )
-        let data = try await performWithRetry(urlRequest, attempt: 1)
-        return try await decodeImages(data: data)
+        throw Self.allModelsFailed(firstError)
+    }
+
+    // MARK: - 检查 Key 和模型（不花钱）
+
+    /// 检查结果。
+    public enum ProbeResult: Equatable, Sendable {
+        /// 这个模型开通了。
+        case usable(String)
+        case unauthorized
+        /// 一个都用不了。
+        case noModel(String?)
+        /// 连不上。
+        case unreachable(String)
+    }
+
+    /// 用空提示词请求：Key 错回 401，模型没开通回 404，都对的话回 400 说缺提示词。不出图，不收费。
+    public static func probe(config: AIProviderConfig, apiKey: String, session: URLSession? = nil) async -> ProbeResult {
+        guard let url = config.resolvedURL(path: "/images/generations") else {
+            return .noModel("地址不对")
+        }
+        let urlSession = session ?? HTTPTransport.makeSession(timeout: 20)
+        var lastMessage: String?
+        for model in candidates(configured: config.imageModel, lastGood: nil) {
+            guard let request = try? HTTPTransport.makeJSONRequest(url: url,
+                                                                   auth: .bearer(apiKey),
+                                                                   extraHeaders: config.extraHeaders,
+                                                                   timeout: 20,
+                                                                   body: ["model": model, "prompt": ""]) else {
+                continue
+            }
+            do {
+                _ = try await HTTPTransport.send(request, session: urlSession)
+                return .usable(model)
+            } catch let error as AIError {
+                switch error {
+                case .unauthorized:
+                    return .unauthorized
+                case let .server(code, message) where code == 400:
+                    if isModelMissing(message) {
+                        lastMessage = message
+                    } else {
+                        return .usable(model)
+                    }
+                case let .server(_, message):
+                    lastMessage = message
+                default:
+                    return .unreachable(error.errorDescription ?? "连不上")
+                }
+            } catch {
+                return .unreachable(error.localizedDescription)
+            }
+        }
+        return .noModel(lastMessage)
     }
 
     // MARK: - 内部实现
@@ -125,7 +192,7 @@ public final class SeedreamImageClient: ImageGenerating, @unchecked Sendable {
                let bytes = Data(base64Encoded: base64, options: [.ignoreUnknownCharacters]),
                !bytes.isEmpty {
                 if bytes.count > ImageDownloader.maxBytes {
-                    throw AIError.server(code: 413, message: "图片体积超过 4 MB 上限，请换更小的尺寸")
+                    throw AIError.server(code: 413, message: "图片太大，请换更小的尺寸")
                 }
                 results.append(GeneratedImage(data: bytes, remoteURL: nil, mimeType: "image/png"))
                 continue
@@ -148,24 +215,44 @@ public final class SeedreamImageClient: ImageGenerating, @unchecked Sendable {
         return results
     }
 
-    /// 归一化模型名：空则用默认 3.0；`doubao-seedream` 前缀但未带日期时补默认日期后缀。
-    static func resolvedModel(_ raw: String?) -> String {
-        guard let raw, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return defaultModel
-        }
-        return raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// 要试的模型，按顺序去重。
+    static func candidates(configured: String?, lastGood: String?) -> [String] {
+        var seen = Set<String>()
+        let chosen = (configured ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return ([chosen, lastGood ?? ""] + modelChain).filter { !$0.isEmpty && seen.insert($0).inserted }
     }
 
-    /// 归一化尺寸：只保留 API 支持的档位，不支持时退回 `1024x1024`。
-    static func resolvedSize(_ raw: String) -> String {
+    /// 服务器说的是模型不存在或没开通。
+    static func isModelMissing(_ message: String?) -> Bool {
+        let lower = (message ?? "").lowercased()
+        return ["modelnotopen", "notfound", "not found", "not activated", "does not exist", "未开通"]
+            .contains { lower.contains($0) }
+    }
+
+    /// 换个模型可能就好了。提示词被内容审核拦下来的不算，换模型也一样。
+    static func shouldTryNextModel(_ error: AIError) -> Bool {
+        guard case let .server(code, message) = error, [400, 403, 404].contains(code) else { return false }
+        return !(message ?? "").lowercased().contains("sensitive")
+    }
+
+    private static func allModelsFailed(_ first: AIError?) -> AIError {
+        guard case let .server(code, message)? = first else {
+            return first ?? .notConfigured
+        }
+        return .server(code: code,
+                       message: "即梦的模型都用不了，多半是还没开通：到火山方舟控制台的「开通管理」开通 Seedream 再试。服务器原话：\(message ?? "没有说明")")
+    }
+
+    /// 这个模型该用什么尺寸。4.5 和 5.0 lite 不接受 1K 这一档。
+    static func resolvedSize(_ raw: String, model: String) -> String {
+        if model.contains("4-5") || model.contains("5-0-lite") {
+            return "2K"
+        }
         let normalized = raw
             .replacingOccurrences(of: "*", with: "x")
             .replacingOccurrences(of: "×", with: "x")
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
-        if supportedSizes.contains(normalized) {
-            return normalized
-        }
-        return "1024x1024"
+        return supportedSizes.contains(normalized) ? normalized : "1024x1024"
     }
 }

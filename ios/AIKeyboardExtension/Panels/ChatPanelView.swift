@@ -14,27 +14,33 @@ struct ChatPanelView: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(spacing: 0) {
-            ZStack(alignment: .topTrailing) {
-                messages
-                HStack(spacing: 0) {
-                    if !chat.messages.isEmpty {
-                        Button {
-                            chat.clear()
-                        } label: {
-                            Image(systemName: "square.and.pencil")
-                                .font(.system(size: 14))
-                                .foregroundColor(palette.secondary.color)
-                                .frame(width: 34, height: 34)
-                                .contentShape(Rectangle())
+        GeometryReader { geometry in
+            // 打字时键区占了大部分地方，放不下消息就只留输入行
+            let showsMessages = !session.chatTyping || geometry.size.height >= 110
+            VStack(spacing: 0) {
+                if showsMessages {
+                    ZStack(alignment: .topTrailing) {
+                        messages
+                        HStack(spacing: 0) {
+                            if !chat.messages.isEmpty {
+                                Button {
+                                    chat.clear()
+                                } label: {
+                                    Image(systemName: "square.and.pencil")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(palette.secondary.color)
+                                        .frame(width: 34, height: 34)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("新对话")
+                            }
+                            PanelCloseButton { session.setPage(.keys) }
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("新对话")
                     }
-                    PanelCloseButton { session.setPage(.keys) }
                 }
+                inputRow(showsClose: !showsMessages)
             }
-            inputRow
         }
     }
 
@@ -122,34 +128,58 @@ struct ChatPanelView: View {
         .buttonStyle(.plain)
     }
 
-    private var inputRow: some View {
+    @ViewBuilder
+    private func inputRow(showsClose: Bool) -> some View {
         HStack(spacing: 6) {
-            HStack(spacing: 0) {
-                Text(session.draft.isEmpty ? " " : session.draft)
-                    .font(.system(size: 14.5))
-                    .foregroundColor(palette.text.color)
-                    .lineLimit(1)
-                    .truncationMode(.head)
-                palette.accent.color.frame(width: 1.5, height: 17)
-                Spacer(minLength: 0)
+            if showsClose {
+                PanelCloseButton { session.setPage(.keys) }
             }
-            .padding(.horizontal, 10)
-            .frame(height: 32)
-            .background(palette.key.color)
-            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            if session.chatTyping {
+                HStack(spacing: 0) {
+                    Text(session.draft.isEmpty ? " " : session.draft)
+                        .font(.system(size: 14.5))
+                        .foregroundColor(palette.text.color)
+                        .lineLimit(1)
+                        .truncationMode(.head)
+                    palette.accent.color.frame(width: 1.5, height: 17)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 10)
+                .frame(height: 32)
+                .background(palette.key.color)
+                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            } else {
+                // 看回答时没有键区，点这里回去打字
+                Button {
+                    session.setChatTyping(true)
+                } label: {
+                    Text("接着问…")
+                        .font(.system(size: 14.5))
+                        .foregroundColor(palette.secondary.color)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 10)
+                        .frame(height: 32)
+                        .background(palette.key.color)
+                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
 
-            Button {
-                chat.send()
-            } label: {
-                Image(systemName: chat.phase == .idle ? "arrow.up" : "stop.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(palette.onAccent.color)
-                    .frame(width: 32, height: 32)
-                    .background(palette.accent.color)
-                    .clipShape(Circle())
+            if session.chatTyping || chat.phase != .idle {
+                Button {
+                    chat.send()
+                } label: {
+                    Image(systemName: chat.phase == .idle ? "arrow.up" : "stop.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(palette.onAccent.color)
+                        .frame(width: 32, height: 32)
+                        .background(palette.accent.color)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(chat.phase == .idle ? "发送" : "停止")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(chat.phase == .idle ? "发送" : "停止")
         }
         .padding(.horizontal, 8)
         .frame(height: 42)

@@ -131,32 +131,31 @@ public enum ProviderCheck {
         }
     }
 
-    /// Key 没问题但模型不行：查这家现在有什么，换一个再试。
+    /// Key 没问题但模型不行：查这家现在有什么，换几个试试。
+    /// 有的服务商（火山方舟）列表里有的不一定开通了，所以不能只试一个；查不到列表就试预设里的。
     private static func recoverModel(config: AIProviderConfig, apiKey: String,
                                      firstReason: String) async -> ProviderCheckResult {
-        guard let models = try? await ModelCatalog.fetch(config: config, apiKey: apiKey, forImage: false),
-              !models.isEmpty else {
-            return ProviderCheckResult(config: config, isUsable: false, message: firstReason, models: [])
-        }
+        let models = (try? await ModelCatalog.fetch(config: config, apiKey: apiKey, forImage: false)) ?? []
         let preferred = PresetProviders.preset(id: config.id)?.availableModels.map(\.modelID) ?? []
-        guard let next = ModelCatalog.replacement(for: config.model, preferred: preferred, available: models) else {
-            return ProviderCheckResult(config: config, isUsable: false, message: firstReason, models: models)
-        }
-        var changed = config
-        changed.model = next
-        do {
-            let sample = try await sayHello(config: changed, apiKey: apiKey)
-            guard !sample.isEmpty else {
-                return ProviderCheckResult(config: config, isUsable: false, message: firstReason, models: models)
+        let known = Set(models.map { $0.lowercased() })
+        let ordered = models.isEmpty ? preferred : preferred.filter { known.contains($0.lowercased()) } + models
+        var seen: Set<String> = [config.model]
+        for next in ordered.filter({ seen.insert($0).inserted }).prefix(4) {
+            var changed = config
+            changed.model = next
+            if let sample = try? await sayHello(config: changed, apiKey: apiKey), !sample.isEmpty {
+                return ProviderCheckResult(config: changed, isUsable: true,
+                                           message: "能用。\(config.model) 用不了，已换成 \(next)。",
+                                           models: models)
             }
-            return ProviderCheckResult(config: changed, isUsable: true,
-                                       message: "能用。\(config.model) 用不了了，已换成 \(next)。",
-                                       models: models)
-        } catch {
-            return ProviderCheckResult(config: config, isUsable: false,
-                                       message: "\(firstReason)\n这家现在的模型在下面，选一个再试。",
-                                       models: models)
         }
+        var message = firstReason
+        if config.normalizedBaseURL.lowercased().contains("volces") {
+            message += "\n豆包的模型要先开通：到火山方舟控制台的「开通管理」开通后再试。"
+        } else if !models.isEmpty {
+            message += "\n这家现在的模型在下面，选一个再试。"
+        }
+        return ProviderCheckResult(config: config, isUsable: false, message: message, models: models)
     }
 
     private static func sayHello(config: AIProviderConfig, apiKey: String) async throws -> String {
@@ -165,18 +164,41 @@ public enum ProviderCheck {
         return result.text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// 服务器回的 400、404 多半是模型名的事。Key 错、限流、断网换模型也没用。
-    private static func isModelProblem(_ error: AIError) -> Bool {
+    /// 服务器回的 400、403、404 多半是模型的事（下线了或没开通）。Key 错、限流、断网换模型也没用。
+    public static func isModelProblem(_ error: AIError) -> Bool {
         if case let .server(code, _) = error {
-            return code == 400 || code == 404
+            return code == 400 || code == 403 || code == 404
         }
         return false
     }
 
     // MARK: - 画图
 
+    /// 即梦：不出图也能分清 Key 错和模型没开通。
+    private static func checkSeedream(config: AIProviderConfig, apiKey: String) async -> ProviderCheckResult {
+        switch await SeedreamImageClient.probe(config: config, apiKey: apiKey) {
+        case let .usable(model):
+            var changed = config
+            changed.imageModel = model
+            return ProviderCheckResult(config: changed, isUsable: true,
+                                       message: "Key 能用，用 \(model) 画图。没有真的画图，第一张图出来才算数。",
+                                       models: [])
+        case .unauthorized:
+            return ProviderCheckResult(config: config, isUsable: false, message: "Key 不对，检查一下有没有复制完整。", models: [])
+        case let .noModel(reason):
+            return ProviderCheckResult(config: config, isUsable: false,
+                                       message: "Key 是对的，但 Seedream 模型都用不了，多半是还没开通。到火山方舟控制台的「开通管理」开通后再试。\n\(reason ?? "")",
+                                       models: [])
+        case let .unreachable(reason):
+            return ProviderCheckResult(config: config, isUsable: false, message: reason, models: [])
+        }
+    }
+
     /// 真画一张要花钱，这里只查模型列表，顺便确认 Key。
     private static func checkImage(config: AIProviderConfig, apiKey: String) async -> ProviderCheckResult {
+        if ImageClientRouter.route(for: config) == .seedream {
+            return await checkSeedream(config: config, apiKey: apiKey)
+        }
         do {
             let models = try await ModelCatalog.fetch(config: config, apiKey: apiKey, forImage: true)
             let current = config.imageModel ?? ""
@@ -282,7 +304,10 @@ public extension PresetProviders {
             return nil
         }
         let partnerIsImage = partnerPreset.isImageOnly
-        if usable(partnerIsImage ? snapshot.imageProvider : snapshot.defaultProvider) {
+        // 这件事已经有填了 Key 的服务在做，就不动
+        if snapshot.providers.contains(where: { provider in
+            (partnerIsImage ? provider.supportsImage : provider.supportsChat) && usable(provider)
+        }) {
             return nil
         }
         let partner = snapshot.providers.first { $0.id == partnerID } ?? partnerPreset.makeProvider()
@@ -295,6 +320,20 @@ public extension PresetProviders {
             snapshot.defaultProviderID = partnerID
         }
         return partner
+    }
+
+    /// 默认的那家没填 Key、别的填了的话，默认改成填了的。
+    static func repairDefaults(_ snapshot: inout ConfigSnapshot, hasKey: (String) -> Bool) {
+        if let current = snapshot.defaultProvider, hasKey(current.id) {
+            // 已经能用
+        } else if let keyed = snapshot.providers.first(where: { $0.supportsChat && hasKey($0.id) }) {
+            snapshot.defaultProviderID = keyed.id
+        }
+        if let current = snapshot.imageProvider, hasKey(current.id) {
+            // 已经能用
+        } else if let keyed = snapshot.providers.first(where: { $0.supportsImage && hasKey($0.id) }) {
+            snapshot.imageProviderID = keyed.id
+        }
     }
 
     /// 已确认下线的模型名 -> 替代。老用户存过的配置在读取时换掉。

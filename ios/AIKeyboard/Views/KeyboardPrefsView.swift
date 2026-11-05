@@ -67,11 +67,11 @@ struct KeyboardPrefsView: View {
 
                 SectionLabel(text: "语音输入")
                 NavigationLink {
-                    VoiceDictationView()
+                    VoiceSessionView()
                         .environmentObject(model)
                         .environment(\.palette, palette)
                 } label: {
-                    LineRow(title: "说话转文字", detail: "键盘里录不了音时用这里。说完自动复制，回到聊天框粘贴。") {
+                    LineRow(title: "说话转文字", detail: "键盘里点麦克风会跳到这里。说完回到聊天框，文字会自动放进输入框。") {
                         Chevron()
                     }
                 }
@@ -330,85 +330,5 @@ struct PhrasesView: View {
         .background(palette.page.color.ignoresSafeArea())
         .navigationTitle("常用短语")
         .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-/// 说话转文字：系统不让键盘录音时的备用入口。
-@MainActor
-struct VoiceDictationView: View {
-    @EnvironmentObject private var model: AppModel
-    @Environment(\.palette) private var palette
-    @ObservedObject private var voice = KMVoiceInput.shared
-
-    var body: some View {
-        VStack(spacing: 14) {
-            ScrollView {
-                Text(displayText)
-                    .font(.system(size: 18))
-                    .foregroundColor(isPlaceholder ? palette.secondary.color : palette.text.color)
-                    .lineSpacing(4)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(14)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(palette.surface.color)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-            PrimaryButton(title: buttonTitle) { toggle() }
-        }
-        .padding(20)
-        .background(palette.page.color.ignoresSafeArea())
-        .navigationTitle("说话转文字")
-        .navigationBarTitleDisplayMode(.inline)
-        .onChange(of: voice.state) { state in
-            if case let .finished(text) = state, !text.isEmpty {
-                UIPasteboard.general.string = text
-                model.showToast("已复制，回到聊天框粘贴")
-            }
-        }
-        .onDisappear { voice.cancel() }
-    }
-
-    private var isPlaceholder: Bool {
-        if case .finished = voice.state { return false }
-        return voice.partialText.isEmpty
-    }
-
-    private var displayText: String {
-        switch voice.state {
-        case let .finished(text):
-            return text
-        case let .failed(reason, _):
-            return reason
-        default:
-            return voice.partialText.isEmpty ? "点下面的按钮开始说话" : voice.partialText
-        }
-    }
-
-    private var buttonTitle: String {
-        if case .recording = voice.state { return "说完了" }
-        if case .transcribing = voice.state { return "正在转文字…" }
-        return "开始说话"
-    }
-
-    private func toggle() {
-        if case .recording = voice.state {
-            voice.stop()
-            return
-        }
-        guard !voice.state.isActive else { return }
-        AVAudioSession.sharedInstance().requestRecordPermission { granted in
-            SFSpeechRecognizer.requestAuthorization { status in
-                Task { @MainActor in
-                    guard granted, status == .authorized else {
-                        model.showToast("到 设置 › 墨语 里打开麦克风和语音识别")
-                        return
-                    }
-                    voice.reset()
-                    voice.start()
-                }
-            }
-        }
     }
 }

@@ -1,0 +1,79 @@
+name: Keyboard Simulator Check
+
+# 这台开发电脑没有 Mac。这里在模拟器里真的把键盘弹出来，按 MOYU_SIM_CHECK 写好的顺序走一遍
+# 各个高度和页面，每隔几秒截一张图传上来，不用等装到手机上才知道高度对不对。
+# 只用来看结果，不影响打包。
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - redesign-v3
+    paths:
+      - "ios/**"
+      - "scripts/qa/sim_check.sh"
+      - ".github/workflows/sim-check.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  sim:
+    name: Keyboard in simulator (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [xcode-27, macos-26]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Show tools
+        run: |
+          xcodebuild -version
+          xcrun simctl list runtimes
+
+      - name: Generate project
+        run: python3 scripts/gen_xcodeproj.py
+
+      - name: Build for simulator
+        run: |
+          set -o pipefail
+          mkdir -p build
+          xcodebuild \
+            -project ios/AIKeyboard.xcodeproj \
+            -scheme AIKeyboard \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/dd \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY=- \
+            CODE_SIGNING_REQUIRED=NO \
+            DEVELOPMENT_TEAM= \
+            "SWIFT_ACTIVE_COMPILATION_CONDITIONS=DEBUG MOYU_SIM_CHECK" \
+            build 2>&1 | tee build/xcodebuild.log | grep -E "error:|warning: unre|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" build/xcodebuild.log
+
+      - name: Run keyboard and take screenshots
+        run: bash scripts/qa/sim_check.sh
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sim-shots-${{ matrix.runner }}
+          path: |
+            build/sim-shots
+            build/xcodebuild.log
+          if-no-files-found: warn
+          retention-days: 7

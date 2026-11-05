@@ -282,7 +282,7 @@ public final class KMVoiceInput: ObservableObject {
         try? AVAudioSession.sharedInstance().setActive(false, options: [])
         let code = (lastError as NSError?).map { "（错误码 \($0.code)）" } ?? ""
         state = .failed(
-            reason: "系统不让键盘录音\(code)。可以到墨语 App 的「键盘」页打开「说话转文字」，说完自动复制，回来粘贴。",
+            reason: "系统不让录音\(code)。到 设置 › 墨语 看看麦克风开了没；打电话或别的 App 占着麦克风时也录不了。",
             isPlatformUnsupported: false
         )
     }

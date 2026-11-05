@@ -39,6 +39,8 @@ final class ChatModel: ObservableObject {
 
     private unowned let session: KeyboardSession
     private var task: Task<Void, Never>?
+    /// 这一句已经换过模型了，再失败就直接报错。
+    private var triedOtherModel = false
 
     init(session: KeyboardSession) {
         self.session = session
@@ -58,6 +60,7 @@ final class ChatModel: ObservableObject {
     func clear() {
         cancel()
         messages = []
+        session.setChatTyping(true)
     }
 
     /// 发送草稿。在回答时再按一次就是停止。
@@ -68,6 +71,9 @@ final class ChatModel: ObservableObject {
         }
         let text = session.takeDraft().trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
+        // 发出去就切到看回答，回答要有地方显示
+        session.setChatTyping(false)
+        triedOtherModel = false
         if let blocker = session.aiBlocker {
             switch blocker {
             case .noFullAccess:
@@ -76,7 +82,7 @@ final class ChatModel: ObservableObject {
                                            isError: true))
             case .notConfigured:
                 messages.append(ChatBubble(role: .assistant,
-                                           text: "还没配好 AI 服务。点右上角的齿轮，选一家服务，填上 Key。",
+                                           text: Self.notConfiguredText,
                                            isError: true))
             }
             return
@@ -86,9 +92,27 @@ final class ChatModel: ObservableObject {
         start(userText: text)
     }
 
+    /// 没 Key 时怎么说。App 和键盘没打通的话，在 App 里填的 Key 键盘看不到。
+    private static var notConfiguredText: String {
+        let isShared = SharedStore.shared.isAppGroupAvailable || SharedVault.shared.isAvailable
+        return isShared
+            ? "还没配好写字用的 AI 服务。关掉对话，点工具栏的齿轮 › AI 服务，选一家，填上 Key。"
+            : "键盘里还没有 Key。这台手机上 App 和键盘没打通，在 App 里填的 Key 这里看不到。关掉对话，点工具栏的齿轮 › AI 服务，直接在这里填，或者点「导入 App 里的配置」。"
+    }
+
+    #if MOYU_SIM_CHECK
+    func fillForSimCheck() {
+        messages = [
+            ChatBubble(role: .user, text: "帮我写一句请假的话"),
+            ChatBubble(role: .assistant, text: "老板您好，我明天身体不舒服，想请一天假，工作已经交接好了，谢谢。")
+        ]
+    }
+    #endif
+
     /// 重发最后一句。
     func retry() {
         guard phase == .idle, let last = messages.last(where: { $0.role == .user }) else { return }
+        triedOtherModel = false
         while let tail = messages.last, tail.role == .assistant {
             messages.removeLast()
         }
@@ -99,7 +123,7 @@ final class ChatModel: ObservableObject {
         let snapshot = session.snapshot
         guard let provider = snapshot.defaultProvider, provider.supportsChat,
               let apiKey = KeychainStore.shared.apiKey(for: provider.id), !apiKey.isEmpty else {
-            messages.append(ChatBubble(role: .assistant, text: "还没配好 AI 服务。", isError: true))
+            messages.append(ChatBubble(role: .assistant, text: Self.notConfiguredText, isError: true))
             return
         }
 
@@ -134,8 +158,36 @@ final class ChatModel: ObservableObject {
                 self.finish(bubbleID: bubbleID, receivedAny: receivedAny)
             } catch {
                 guard let self, !Task.isCancelled else { return }
-                self.fail(error, bubbleID: bubbleID)
+                let mapped = AIError.wrap(error)
+                if !self.triedOtherModel, ProviderCheck.isModelProblem(mapped) {
+                    self.triedOtherModel = true
+                    self.switchModel(after: mapped, provider: provider, apiKey: apiKey, userText: userText, bubbleID: bubbleID)
+                } else {
+                    self.fail(mapped, bubbleID: bubbleID)
+                }
             }
+        }
+    }
+
+    /// 模型用不了（下线了或没开通）：换一个能用的，存下来，再发一次。
+    private func switchModel(after error: AIError, provider: AIProviderConfig, apiKey: String,
+                             userText: String, bubbleID: UUID) {
+        phase = .thinking("这个模型用不了，正在换一个…")
+        task = Task { [weak self] in
+            let result = await ProviderCheck.run(config: provider, apiKey: apiKey)
+            guard let self, !Task.isCancelled else { return }
+            guard result.isUsable, result.config.model != provider.model else {
+                self.fail(result.isUsable ? error : AIError.unknown(result.message), bubbleID: bubbleID)
+                return
+            }
+            var snapshot = self.session.snapshot
+            if let index = snapshot.providers.firstIndex(where: { $0.id == provider.id }) {
+                snapshot.providers[index] = result.config
+                self.session.saveConfig(snapshot)
+            }
+            self.messages.removeAll { $0.id == bubbleID }
+            self.session.showToast("已换成 \(result.config.model)")
+            self.start(userText: userText)
         }
     }
 

@@ -89,7 +89,7 @@ struct KeyboardVisualState: Equatable {
 /// 尺寸。
 struct KeyboardMetrics {
     private(set) var capHeight: CGFloat
-    let rowGap: CGFloat
+    private(set) var rowGap: CGFloat
     let topBarHeight: CGFloat
     let isLandscape: Bool
 
@@ -125,11 +125,18 @@ struct KeyboardMetrics {
         topPadding + capHeight * 4 + rowGap * 3 + bottomPadding
     }
 
-    /// 放不下时压缩键高。
+    /// 按系统实际给的高度调整键高：不够就压缩，多一点就撑满。多太多是系统的过渡状态，不跟。
     func fitted(toSurfaceHeight available: CGFloat) -> KeyboardMetrics {
-        guard available < surfaceHeight, available >= 110 else { return self }
+        guard available >= 90 else { return self }
         var copy = self
-        copy.capHeight = (available - topPadding - bottomPadding - rowGap * 3) / 4
+        if available < surfaceHeight {
+            if available < surfaceHeight - 30 {
+                copy.rowGap = min(rowGap, 6)
+            }
+        } else if available > surfaceHeight + 60 {
+            return self
+        }
+        copy.capHeight = (available - topPadding - bottomPadding - copy.rowGap * 3) / 4
         return copy
     }
 }

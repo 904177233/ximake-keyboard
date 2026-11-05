@@ -100,6 +100,9 @@ public enum AIError: LocalizedError, Equatable, Sendable {
         case .rateLimited:
             return "稍等十几秒再试；如果经常限流，去服务商控制台确认额度或换一个模型。"
         case let .server(code, _):
+            if code == 403 {
+                return "Key 没有用这个模型的权限，多半是模型还没开通：到服务商控制台开通，或者换一个模型。"
+            }
             if code == 404 {
                 return "检查 设置 › AI 服务 里的 baseURL 与模型名是否写对（baseURL 一般以 /v1 结尾）。"
             }
@@ -179,7 +182,7 @@ public enum AIError: LocalizedError, Equatable, Sendable {
         retryAfter: TimeInterval? = nil
     ) -> AIError {
         switch statusCode {
-        case 401, 403:
+        case 401:
             return .unauthorized
         case 429:
             return .rateLimited(retryAfter: retryAfter)

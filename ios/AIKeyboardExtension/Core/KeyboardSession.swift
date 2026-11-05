@@ -16,7 +16,9 @@ protocol KeyboardHost: AnyObject {
     var documentProxy: UITextDocumentProxy { get }
     var hostHasFullAccess: Bool { get }
     var hostNeedsSwitchKey: Bool { get }
+    var heightDiagnostic: String { get }
     func goToNextKeyboard()
+    func openContainingApp(_ url: URL, completion: @escaping (Bool) -> Void)
 }
 
 @MainActor
@@ -52,6 +54,12 @@ final class KeyboardSession: ObservableObject {
         let onDone: (String) -> Void
     }
 
+    /// 语音面板显示什么。录音在 App 里，这里只是看结果。
+    enum VoicePanelState: Equatable {
+        case opening, listening, transcribing, waitingInApp
+        case failed(String)
+    }
+
     /// 组字中已经选好的一段。
     private struct Segment {
         let text: String
@@ -71,6 +79,10 @@ final class KeyboardSession: ObservableObject {
     @Published private(set) var conversion: IMEConversion = .empty
     @Published private(set) var fieldEdit: FieldEdit?
     @Published var settingsRoute: SettingsRoute = .home
+    /// 对话页：true 在打字（有键区），false 在看回答（消息占满）。
+    @Published private(set) var chatTyping = true
+    @Published private(set) var voiceState: VoicePanelState = .opening
+    @Published private(set) var voiceText = ""
 
     /// 是否深色（控制器根据外观回填）。
     private(set) var isDark = false
@@ -93,6 +105,7 @@ final class KeyboardSession: ObservableObject {
     private var documentIdentifier: UUID?
     private var isActive = false
     private var toastTask: Task<Void, Never>?
+    private var voiceTask: Task<Void, Never>?
 
     /// UIKit 部分需要刷新时调用。
     var onRender: (() -> Void)?
@@ -129,13 +142,21 @@ final class KeyboardSession: ObservableObject {
         fieldEdit = nil
         draft = ""
         prefs = KeyboardPrefs.load()
-        snapshot = configStore.load()
+        snapshot = loadedSnapshot()
         kit.learning.isEnabled = snapshot.enableLearning
         kit.reloadPhrases()
         _ = FuzzyPinyinSettings.shared.setEnabled(prefs.fuzzyPinyin)
         palette = MoyuPalette(theme: prefs.theme, dark: isDark)
         syncWithDocument(force: true)
+        resumeVoice()
         render()
+    }
+
+    /// 读配置。默认的那家没填 Key、别的填了的话，用填了的。
+    private func loadedSnapshot() -> ConfigSnapshot {
+        var loaded = configStore.load()
+        PresetProviders.repairDefaults(&loaded) { KeychainStore.shared.hasAPIKey(for: $0) }
+        return loaded
     }
 
     /// 键盘收起：停掉所有请求，把学习数据写盘。
@@ -145,8 +166,9 @@ final class KeyboardSession: ObservableObject {
         chat.cancel()
         suggest.cancel()
         kit.learning.flush()
+        voiceTask?.cancel()
+        voiceTask = nil
         if page == .voice {
-            KMVoiceInput.shared.cancel()
             page = .keys
         }
     }
@@ -298,10 +320,7 @@ final class KeyboardSession: ObservableObject {
 
     /// 顶栏工具。
     var tools: [ToolID] {
-        var list: [ToolID] = [.polish, .translate, .reply, .expand, .image]
-        if KMVoiceInput.shared.isPlatformSupported {
-            list.append(.voice)
-        }
+        var list: [ToolID] = [.polish, .translate, .reply, .expand, .image, .voice]
         if host?.hostNeedsSwitchKey == true {
             list.append(.symbols)
         }
@@ -725,7 +744,11 @@ final class KeyboardSession: ObservableObject {
     func setPage(_ target: Page) {
         guard page != target else { return }
         if page == .voice {
-            KMVoiceInput.shared.cancel()
+            voiceTask?.cancel()
+            voiceTask = nil
+            if voiceState == .listening {
+                VoiceBridge.send(.discard)
+            }
         }
         if page == .chat || page == .field {
             resetComposition()
@@ -791,45 +814,129 @@ final class KeyboardSession: ObservableObject {
     }
 
     func openAI(_ feature: AIPanelFeature) {
-        snapshot = configStore.load()
+        snapshot = loadedSnapshot()
         ai.open(feature)
         setPage(.ai)
     }
 
     func openChat() {
-        snapshot = configStore.load()
+        snapshot = loadedSnapshot()
         chat.prepare()
         resetComposition()
         draft = ""
+        // 聊过的话先给看回答，没聊过直接打字
+        chatTyping = chat.messages.isEmpty
         setPage(.chat)
     }
 
+    /// 对话页在打字和看回答之间切换。
+    func setChatTyping(_ typing: Bool) {
+        guard chatTyping != typing else { return }
+        chatTyping = typing
+        render()
+    }
+
     func openSettings() {
-        snapshot = configStore.load()
+        snapshot = loadedSnapshot()
         settingsRoute = .home
         setPage(.settings)
     }
 
     /// 直接进 AI 服务列表（没配服务时从 AI 面板跳过来）。
     func openProviderSettings() {
-        snapshot = configStore.load()
+        snapshot = loadedSnapshot()
         settingsRoute = .providers
         setPage(.settings)
     }
 
+    /// 点麦克风：苹果不给键盘用麦克风，跳到 App 里录。回来时 resumeVoice 接着。
     func openVoice() {
         guard host?.hostHasFullAccess == true else {
             showToast("先在系统设置里打开「允许完全访问」")
             return
         }
-        guard KMVoiceInput.shared.isAuthorized else {
-            showToast("先到墨语 App 的「键盘」页允许麦克风和语音识别")
+        guard let url = URL(string: "moyu://voice") else { return }
+        VoiceBridge.clear()
+        voiceText = ""
+        voiceState = .opening
+        setPage(.voice)
+        host?.openContainingApp(url) { [weak self] success in
+            guard let self, !success, self.page == .voice else { return }
+            self.voiceState = .failed("打不开墨语。手动打开墨语 App，在「键盘」页点「说话转文字」，说完回到这里会自动放进输入框。")
+        }
+    }
+
+    /// 键盘弹出时看看语音那边怎么样了。
+    private func resumeVoice() {
+        guard host?.hostHasFullAccess == true else { return }
+        if let text = VoiceBridge.takeFinishedText() {
+            deliverVoice(text)
             return
         }
-        setPage(.voice)
-        KMVoiceInput.shared.reset()
-        KMVoiceInput.shared.start()
+        if let state = VoiceBridge.readState(), state.isFresh, state.status == .listening || state.status == .transcribing {
+            page = .voice
+            applyVoice(state)
+            startVoicePolling()
+        }
     }
+
+    private func applyVoice(_ state: VoiceBridgeState) {
+        voiceText = state.text
+        voiceState = state.status == .transcribing ? .transcribing : .listening
+    }
+
+    private func startVoicePolling() {
+        voiceTask?.cancel()
+        voiceTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                guard let self, self.page == .voice else { return }
+                self.pollVoice()
+            }
+        }
+    }
+
+    private func pollVoice() {
+        if let text = VoiceBridge.takeFinishedText() {
+            setPage(.keys)
+            deliverVoice(text)
+            return
+        }
+        guard let state = VoiceBridge.readState() else { return }
+        if state.status == .failed {
+            voiceState = .failed(state.text)
+            VoiceBridge.clear()
+        } else if !state.isFresh {
+            voiceState = .failed("录音断了，再点一次麦克风。")
+            VoiceBridge.clear()
+        } else {
+            applyVoice(state)
+        }
+    }
+
+    /// 刚弹出时输入框还没接好，等一下再写。
+    private func deliverVoice(_ text: String) {
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard let self else { return }
+            self.host?.documentProxy.insertText(text)
+            self.showToast("已放进输入框")
+        }
+    }
+
+    /// 语音面板上的「说完了」。
+    func finishVoice() {
+        VoiceBridge.send(.stop)
+        voiceState = .transcribing
+    }
+
+    #if MOYU_SIM_CHECK
+    func showVoicePanelForSimCheck() {
+        voiceText = "今天下午三点开会"
+        voiceState = .listening
+        setPage(.voice)
+    }
+    #endif
 
     // MARK: - 设置项编辑
 

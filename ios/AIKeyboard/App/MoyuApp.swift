@@ -19,12 +19,18 @@ struct MoyuApp: App {
     }
 }
 
+/// 键盘跳过来要录音。
+struct VoiceRequest: Identifiable {
+    let id = UUID()
+}
+
 /// 根页签。
 @MainActor
 struct RootTabs: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
+    @State private var voiceRequest: VoiceRequest?
 
     private var palette: MoyuPalette {
         MoyuPalette(theme: model.prefs.theme, dark: colorScheme == .dark)
@@ -45,6 +51,18 @@ struct RootTabs: View {
             if phase == .active {
                 model.reload()
             }
+        }
+        .onOpenURL { url in
+            if url.scheme == "moyu", url.host == "voice" {
+                voiceRequest = VoiceRequest()
+            }
+        }
+        .sheet(item: $voiceRequest) { _ in
+            NavigationStack {
+                VoiceSessionView(autoStart: true) { voiceRequest = nil }
+            }
+            .environmentObject(model)
+            .environment(\.palette, palette)
         }
     }
 }

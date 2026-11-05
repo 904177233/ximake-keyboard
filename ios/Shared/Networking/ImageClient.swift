@@ -15,7 +15,7 @@ import Foundation
 enum ImageDownloader {
 
     /// 单张图片体积上限：4 MB（键盘扩展内存有限）。
-    static let maxBytes = 4 * 1024 * 1024
+    static let maxBytes = 12 * 1024 * 1024
 
     /// 下载图片并做体积校验。
     ///

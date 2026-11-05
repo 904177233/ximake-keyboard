@@ -161,13 +161,15 @@ public enum PresetProviders {
             kind: .openAICompatible,
             baseURL: "https://ark.cn-beijing.volces.com/api/v3",
             model: "doubao-seed-2-1-lite-260915",
-            imageModel: "doubao-seedream-3-0-t2i-250415",
-            note: "在火山引擎控制台开通「方舟」，创建推理接入点 / API Key；豆包模型名也可填接入点 ID（ep-xxx）。生图走即梦（Seedream）。",
+            imageModel: "doubao-seedream-5-0-pro-260628",
+            note: "在火山引擎控制台开通「方舟」，创建 API Key。要用的模型还得在「开通管理」里开通，没开通的用不了。",
             consoleURL: URL(string: "https://console.volcengine.com/ark"),
             isImageOnly: false,
             availableModels: [
                 ModelRef(title: "doubao-seed-2-1-lite（便宜）", modelID: "doubao-seed-2-1-lite-260915"),
-                ModelRef(title: "doubao-seed-2-1-pro（更强）", modelID: "doubao-seed-2-1-pro-260915")
+                ModelRef(title: "doubao-seed-2-1-pro（更强）", modelID: "doubao-seed-2-1-pro-260915"),
+                ModelRef(title: "doubao-seed-2-0-lite", modelID: "doubao-seed-2-0-lite-260428"),
+                ModelRef(title: "doubao-seed-2-0-mini", modelID: "doubao-seed-2-0-mini-260428")
             ]
         ),
         Preset(
@@ -241,13 +243,16 @@ public enum PresetProviders {
             kind: .custom,
             baseURL: "https://ark.cn-beijing.volces.com/api/v3",
             model: "",
-            imageModel: "doubao-seedream-3-0-t2i-250415",
-            note: "在火山引擎控制台开通方舟并创建推理接入点 / API Key（与豆包对话共用同一个 Key）。备选模型 doubao-seedream-4-0-250828 更强但更贵。",
+            imageModel: "doubao-seedream-5-0-pro-260628",
+            note: "在火山引擎控制台开通方舟，创建 API Key（和豆包共用）。还要在「开通管理」里开通 Seedream，没开通的画不了。",
             consoleURL: URL(string: "https://console.volcengine.com/ark"),
             isImageOnly: true,
             availableModels: [
-                ModelRef(title: "Seedream 3.0（默认）", modelID: "doubao-seedream-3-0-t2i-250415"),
-                ModelRef(title: "Seedream 4.0（更强）", modelID: "doubao-seedream-4-0-250828")
+                ModelRef(title: "Seedream 5.0 Pro", modelID: "doubao-seedream-5-0-pro-260628"),
+                ModelRef(title: "Seedream 5.0 Lite", modelID: "doubao-seedream-5-0-lite-260128"),
+                ModelRef(title: "Seedream 4.5", modelID: "doubao-seedream-4-5-251128"),
+                ModelRef(title: "Seedream 4.0", modelID: "doubao-seedream-4-0-250828"),
+                ModelRef(title: "Seedream 3.0", modelID: "doubao-seedream-3-0-t2i-250415")
             ]
         ),
         Preset(
