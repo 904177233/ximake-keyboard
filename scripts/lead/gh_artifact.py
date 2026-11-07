@@ -101,7 +101,13 @@ def download_artifact(tok: str, artifact_id: int, out: Path) -> Path:
         ipas = [n for n in names if n.lower().endswith(".ipa")]
         if not ipas:
             raise SystemExit(f"artifact 里没有 .ipa：{names}")
-        data = zf.read(ipas[0])
+        # 一个 artifact 里可能有几个包（普通版、带 App Group 的），都按原名放出来
+        for extra in ipas[1:]:
+            target = DIST / Path(extra).name
+            target.write_bytes(zf.read(extra))
+            print(f"另写出：{target}")
+        main = next((n for n in ipas if Path(n).name == out.name), ipas[0])
+        data = zf.read(main)
         out.write_bytes(data)
         print(f"已写出：{out}")
         print(f"大小  ：{len(data)} 字节（{len(data) / 1024 / 1024:.2f} MB）")
