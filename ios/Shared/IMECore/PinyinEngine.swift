@@ -38,6 +38,22 @@ public final class PinyinEngine {
     static let initialsLengthBonus = 3.0
     /// 前一个词的最后一个字和这个词的第一个字连起来是个常用词（吃 + 过了 -> 吃过），加分。
     static let junctionBonus = 2.0
+    /// 整串都能切成完整拼音时，中间几个字母当简拼要多扣的分：bang 是「帮」，不是 ba + ng（那个）。
+    static let fullPinyinInitialsPenalty = 6.0
+    /// 简拼里有 a、e、o（零声母字的首字母）时每个扣的分：hap 多半是打错的 hao，不是「海岸炮」。
+    static let initialsVowelPenalty = 4.0
+    /// 纠错：一块词里打错一处的代价（换成相邻键、交换两个字母、多打一个、少打一个）。
+    /// 数值在 tools/dict/typo_eval.py 上调过：一处打错的句子约六成纠对排第一，打对的句子基本不误纠。
+    static let substituteCost = 5.0
+    static let swapCost = 4.0
+    static let extraLetterCost = 5.0
+    static let missingLetterCost = 5.5
+    /// 纠错后的整句比原来高出这么多分才排第一，否则排第二。
+    static let correctionLead = 2.0
+    /// 纠错只看这么长以内的词块。
+    static let maxEditTileLength = 12
+    /// 少打一个字母时，只试补这几个（韵母、zh/ch/sh 的 h、ng 的 g）。
+    static let insertableLetters: [UInt8] = Array("aeiouhgn".utf8)
     /// 嗯、呣这类只有声母的音节，放在句子中间基本是错的。
     static let unlikelySyllables: Set<String> = ["n", "m", "ng", "hm", "hng"]
     static let unlikelyPenalty = 20.0
@@ -112,6 +128,10 @@ public final class PinyinEngine {
         let lastSyllable: String?
         /// 简拼或没打完的词：拼音不是完整对上的。
         var isLoose = false
+        /// 还没打完的词（只会在末尾）。
+        var isPartial = false
+        /// 纠过错的词块。
+        var isEdited = false
     }
 
     /// 取一个键下最适合用来拼句子的词：词频最高的正常词，学过的词优先。
@@ -165,7 +185,7 @@ public final class PinyinEngine {
 
     /// 26 键：从 start 开始的所有词块。
     private func qwertyTiles(query: IMEQuery, start: Int, previous: String?, previousSyllable: String?,
-                             dictionary: MoyuDictionary) -> [Tile] {
+                             fullPinyin: Bool, dictionary: MoyuDictionary) -> [Tile] {
         var tiles: [Tile] = []
         let input = query.input
         let count = input.count
@@ -183,6 +203,8 @@ public final class PinyinEngine {
 
             let sub = Array(input[start..<position])
             let subString = String(decoding: sub, as: UTF8.self)
+            // 这串字母本身就是一个音节时，切成两个音节的词不加奖励：lve 是「略」，不是 lv'e（绿萼）
+            let oneSyllable = PinyinSyllables.isSyllable(subString)
             var matchedExact = false
             var cursor = range.lowerBound
             while cursor < range.upperBound, dictionary.keyLength(key: cursor) == sub.count {
@@ -190,7 +212,7 @@ public final class PinyinEngine {
                     matchedExact = true
                     let syllables = dictionary.syllables(key: cursor)
                     var score = scoreWord(frequency: entry.frequency,
-                                          syllableCount: dictionary.syllableCount(key: cursor),
+                                          syllableCount: oneSyllable ? 1 : dictionary.syllableCount(key: cursor),
                                           text: entry.text,
                                           previous: previous)
                     // 嗯、呣开头的词（包括 nhao -> 嗯好）放在句子中间基本是错的
@@ -222,7 +244,10 @@ public final class PinyinEngine {
 
             // 简拼：这一段没有全拼能对上时才试
             if !matchedExact, sub.count <= 6 {
-                let penalty = sub.count == 1 ? Self.singleInitialPenalty : Self.initialsPenalty
+                let vowels = sub.count >= 2 ? sub.filter { $0 == 0x61 || $0 == 0x65 || $0 == 0x6F }.count : 0
+                let penalty = (sub.count == 1 ? Self.singleInitialPenalty : Self.initialsPenalty)
+                    + (fullPinyin ? Self.fullPinyinInitialsPenalty : 0)
+                    + Self.initialsVowelPenalty * Double(vowels)
                 for index in dictionary.initialKeys(sub, limit: Self.initialTopK) {
                     guard let entry = bestWord(key: index, dictionary: dictionary) else { continue }
                     let syllables = dictionary.syllables(key: index)
@@ -253,7 +278,98 @@ public final class PinyinEngine {
                                   syllableCount: 1,
                                   text: entry.text) - Self.partialPenalty
             tiles.append(Tile(end: count, text: entry.text, key: dictionary.keyString(key: top),
-                              score: score, syllables: nil, lastSyllable: nil, isLoose: true))
+                              score: score, syllables: nil, lastSyllable: nil, isLoose: true, isPartial: true))
+        }
+        return tiles
+    }
+
+    /// 26 键纠错用的词块：从 start 开始的一段字母打错一处，改过来以后正好是词库里的一个拼音。
+    ///
+    /// 改动位置之前的字母必须对得上词库里某个拼音的开头，所以从那里接着往下查，大多数改法查一两个字母就断了。
+    private func editedTiles(query: IMEQuery, start: Int, previous: String?, dictionary: MoyuDictionary) -> [Tile] {
+        let input = query.input
+        let count = input.count
+        let limit = min(count, start + Self.maxEditTileLength)
+        // prefixes[k]：以 input[start..<start+k] 开头的键
+        var prefixes: [Range<Int>] = [0..<dictionary.keyCount]
+        while start + prefixes.count - 1 < limit {
+            let depth = prefixes.count - 1
+            let next = dictionary.narrow(prefixes[depth], depth: depth, byte: input[start + depth])
+            prefixes.append(next)
+            if next.isEmpty { break }
+        }
+        func lookup(_ variant: [UInt8], from position: Int) -> Int? {
+            guard position < prefixes.count, !prefixes[position].isEmpty else { return nil }
+            var range = prefixes[position]
+            var depth = position
+            while depth < variant.count {
+                range = dictionary.narrow(range, depth: depth, byte: variant[depth])
+                if range.isEmpty { return nil }
+                depth += 1
+            }
+            guard let first = range.first, dictionary.keyLength(key: first) == variant.count else { return nil }
+            return first
+        }
+
+        var found: [String: (index: Int, cost: Double, end: Int)] = [:]
+        func consider(_ variant: [UInt8], from position: Int, cost: Double, end: Int) {
+            guard let index = lookup(variant, from: position) else { return }
+            let key = String(decoding: variant, as: UTF8.self)
+            let id = key + "#\(end)"
+            if let old = found[id], old.cost <= cost { return }
+            found[id] = (index, cost, end)
+        }
+        // 改动位置不会超过前缀断掉的地方
+        let reachable = prefixes.count - 1
+        var end = start + 1
+        while end <= limit {
+            let sub = Array(input[start..<end])
+            let editable = min(sub.count - 1, reachable)
+            if sub.count >= 2 {
+                for position in 0...editable {
+                    for neighbor in Self.adjacentKeys[sub[position]] ?? [] {
+                        var variant = sub
+                        variant[position] = neighbor
+                        consider(variant, from: position, cost: Self.substituteCost, end: end)
+                    }
+                    if position + 1 < sub.count, sub[position] != sub[position + 1] {
+                        var variant = sub
+                        variant.swapAt(position, position + 1)
+                        consider(variant, from: position, cost: Self.swapCost, end: end)
+                    }
+                    if sub.count > 2 {
+                        var variant = sub
+                        variant.remove(at: position)
+                        consider(variant, from: position, cost: Self.extraLetterCost, end: end)
+                    }
+                }
+            }
+            // 少打一个字母；补在整串最后的不算，那只是还没打完
+            let lastGap = min(end == count ? sub.count - 1 : sub.count, reachable)
+            if lastGap >= 1 {
+                for gap in 1...lastGap {
+                    for letter in Self.insertableLetters {
+                        var variant = sub
+                        variant.insert(letter, at: gap)
+                        consider(variant, from: gap, cost: Self.missingLetterCost, end: end)
+                    }
+                }
+            }
+            end += 1
+        }
+
+        var tiles: [Tile] = []
+        for (id, hit) in found {
+            guard let entry = bestWord(key: hit.index, dictionary: dictionary, previous: previous) else { continue }
+            let syllables = dictionary.syllables(key: hit.index)
+            if let first = syllables.first, Self.unlikelySyllables.contains(first) { continue }
+            let key = String(id.prefix(while: { $0 != "#" }))
+            let score = scoreWord(frequency: entry.frequency,
+                                  syllableCount: PinyinSyllables.isSyllable(key) ? 1 : syllables.count,
+                                  text: entry.text,
+                                  previous: previous) - hit.cost
+            tiles.append(Tile(end: hit.end, text: entry.text, key: key, score: score,
+                              syllables: syllables, lastSyllable: syllables.last, isEdited: true))
         }
         return tiles
     }
@@ -381,8 +497,18 @@ public final class PinyinEngine {
 
     /// 动态规划求最优切法。
     private func solve(query: IMEQuery, dictionary: MoyuDictionary) -> [Tile]? {
+        solveScored(query: query, dictionary: dictionary)?.path
+    }
+
+    /// 整串能不能切成完整拼音（嗯、呣不算）。
+    private func isFullPinyin(_ query: IMEQuery) -> Bool {
+        query.mode == .qwerty && isCompleteSyllables(query.input[...])
+    }
+
+    private func solveScored(query: IMEQuery, dictionary: MoyuDictionary) -> (path: [Tile], score: Double)? {
         let count = query.input.count
         guard count > 0 else { return nil }
+        let fullPinyin = isFullPinyin(query)
         var best = [Double](repeating: -.infinity, count: count + 1)
         var back = [(from: Int, tile: Tile)?](repeating: nil, count: count + 1)
         best[0] = 0
@@ -390,7 +516,8 @@ public final class PinyinEngine {
             let previous = back[start]?.tile.text
             let previousSyllable = back[start]?.tile.lastSyllable
             let tiles = query.mode == .qwerty
-                ? qwertyTiles(query: query, start: start, previous: previous, previousSyllable: previousSyllable, dictionary: dictionary)
+                ? qwertyTiles(query: query, start: start, previous: previous, previousSyllable: previousSyllable,
+                              fullPinyin: fullPinyin, dictionary: dictionary)
                 : t9Tiles(query: query, start: start, previous: previous, previousSyllable: previousSyllable, dictionary: dictionary)
             for tile in tiles {
                 let value = best[start] + tile.score
@@ -407,7 +534,51 @@ public final class PinyinEngine {
             path.append(step.tile)
             cursor = step.from
         }
-        return Array(path.reversed())
+        return (Array(path.reversed()), best[count])
+    }
+
+    /// 允许整句里有一块词打错一处，求最优切法。
+    ///
+    /// 两层：第 0 层没纠过，第 1 层纠过一次。纠过以后不再收简拼和没打完的词，
+    /// 纠完还有对不上的就不算纠好。返回纠过一次的最好结果。
+    private func solveCorrected(query: IMEQuery, dictionary: MoyuDictionary) -> (path: [Tile], score: Double)? {
+        let count = query.input.count
+        guard count > 0 else { return nil }
+        let fullPinyin = isFullPinyin(query)
+        var best = [[Double]](repeating: [Double](repeating: -.infinity, count: count + 1), count: 2)
+        var back = [[(from: Int, layer: Int, tile: Tile)?]](repeating: [(from: Int, layer: Int, tile: Tile)?](repeating: nil, count: count + 1), count: 2)
+        best[0][0] = 0
+        for start in 0..<count {
+            for layer in 0..<2 where best[layer][start] > -.infinity {
+                let step = back[layer][start]
+                let previous = step?.tile.text
+                var tiles = qwertyTiles(query: query, start: start, previous: previous,
+                                        previousSyllable: step?.tile.lastSyllable,
+                                        fullPinyin: fullPinyin, dictionary: dictionary)
+                if layer == 0 {
+                    tiles += editedTiles(query: query, start: start, previous: previous, dictionary: dictionary)
+                }
+                for tile in tiles {
+                    let target = tile.isEdited ? 1 : layer
+                    if target == 1, tile.isLoose { continue }
+                    let value = best[layer][start] + tile.score
+                    if value > best[target][tile.end] {
+                        best[target][tile.end] = value
+                        back[target][tile.end] = (start, layer, tile)
+                    }
+                }
+            }
+        }
+        guard back[1][count] != nil else { return nil }
+        var path: [Tile] = []
+        var cursor = count
+        var layer = 1
+        while cursor > 0, let step = back[layer][cursor] {
+            path.append(step.tile)
+            cursor = step.from
+            layer = step.layer
+        }
+        return (Array(path.reversed()), best[1][count])
     }
 
     // MARK: - 转换
@@ -430,7 +601,8 @@ public final class PinyinEngine {
 
         var builder = CandidateBuilder(limit: Self.maxCandidates)
         let count = query.input.count
-        let path = solve(query: query, dictionary: dictionary)
+        let solved = solveScored(query: query, dictionary: dictionary)
+        let path = solved?.path
 
         // 打头的是整句（或一整个词）
         // 两个字母的简拼（wq、nh）歧义太大，首选交给按聊天习惯排的候选；三个字母以上用整句算出来的
@@ -473,10 +645,14 @@ public final class PinyinEngine {
             }
         }
 
-        // 打错一个字母（wozhem -> wozhen）：排在第二个，标上「纠错」
-        if query.mode == .qwerty, typoCorrection {
-            for (offset, candidate) in adjacentCorrections(query: query, path: path, dictionary: dictionary).enumerated() {
-                builder.insert(candidate, at: 1 + offset)
+        // 打错一个字母（wozhem -> wozhen、nihap -> nihao、整句中间打错一个）：标上「纠错」。
+        // 比原来的整句明显好时排第一，否则排第二。
+        if query.mode == .qwerty, typoCorrection,
+           let correction = correctedCandidate(query: query, original: solved, dictionary: dictionary) {
+            if correction.first {
+                builder.promote(correction.candidate, to: 0)
+            } else {
+                builder.insert(correction.candidate, at: 1)
             }
         }
 
@@ -675,49 +851,30 @@ public final class PinyinEngine {
         }
     }
 
-    /// 猜打错的字母：拼音末尾对不上时，试着换成键盘上相邻的字母，或者交换相邻两个字母。
+    /// 纠错后的整句。
     ///
-    /// 只看末尾这几个字母，换完必须每一段都是完整的拼音才算。不做「删最后一个字母」，
-    /// 那只是用户打字的上一步，不算纠错。
-    private func adjacentCorrections(query: IMEQuery, path: [Tile]?, dictionary: MoyuDictionary) -> [IMECandidate] {
-        guard query.breaks.isEmpty else { return [] }
-        let tiles = path ?? []
-        if path != nil, !tiles.contains(where: { $0.isLoose }) { return [] }
-        let looseIndex = tiles.firstIndex { $0.isLoose } ?? 0
-        // 从上一块开始看：wo|zhe|m 要连 zhe 一起看，才能改成 zhen
-        let head = Array(tiles.prefix(max(looseIndex - 1, 0)))
-        let tail = Array(query.input[(head.last?.end ?? 0)...])
+    /// 只在打的是全拼（有韵母）、没手动分词、长度合适时试。原来的整句全都对得上时，
+    /// 纠完要比原来分高才算；原来有对不上的块（打错的字母多半被当成了简拼）时，纠完的放第二，
+    /// 明显更好时放第一。只有末尾还没打完的词时，同样要比原来分高。
+    private func correctedCandidate(query: IMEQuery, original: (path: [Tile], score: Double)?,
+                                    dictionary: MoyuDictionary) -> (candidate: IMECandidate, first: Bool)? {
+        let count = query.input.count
         let vowels = Array("aeiouv".utf8)
-        guard tail.count >= 2, tail.count <= 14, tail.contains(where: { vowels.contains($0) }) else { return [] }
-
-        var rows: [(path: [Tile], score: Double, key: String)] = []
-        var seen: Set<[UInt8]> = [tail]
-        func consider(_ variant: [UInt8]) {
-            guard seen.insert(variant).inserted,
-                  let solved = solve(query: IMEQuery(mode: .qwerty, input: variant), dictionary: dictionary),
-                  !solved.contains(where: { $0.isLoose }) else { return }
-            rows.append((solved, solved.reduce(0) { $0 + $1.score }, String(decoding: variant, as: UTF8.self)))
+        guard query.breaks.isEmpty, query.locks.isEmpty, count >= 2, count <= 40,
+              query.input.contains(where: { vowels.contains($0) }),
+              let corrected = solveCorrected(query: query, dictionary: dictionary) else { return nil }
+        let text = sentenceText(corrected.path)
+        let key = corrected.path.map(\.key).joined()
+        let candidate = IMECandidate(text: text, key: key, consumed: count, kind: .corrected)
+        guard let original else {
+            return (candidate, true)
         }
-        let window = max(tail.count - 5, 0)
-        for position in window..<tail.count {
-            for neighbor in Self.adjacentKeys[tail[position]] ?? [] {
-                var variant = tail
-                variant[position] = neighbor
-                consider(variant)
-            }
-            if position + 1 < tail.count, tail[position] != tail[position + 1] {
-                var variant = tail
-                variant.swapAt(position, position + 1)
-                consider(variant)
-            }
-        }
-        rows.sort { $0.score > $1.score }
-        return rows.prefix(2).map { row in
-            IMECandidate(text: sentenceText(head + row.path),
-                         key: head.map { $0.key }.joined() + row.key,
-                         consumed: query.input.count,
-                         kind: .corrected)
-        }
+        guard text != sentenceText(original.path) else { return nil }
+        let gain = corrected.score - original.score
+        let hasMismatch = original.path.contains { $0.isLoose && !$0.isPartial }
+        if gain > Self.correctionLead { return (candidate, true) }
+        if gain > 0 || (hasMismatch && gain > -Self.correctionLead * 2) { return (candidate, false) }
+        return nil
     }
 
     /// 打错一个字母：候选很少时试一下。
@@ -784,18 +941,48 @@ public final class PinyinEngine {
         learning.record(segments: segments)
     }
 
-    /// 上屏后的下一个词：用户习惯 > 手工整理的常用搭配 > 内置短语 > 从词库推的后半截。
-    public func predictions(after text: String, limit: Int) -> [String] {
+    /// 句末是这些字时，先给问号。
+    private static let questionEndings: Set<Character> = ["吗", "呢", "么", "嘛", "啥", "谁", "哪", "几"]
+    /// 句末是这些字时，先给感叹号。
+    private static let exclaimEndings: Set<Character> = ["啊", "呀", "啦", "哇", "哦", "喔", "哈", "嘿", "耶"]
+
+    /// 上屏后的下一个词：句末标点 > 用户习惯 > 手工整理的常用搭配 > 内置短语 > 从短语库推的下一个词 > 后半截。
+    ///
+    /// - Parameters:
+    ///   - text: 刚上屏的内容（可能是一整句）。
+    ///   - lastWord: 这次上屏的最后一个词（整句时用它找下一个词）；不传就按 text 的结尾找。
+    ///   - limit: 最多几个。
+    public func predictions(after text: String, lastWord: String? = nil, limit: Int) -> [String] {
         var result: [String] = []
         func add(_ words: [String]) {
             for word in words where result.count < limit && word != text && !result.contains(word) {
                 result.append(word)
             }
         }
+        let sentence = text.count >= 3
+        if sentence, let last = text.last {
+            if Self.questionEndings.contains(last) {
+                add(["？", "。"])
+            } else if Self.exclaimEndings.contains(last) {
+                add(["！", "。"])
+            } else if text.count >= 4 {
+                add(["，", "。"])
+            }
+        }
         add(learning.next(after: text, limit: limit))
-        add(nextWords.authoredWords(after: text))
+        if let lastWord, lastWord != text {
+            add(learning.next(after: lastWord, limit: limit))
+        }
+        let anchor = lastWord.map { text.hasSuffix($0) ? text : $0 } ?? text
+        add(nextWords.authoredWords(after: anchor))
         add(suggestions.suggestions(after: text, limit: limit).map { $0.text })
-        add(nextWords.compoundWords(after: text))
+        // 短语库推的带点书面味（工作 -> 人员），只在前面不够时补几个
+        if result.count < 8 {
+            add(Array(nextWords.followingWords(after: anchor).prefix(4)))
+        }
+        // 后半截是「把词打完」（今 -> 天）。一整句后面接单个字的后半截没有意义（很忙 -> 碌），
+        // 只用两个字以上的结尾（想你 -> 了、太贵了 -> 吧）。
+        add(nextWords.compoundWords(after: text, minimumHeadLength: sentence ? 2 : 1))
         return result
     }
 }

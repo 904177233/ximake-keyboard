@@ -1,9 +1,9 @@
 {
-  "version": "3.0.5",
-  "generated_at": "2026-11-05",
-  "entries": 275498,
-  "keys": 209944,
-  "bytes": 14498920,
+  "version": "3.0.6",
+  "generated_at": "2026-11-07",
+  "entries": 274111,
+  "keys": 210265,
+  "bytes": 14495801,
   "sources": [
     {
       "name": "jieba dict.txt",

@@ -110,6 +110,8 @@ final class KeyboardSession: ObservableObject {
     private(set) var predictions: [String] = []
     private(set) var aiSuggestions: [String] = []
     private var lastCommit = ""
+    /// 上一次上屏的最后一个词（整句时是句子的最后一个词），用来记「后面常跟什么」。
+    private var lastWord = ""
     private var documentIdentifier: UUID?
     private var isActive = false
     private var toastTask: Task<Void, Never>?
@@ -667,19 +669,24 @@ final class KeyboardSession: ObservableObject {
             typed.append((text, allLetters))
         }
         kit.learning.recordTyped(typed)
-        didCommit(text)
+        didCommit(text, firstWord: segments.first?.text, lastWord: segments.last?.text)
     }
 
     /// 上屏后：记先后关系，给联想。
-    private func didCommit(_ text: String) {
-        kit.learning.recordFollow(previous: lastCommit, current: text)
+    private func didCommit(_ text: String, firstWord: String? = nil, lastWord word: String? = nil) {
+        // 整句上屏时按句子的最后一个词记，免得「后面跟什么」只记在整句上、下次永远对不上
+        let isPunctuation = text.unicodeScalars.allSatisfy { CharacterSet.punctuationCharacters.contains($0) }
+        if !isPunctuation {
+            kit.learning.recordFollow(previous: lastWord, current: firstWord ?? text)
+        }
         lastCommit = text
+        lastWord = isPunctuation ? "" : (word ?? text)
         if writesToDraft {
             predictions = []
             showingTools = true
             return
         }
-        predictions = kit.engine.predictions(after: text, limit: 14)
+        predictions = kit.engine.predictions(after: text, lastWord: word, limit: 14)
         aiSuggestions = []
         showingTools = predictions.isEmpty
         suggest.schedule()

@@ -67,6 +67,10 @@ ESSAY_NEW_WORD_MIN = 500
 ESSAY_BLEND = 1.0
 #: rime-ice（雾凇拼音）基础词库，GPL-3.0，下载地址见 docs/16-交接文档.md。没有这个文件就跳过。
 RIME_ICE = HERE / ".cache" / "rime-ice" / "base.dict.yaml"
+#: rime-ice 的 8105 字表：每个字每个读音的字频（GPL-3.0），用来给多音字的其它读音定词频。
+RIME_CHARS = HERE / ".cache" / "rime-ice" / "8105.dict.yaml"
+#: 其它读音占这个字总字频的比例低于这个数就不收（绿 lu、不 fou 这类古音）。
+ALT_READING_MIN_SHARE = 0.01
 #: 词库里没有的词，rime-ice 权重到这个数才收。
 RIME_NEW_MIN = 1000
 #: 两边都有的词，词频里 rime-ice 占多少（按对数算）。
@@ -76,9 +80,15 @@ RIME_PHRASE_MIN = 1000
 ESSAY_RAISE_V1 = True
 #: 词频低于这个的词不拿来推「后半截」联想。
 COMPOUND_MIN_FREQ = 200
+#: 推「下一个词」时用的 rime-ice 短语：权重下限、每个词留几个、至少几条短语支持。
+FOLLOW_PHRASE_MIN = 300
+FOLLOW_KEEP = 8
+FOLLOW_MIN_PHRASES = 3
+#: 推出来的下一个词本身要够常用（去掉 债、债券 这类书面词）。
+FOLLOW_WORD_MIN = 3000
 
-DICT_VERSION = "3.0.5"
-GENERATED_DATE = "2026-11-05"
+DICT_VERSION = "3.0.6"
+GENERATED_DATE = "2026-11-07"
 
 #: jieba 词频下限。词频再低的多是专名和噪声，收进来只会占地方。
 MIN_FREQ = 5
@@ -91,6 +101,8 @@ CHAT_FREQ_BOOST = 6
 #: 必须有上限：「不」本身词频极高，打八折读成 fu 还是比「服」高，整句就会选错。
 ALT_READING_DISCOUNT = 0.12
 ALT_READING_CAP = 3000
+#: 没有字表数据时猜的读音，上限压低：多半是古音。
+ALT_READING_UNKNOWN_CAP = 200
 
 CJK = re.compile(r"^[一-鿿]+$")
 SYL_SET = frozenset(SYLLABLES)
@@ -154,6 +166,12 @@ def mask_of(syllables: list[str]) -> int:
     return mask
 
 
+def split_by_mask(key: str, mask: int) -> list[str]:
+    """按音节起点掩码把键切回音节。"""
+    starts = [i for i in range(min(len(key), 32)) if mask >> i & 1] or [0]
+    return [key[a:b] for a, b in zip(starts, starts[1:] + [len(key)])]
+
+
 def initials_of(key: str, mask: int) -> str:
     return "".join(key[i] for i in range(min(len(key), 32)) if mask >> i & 1)
 
@@ -202,8 +220,70 @@ def load_next_words() -> dict[str, list[str]]:
     return table
 
 
+def phrase_followers(builder: "Builder") -> dict[str, list[str]]:
+    """把 rime-ice 的多字短语（我吃过了）按词库切成词（我|吃过|了），数前后两个词连在一起的情况。
+
+    rime-ice 是词库不是聊天语料，推出来的会带点书面味（公司 -> 地址），所以联想里排在手工表后面。
+    """
+    rime = load_rime_ice()
+    if not rime:
+        return {}
+    freq: dict[str, int] = {}
+    for (_key, _mask), words in builder.table.items():
+        for text, (f, flags) in words.items():
+            if flags & (FLAG_EMOJI | FLAG_PUNCT | FLAG_ASCII) or not CJK.match(text):
+                continue
+            freq[text] = max(freq.get(text, 0), f)
+
+    def split(text: str) -> list[str] | None:
+        n = len(text)
+        best = [-math.inf] * (n + 1)
+        back = [0] * (n + 1)
+        best[0] = 0.0
+        for i in range(n):
+            if best[i] == -math.inf:
+                continue
+            for j in range(i + 1, min(n, i + 4) + 1):
+                word = text[i:j]
+                if word == text or word not in freq:
+                    continue
+                value = best[i] + math.log(freq[word] + 1) - 10
+                if value > best[j]:
+                    best[j] = value
+                    back[j] = i
+        if best[n] == -math.inf:
+            return None
+        parts = []
+        cursor = n
+        while cursor > 0:
+            parts.append(text[back[cursor]:cursor])
+            cursor = back[cursor]
+        return parts[::-1]
+
+    weight: dict[str, Counter[str]] = defaultdict(Counter)
+    support: dict[str, Counter[str]] = defaultdict(Counter)
+    for text, (_syllables, w) in rime.items():
+        if len(text) < 3 or w < FOLLOW_PHRASE_MIN:
+            continue
+        parts = split(text)
+        if not parts or len(parts) < 2:
+            continue
+        for left, right in zip(parts, parts[1:]):
+            weight[left][right] += w
+            support[left][right] += 1
+    result = {}
+    for head, counter in weight.items():
+        if freq.get(head, 0) < COMPOUND_MIN_FREQ:
+            continue
+        words = [w for w, _ in counter.most_common()
+                 if support[head][w] >= FOLLOW_MIN_PHRASES and freq.get(w, 0) >= FOLLOW_WORD_MIN][:FOLLOW_KEEP]
+        if words:
+            result[head] = words
+    return result
+
+
 def write_next_words(builder: Builder, path: Path) -> int:
-    """手工表 + 从词库推出来的后半截（今 -> 天、年、晚），写成 next.tsv。"""
+    """手工表 + 从词库推出来的后半截（今 -> 天、年、晚）+ 从短语库推的下一个词，写成 next.tsv。"""
     authored = load_next_words()
     known = set()
     weights: dict[str, Counter[str]] = defaultdict(Counter)
@@ -218,12 +298,15 @@ def write_next_words(builder: Builder, path: Path) -> int:
                 # 后半截太长就不像「下一个词」了（今 -> 天天气）
                 if len(text) - cut <= 2:
                     weights[text[:cut]][text[cut:]] += freq
+    followers = phrase_followers(builder)
     lines = []
-    for head in sorted(set(authored) | {h for h in weights if len(h) == 1 or h in known}):
+    heads = set(authored) | {h for h in weights if len(h) == 1 or h in known} | set(followers)
+    for head in sorted(heads):
         words = authored.get(head, [])
         rest = [w for w, _ in weights[head].most_common(14) if w not in words][:10] if head in weights else []
-        if words or rest:
-            lines.append(f"{head}\t{' '.join(words)}\t{' '.join(rest)}")
+        follow = [w for w in followers.get(head, []) if w not in words]
+        if words or rest or follow:
+            lines.append(f"{head}\t{' '.join(words)}\t{' '.join(rest)}\t{' '.join(follow)}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     return len(lines)
 
@@ -288,6 +371,23 @@ def load_rime_ice() -> dict[str, tuple[list[str], int]]:
         if parts[0] not in result or result[parts[0]][1] < weight:
             result[parts[0]] = (syllables, weight)
     return result
+
+
+def load_rime_chars() -> dict[str, dict[str, int]]:
+    """读 rime-ice 的 8105 字表：字 -> {读音: 字频}。"""
+    if not RIME_CHARS.exists():
+        return {}
+    result: dict[str, dict[str, int]] = defaultdict(dict)
+    started = False
+    for line in RIME_CHARS.read_text(encoding="utf-8").splitlines():
+        if not started:
+            started = line.strip() == "..."
+            continue
+        parts = line.split("\t")
+        if len(parts) < 3 or len(parts[0]) != 1 or not parts[2].isdigit() or parts[1] not in SYL_SET:
+            continue
+        result[parts[0]][parts[1]] = max(result[parts[0]].get(parts[1], 0), int(parts[2]))
+    return dict(result)
 
 
 def essay_scale(essay: dict[str, int], jieba: dict[str, int]) -> float:
@@ -448,16 +548,32 @@ def collect() -> Builder:
             builder.stats["rime_new"] += 1
 
     # ③ 单字的其它读音
+    # 以前用 pypinyin 的全部读音，再按默认读音词频打折，最高 3000：不 fu、被 pi、还 fu 这些古音
+    # 都到了 3000，比「皮」「付」还高，整句里到处是它们（pinan -> 副男）。
+    # 现在有 8105 字表时按每个读音的真实字频分；字表里没有的读音不收。
+    rime_chars = load_rime_chars()
     for char, freq in single_freq.items():
         if char not in keep_chars:
             continue
+        default = lazy_pinyin(char)[0].lower()
+        table = rime_chars.get(char)
+        if table:
+            total = sum(table.values()) or 1
+            for reading, weight in table.items():
+                share = weight / total
+                if reading == default or share < ALT_READING_MIN_SHARE:
+                    continue
+                builder.add(reading, [reading], char, min(ALT_READING_CAP, max(8, int(freq * share))), 0)
+                builder.stats["alt_reading"] += 1
+            continue
         readings = pinyin(char, style=Style.NORMAL, heteronym=True)[0]
-        base = freq
         for reading in readings[1:6]:
             reading = reading.lower()
             if reading in SYL_SET:
-                builder.add(reading, [reading], char, min(ALT_READING_CAP, max(8, int(base * ALT_READING_DISCOUNT))), 0)
-                builder.stats["alt_reading"] += 1
+                builder.add(reading, [reading], char, min(ALT_READING_UNKNOWN_CAP, max(8, int(freq * ALT_READING_DISCOUNT))), 0)
+                builder.stats["alt_reading_guess"] += 1
+
+    # ③′ 字表里有、但词库里这个读音不在的单字（率 lv、还 huan 的旧数据可能缺）不另补：旧词库已覆盖常用读音。
 
     # ④ 手工补充与纠偏：可以覆盖词频
     if EXTRA.exists():
@@ -474,6 +590,18 @@ def collect() -> Builder:
             flags = slot.get(word, [0, 0])[1] | FLAG_CHAT | chat_bits(word)
             slot[word] = [freq, flags]
             builder.stats["extra"] += 1
+
+    # ⑤ 略、虐也能打 lue、nue（很多人这么打）。字母数一样，切分位置不变。
+    for (key, mask), words in list(builder.table.items()):
+        syllables = split_by_mask(key, mask)
+        if not any(s in ("lve", "nve") for s in syllables):
+            continue
+        alias = "".join("lue" if s == "lve" else "nue" if s == "nve" else s for s in syllables)
+        slot = builder.table[(alias, mask)]
+        for word, (freq, flags) in words.items():
+            if word not in slot:
+                slot[word] = [freq, flags]
+                builder.stats["ue_alias"] += 1
     return builder
 
 
@@ -559,6 +687,10 @@ INITIALS_LENGTH_BONUS = 3.0
 SYLLABLE_BONUS = 2.0
 BIGRAM_BONUS = 3.0
 UNLIKELY_SINGLE = {"n", "m", "ng", "hm", "hng"}
+#: 整串都能切成完整拼音时，中间再把几个字母当简拼要多扣分：bang 是「帮」，不是 ba + ng（那个）。
+FULL_PINYIN_INITIALS_PENALTY = 6.0
+#: 简拼里有 a、e、o（零声母字的首字母）时每个扣的分：hap 多半是打错的 hao，不是「海岸炮」。
+INITIALS_VOWEL_PENALTY = 4.0
 #: 整句最后一个字是这些音时，换成语气词。没有上下文模型时，这条规则最划算。
 ENDING_PARTICLES = {"ma": "吗", "ba": "吧", "ne": "呢", "a": "啊", "ya": "呀", "la": "啦", "le": "了"}
 
@@ -621,6 +753,8 @@ class Eval:
         best = [-math.inf] * (n + 1)
         back: list[tuple[int, str, str] | None] = [None] * (n + 1)
         best[0] = 0.0
+        parts = segment(query)
+        full_pinyin = parts is not None and not any(p in UNLIKELY_SINGLE for p in parts)
         for i in range(n):
             if best[i] == -math.inf:
                 continue
@@ -632,6 +766,10 @@ class Eval:
                     # 简拼：这一段没有全拼能对上时才试
                     if len(sub) <= 6:
                         penalty = SINGLE_INITIAL_PENALTY if len(sub) == 1 else INITIALS_PENALTY
+                        if full_pinyin:
+                            penalty += FULL_PINYIN_INITIALS_PENALTY
+                        if len(sub) >= 2:
+                            penalty += INITIALS_VOWEL_PENALTY * sum(c in "aeo" for c in sub)
                         for freq, text, key in self.init.get(sub, [])[:INITIAL_TOP_K]:
                             junction = JUNCTION_BONUS if previous and previous[-1] + text[0] in self.two_char else 0.0
                             pair = BIGRAM_BONUS if previous and text in self.pairs.get(previous, ()) else 0.0
@@ -643,9 +781,11 @@ class Eval:
                     continue
                 first = (segment(sub) or [sub])[0]
                 extra = -20.0 if first in UNLIKELY_SINGLE else 0.0
+                one_syllable = sub in SYL_SET
                 for text, freq, syllables, _ in rows[:8]:
                     pair = BIGRAM_BONUS if previous and text in self.pairs.get(previous, ()) else 0.0
-                    value = best[i] + math.log(freq + 1) - TILE_PENALTY + SYLLABLE_BONUS * (syllables - 1) + extra + pair
+                    bonus = 0.0 if one_syllable else SYLLABLE_BONUS * (syllables - 1)
+                    value = best[i] + math.log(freq + 1) - TILE_PENALTY + bonus + extra + pair
                     if value > best[j]:
                         best[j] = value
                         back[j] = (i, text, sub)
@@ -654,10 +794,13 @@ class Eval:
         pieces = []
         cursor = n
         last_key = back[n][2]
+        self.trace = []
         while cursor > 0:
             prev, text, _key = back[cursor]
             pieces.append(text)
+            self.trace.append((query[prev:cursor], text, _key))
             cursor = prev
+        self.trace.reverse()
         if len(pieces) >= 2 and last_key in ENDING_PARTICLES:
             pieces[0] = ENDING_PARTICLES[last_key]
         return "".join(reversed(pieces))

@@ -3,7 +3,9 @@
 //  墨语 · 输入法内核
 //
 //  「这个词后面常跟什么」。数据来自 tools/dict/build_binary.py 生成的 next.tsv，每行：
-//      词 <TAB> 手工整理的下一个词 <TAB> 从词库推出来的后半截
+//      词 <TAB> 手工整理的下一个词 <TAB> 从词库推出来的后半截 <TAB> 从短语库推出来的下一个词
+//
+//  第四列：把 rime-ice 里的多字短语（我吃过了）切成词（我|吃过|了），数前后两个词连在一起的次数。
 //
 //  手工整理的部分质量高，既用于上屏后的联想，也用于整句转换时判断两个词连在一起是否自然
 //  （「我想」比「我向」常见）。后半截只用于联想：打了「今」，下一个可能是「天」。
@@ -17,6 +19,7 @@ public final class NextWordIndex {
     private var authored: [String: [String]] = [:]
     private var authoredSets: [String: Set<String>] = [:]
     private var compound: [String: [String]] = [:]
+    private var following: [String: [String]] = [:]
 
     /// 最长按几个字匹配上屏内容的结尾。
     private static let maximumHeadLength = 4
@@ -39,6 +42,9 @@ public final class NextWordIndex {
             }
             if !fields[2].isEmpty {
                 compound[head] = fields[2].split(separator: " ").map(String.init)
+            }
+            if fields.count >= 4, !fields[3].isEmpty {
+                following[head] = fields[3].split(separator: " ").map(String.init)
             }
         }
     }
@@ -63,15 +69,21 @@ public final class NextWordIndex {
     }
 
     /// 从词库推出来的后半截。
-    public func compoundWords(after text: String) -> [String] {
-        lookup(text, in: compound)
+    /// - Parameter minimumHeadLength: 结尾至少按几个字匹配（一整句后面不要按单个字补全）。
+    public func compoundWords(after text: String, minimumHeadLength: Int = 1) -> [String] {
+        lookup(text, in: compound, minimumLength: minimumHeadLength)
     }
 
-    private func lookup(_ text: String, in table: [String: [String]]) -> [String] {
+    /// 从短语库推出来的下一个词。
+    public func followingWords(after text: String) -> [String] {
+        lookup(text, in: following)
+    }
+
+    private func lookup(_ text: String, in table: [String: [String]], minimumLength: Int = 1) -> [String] {
         let characters = Array(text)
         guard !characters.isEmpty else { return [] }
         var length = min(Self.maximumHeadLength, characters.count)
-        while length >= 1 {
+        while length >= max(minimumLength, 1) {
             if let words = table[String(characters.suffix(length))] {
                 return words
             }

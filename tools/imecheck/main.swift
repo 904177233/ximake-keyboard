@@ -82,11 +82,35 @@ check("wom 有我们", texts(qwerty("wom"), 3).contains("我们"), "\(texts(qwer
 check("woxih 首选我喜欢", qwerty("woxih").candidates.first?.text == "我喜欢", "\(texts(qwerty("woxih")))")
 
 print("打错字")
-let typo = typed("wozhem")
-check("wozhem 第二个候选是纠错后的我真", typo.candidates.dropFirst().first?.text == "我真" && typo.candidates.dropFirst().first?.kind == .corrected, "\(texts(typo))")
+func correctedFirst(_ input: String, _ expected: String) {
+    let got = typed(input)
+    let top = got.candidates.first
+    check("\(input) 首选纠成\(expected)", top?.text == expected && top?.kind == .corrected, "\(texts(got))")
+}
+correctedFirst("nihap", "你好")
+correctedFirst("jintianhebmang", "今天很忙")
+correctedFirst("woxiangchifna", "我想吃饭")
+correctedFirst("zhegewenttizenmebanne", "这个问题怎么办呢")
+correctedFirst("xiexienu", "谢谢你")
 let clean = typed("wozhen")
 check("拼对了不出纠错", !clean.candidates.prefix(3).contains { $0.kind == .corrected }, "\(texts(clean))")
+for input in ["jintianhenmang", "woxihuanni", "nichifanlema", "zhegedongxihenhaoyong"] {
+    check("\(input) 打对了首选不是纠错", typed(input).candidates.first?.kind != .corrected, "\(texts(typed(input)))")
+}
 check("简拼不乱纠错", !typed("wq").candidates.prefix(4).contains { $0.kind == .corrected }, "\(texts(typed("wq")))")
+check("wbzd 不乱纠错", typed("wbzd").candidates.first?.text == "我不知道", "\(texts(typed("wbzd")))")
+
+print("ü 和分词")
+for (input, expected) in [("lve", "略"), ("lue", "略"), ("nve", "虐"), ("nue", "虐"), ("lueguo", "略过"),
+                          ("nvhai", "女孩"), ("lvse", "绿色"), ("qulvyou", "去旅游"), ("zhanlue", "战略")] {
+    check("\(input) 首选是\(expected)", qwerty(input).candidates.first?.text == expected, "\(texts(qwerty(input)))")
+}
+check("lve 不被切成 lv'e", qwerty("lve").spelling == "lve", qwerty("lve").spelling)
+check("lv 首选是绿", qwerty("lv").candidates.first?.text == "绿", "\(texts(qwerty("lv")))")
+check("pi 首选不是古音（被、比）", qwerty("pi").candidates.first?.text == "皮", "\(texts(qwerty("pi")))")
+check("fu 前三没有不、还", !texts(qwerty("fu"), 3).contains("不") && !texts(qwerty("fu"), 3).contains("还"), "\(texts(qwerty("fu")))")
+check("bang 不被切成 ba + ng", qwerty("ninengbangwoyigemangma").candidates.first?.text == "你能帮我一个忙吗",
+      "\(texts(qwerty("ninengbangwoyigemangma")))")
 
 print("联想")
 let afterWo = engine.predictions(after: "我", limit: 14)
@@ -94,6 +118,12 @@ check("我 后面有想、们", afterWo.contains("想") && afterWo.contains("们
 let afterJin = engine.predictions(after: "今", limit: 14)
 check("今 后面有天", afterJin.contains("天"), "\(afterJin)")
 check("长句按结尾的词联想", engine.predictions(after: "我们今天", limit: 14).contains("晚上"), "\(engine.predictions(after: "我们今天", limit: 14))")
+let afterQuestion = engine.predictions(after: "你吃过了吗", lastWord: "吗", limit: 14)
+check("问句后面先给问号", afterQuestion.first == "？", "\(afterQuestion)")
+let afterBusy = engine.predictions(after: "我今天很忙", lastWord: "忙", limit: 14)
+check("整句后面不按单字补全（很忙 -> 碌）", !afterBusy.contains("碌") && afterBusy.first == "，", "\(afterBusy)")
+let afterHome = engine.predictions(after: "我到家", lastWord: "到家", limit: 14)
+check("到家 后面有了", afterHome.contains("了"), "\(afterHome)")
 
 print("逐词选词")
 let long = qwerty("woxihuanni")
@@ -154,6 +184,13 @@ for _ in 0..<50 {
 let perCall = Date().timeIntervalSince(started) / 50 * 1000
 print(String(format: "  长句每次转换 %.2f 毫秒", perCall))
 check("长句转换不超过 16 毫秒", perCall < 16)
+let typoStarted = Date()
+for _ in 0..<20 {
+    _ = typed("jintiantianqihenhaowomenyiqichuquwamba")
+}
+let typoPerCall = Date().timeIntervalSince(typoStarted) / 20 * 1000
+print(String(format: "  长句打错一处（带纠错）每次转换 %.2f 毫秒", typoPerCall))
+check("带纠错的长句不超过 40 毫秒", typoPerCall < 40)
 
 print("整句准确率（没有参与调词频的句子）")
 let holdout: [(String, String)] = [
