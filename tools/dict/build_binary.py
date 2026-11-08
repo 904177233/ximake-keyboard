@@ -851,7 +851,7 @@ def main() -> int:
             {"name": "pypinyin", "license": "MIT", "url": "https://github.com/mozillazg/python-pinyin"},
             {"name": "rime-essay essay.txt", "license": "LGPL-3.0", "url": "https://github.com/rime/rime-essay"},
             {"name": "OpenCC TSCharacters / TSPhrases", "license": "Apache-2.0", "url": "https://github.com/BYVoid/OpenCC"},
-            {"name": "rime-ice cn_dicts/base.dict.yaml", "license": "GPL-3.0", "url": "https://github.com/iDvel/rime-ice"},
+            {"name": "rime-ice cn_dicts/base.dict.yaml + 8105.dict.yaml", "license": "GPL-3.0", "url": "https://github.com/iDvel/rime-ice"},
         ],
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 

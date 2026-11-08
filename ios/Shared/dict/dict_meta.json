@@ -26,7 +26,7 @@
       "url": "https://github.com/BYVoid/OpenCC"
     },
     {
-      "name": "rime-ice cn_dicts/base.dict.yaml",
+      "name": "rime-ice cn_dicts/base.dict.yaml + 8105.dict.yaml",
       "license": "GPL-3.0",
       "url": "https://github.com/iDvel/rime-ice"
     }
