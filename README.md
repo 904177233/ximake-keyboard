@@ -8,7 +8,7 @@
 
 没有后端，API Key 只存在你手机的钥匙串里，请求直连你自己选的服务商。
 
-[English](README.en.md) · [安装](#安装) · [构建](#没有-mac-怎么开发) · [交接文档](docs/16-交接文档.md)
+[English](README.en.md) · [下载](https://github.com/904177233/ximake-keyboard/releases/latest) · [安装](#安装) · [构建](#没有-mac-怎么开发) · [交接文档](docs/16-交接文档.md)
 
 ![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)
 ![Platform: iOS 16+](https://img.shields.io/badge/platform-iOS%2016%2B-lightgrey)
@@ -101,11 +101,11 @@
 
 现在的安装方式（免费，但每 7 天要重签一次）：
 
-1. 在本仓库的 [Actions](https://github.com/904177233/ximake-keyboard/actions/workflows/build.yml) 里打开最近一次成功的构建，下载 `AIKeyboard-unsigned-ipa`。里面有两个包：
-   - `AIKeyboard-appgroup-unsigned.ipa`：带 App Group 声明，App 和键盘能共享设置，优先用这个；
-   - `AIKeyboard-unsigned.ipa`：签名工具不支持 App Group 时用这个。
+1. 到 [Releases](https://github.com/904177233/ximake-keyboard/releases/latest) 下载安装包。每个版本有两个：
+   - `…-appgroup-unsigned.ipa`：带 App Group 声明，App 和键盘能共享设置，优先用这个；
+   - `…-unsigned.ipa`：签名工具不支持 App Group 时用这个。
 
-   下载 Actions 里的文件要先登录 GitHub，文件保留 7 天。过期了可以 fork 本仓库，自己跑一次构建。
+   想要最新的开发版，可以在 [Actions](https://github.com/904177233/ximake-keyboard/actions/workflows/build.yml) 里下载最近一次构建（要登录 GitHub，文件保留 7 天）。
 2. 用 SideStore、AltStore、iloader 等工具，以自己的免费 Apple ID 签名装到 iPhone。
 3. 设置 › 通用 › 键盘 › 键盘 › 添加新键盘 › 墨语，打开「允许完全访问」。
 4. 打开墨语 App，在「AI」页选一家服务商、粘贴 Key。

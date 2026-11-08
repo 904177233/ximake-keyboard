@@ -99,11 +99,11 @@ The author only has a Windows PC. The whole project was built without a Mac:
 
 How to install today (free, but it has to be re-signed every 7 days):
 
-1. Open the latest successful run under [Actions](https://github.com/904177233/ximake-keyboard/actions/workflows/build.yml) and download `AIKeyboard-unsigned-ipa`. It contains two packages:
-   - `AIKeyboard-appgroup-unsigned.ipa` declares an App Group so the app and keyboard can share settings. Try this one first.
-   - `AIKeyboard-unsigned.ipa` is for signing tools that don't support App Groups.
+1. Download a package from [Releases](https://github.com/904177233/ximake-keyboard/releases/latest). Each version has two:
+   - `…-appgroup-unsigned.ipa` declares an App Group so the app and keyboard can share settings. Try this one first.
+   - `…-unsigned.ipa` is for signing tools that don't support App Groups.
 
-   Downloading from Actions requires a GitHub login, and files are kept for 7 days. If they've expired, fork the repo and run the build yourself.
+   For the latest development build, download the most recent run from [Actions](https://github.com/904177233/ximake-keyboard/actions/workflows/build.yml) (requires a GitHub login; files are kept for 7 days).
 2. Sign and install it with your free Apple ID using SideStore, AltStore, iloader or similar.
 3. Settings › General › Keyboard › Keyboards › Add New Keyboard › 墨语, then turn on Allow Full Access.
 4. Open the Moyu app, go to the AI tab, pick a provider and paste your key.
