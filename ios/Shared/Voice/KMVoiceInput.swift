@@ -112,11 +112,11 @@ public final class KMVoiceInput: ObservableObject {
         return recognizer.isAvailable || SFSpeechRecognizer.authorizationStatus() == .notDetermined
     }
 
-    /// 当前是否已经拿到麦克风 + 语音识别两项授权（**只读检查，绝不弹窗**）。
+    /// 当前是否已经拿到麦克风 + 语音识别两项授权（只读检查，绝不弹窗）。
     ///
     /// v1.4 架构修正（用户反馈「语音输入一点击就会切到别的输入法」）：
     /// 键盘扩展里调 `requestAuthorization` / `requestRecordPermission` 会弹系统权限框，
-    /// **而弹出系统框会让键盘失去第一响应者、被系统收起，从而切回上一个输入法**。
+    /// 而弹出系统框会让键盘失去第一响应者、被系统收起，从而切回上一个输入法。
     /// 所以权限只能由宿主 App 申请；扩展这里只读状态，没授权就给出引导文案。
     public var isAuthorized: Bool {
         guard SFSpeechRecognizer.authorizationStatus() == .authorized else { return false }
@@ -147,9 +147,9 @@ public final class KMVoiceInput: ObservableObject {
 
     // MARK: 公开动作
 
-    /// 开始录音（**不申请权限**，只检查已有授权）。
+    /// 开始录音（不申请权限，只检查已有授权）。
     ///
-    /// 没授权时直接进 `.failed`，由 UI 引导用户去「墨语」App 里开权限 ——
+    /// 没授权时直接进 `.failed`，由 UI 引导用户去「墨语」App 里开权限，
     /// 在扩展里弹权限框会把键盘顶掉，这条路径必须彻底删掉。
     public func start() {
         guard !state.isActive else { return }
@@ -207,7 +207,7 @@ public final class KMVoiceInput: ObservableObject {
 
     // MARK: 权限
 
-    // 说明：扩展内**不再**有任何 `request*Permission` 调用。
+    // 说明：扩展内不再有任何 `request*Permission` 调用。
     // 键盘扩展弹系统权限框会让键盘失去第一响应者并被收起（用户看到的
     // 「点语音就切到别的输入法」就是它），授权统一由宿主 App 发起。
 

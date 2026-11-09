@@ -10,7 +10,7 @@
     ios/Shared/dict/phrases.tsv     建议词拼音 <TAB> 触发词 <TAB> 建议词
     ios/Shared/dict/dict_meta.json  版本/条数/日期/来源/SHA256
 
-注意：输出目录**必须**是 `ios/Shared/dict/`，绝不能是 `ios/Shared/Resources/dict/`。
+注意：输出目录必须是 `ios/Shared/dict/`，绝不能是 `ios/Shared/Resources/dict/`。
 folder reference 会把目录名原样复制到 App bundle 根，若出现 `Resources/` 目录，
 iOS 27 的 installd 会拒绝安装（IXErrorDomain Code=13 Missing bundle ID）。
 
@@ -78,7 +78,7 @@ HAS_CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
 
 # jieba 词性中属于"人名/音译/专名"的标记。v1.1.0 改为分级放行：
 # 3 万条规模下如果全放，词库会被"韦小宝/毛泽东/鄂"这类词灌满；全砍又会丢「王/李/明白」这种
-# 既是姓氏又是常用词的条目 —— 所以只对 freq 高的放行，且单字完全按常用字放行（见 select_jieba）。
+# 既是姓氏又是常用词的条目，所以只对 freq 高的放行，且单字完全按常用字放行（见 select_jieba）。
 PERSON_POS = {"nr", "nrt", "nrx", "nrfg"}
 PLACE_POS = {"ns"}
 ORG_POS = {"nt"}
@@ -136,7 +136,7 @@ def select_jieba(rows: list[tuple[str, int, str]], keep_chars: set[str]) -> list
     """按词频取前 N 条通用词，过滤生僻字/超长词/低质专名。
 
     v1.1.0 的词性策略（3 万条规模下人名地名会大量混入，必须分级放行）：
-    - 单字（len == 1）：不看词性，只要命中常用字就收 —— 拼音输入靠单字兜底；
+    - 单字（len == 1）：不看词性，只要命中常用字就收，拼音输入靠单字兜底；
     - 人名 nr/nrt/nrx/nrfg：仅保留 freq >= PERSON_KEEP_FREQ 的高频词；
     - 地名 ns：保留 freq >= PLACE_KEEP_FREQ 的省市地名（用户会打地名）；
     - 机构 nt：仅保留 freq >= ORG_KEEP_FREQ；

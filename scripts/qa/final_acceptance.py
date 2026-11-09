@@ -19,7 +19,7 @@
 
 退出码：
     0  GO（六闸门全绿）
-    1  CONDITIONAL（无 P0，但有 P1 —— 需 Lead 逐条签收）
+    1  CONDITIONAL（无 P0，但有 P1，需 Lead 逐条签收）
     2  NO-GO（存在 P0）
     3  脚本内部错误
 """
@@ -36,7 +36,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# Windows 控制台默认 GBK，中文会乱码 —— 强制 UTF-8
+# Windows 控制台默认 GBK，中文会乱码，强制 UTF-8
 for _stream_name in ("stdout", "stderr"):
     try:
         getattr(sys, _stream_name).reconfigure(encoding="utf-8", errors="replace")
@@ -314,7 +314,7 @@ def gate_link() -> GateResult:
         bad = (payload.get("missing_file") or []) + (payload.get("missing_rel_link") or [])
         if bad:
             b = bad[0]
-            # 注意：这里**不能**用反引号包路径 —— 否则 Markdown 报告被 link_check 再扫一遍时
+            # 注意：这里不能用反引号包路径，否则 Markdown 报告被 link_check 再扫一遍时
             # 会把这句「错误描述」当成新的路径引用，形成自我引用的假死链。
             g.detail = f"{b.get('doc')}:{b.get('line')} 引用的路径「{b.get('raw')}」不存在"
     return g
@@ -331,7 +331,7 @@ def run_all(fix: bool = False) -> list[GateResult]:
     gates.append(gate_link())
 
     # 去重：闸门 1（gen）报「工程与磁盘不一致」时，闸门 2/3 的 membership 类 P0
-    # 大概率是**同一个根因**（pbxproj 是生成物快照，滞后于磁盘）。
+    # 大概率是同一个根因（pbxproj 是生成物快照，滞后于磁盘）。
     # 把它们标成 derived，判定时合并计为 1 个 P0，并提示「跑一次 gen 就能一起收敛」。
     drift = gates[0].p0 > 0 and gates[0].key == "gen"
     if drift:
@@ -478,7 +478,7 @@ def render_markdown(gates: list[GateResult], code: str, verdict: str, reason: st
                    "滞后于磁盘），重跑一次 `python scripts/gen_xcodeproj.py` 会一并收敛。")
     out.append("")
 
-    # 关键指标：不论是否全绿都要输出 —— 全绿时的"规模数字"同样是验收证据的一部分
+    # 关键指标：不论是否全绿都要输出，全绿时的"规模数字"同样是验收证据的一部分
     # （冻结后回看需要知道这份报告是哪一版代码、多少文件的快照）。
     if worst is not None:
         out.append("**关键指标**（来自各脚本的 `stats`）：")

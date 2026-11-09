@@ -1,6 +1,6 @@
 """L1 本地联想质量评测（仅本机诊断用，不参与构建）。
 
-用途：把 `ContextualSeedTemplates.swift` 里的触发词表当成**唯一真相源**解析出来，
+用途：把 `ContextualSeedTemplates.swift` 里的触发词表当成唯一真相源解析出来，
 在 Python 里复刻 `LocalSuggestionIndex.suggestions(context:composing:limit:)` 的
 匹配规则（末句截取 → 按「触发词长度降序、置信度降序」找第一个后缀命中 → 取短句），
 然后对 30 个典型上文逐条打印「上文 → 产出」，用来做人工质量评审。

@@ -2,15 +2,12 @@
 //  TypoCorrector.swift
 //  墨语 · 输入法内核（IMECore）
 //
-//  模块职责：输入纠错——当原始输入「无候选」或「候选过少」时，猜测用户可能想打的
-//            拼音串，产出带 `[纠错]` 标记的候选，追加到候选列表尾部。
-//  依赖：Foundation、PinyinSyllables（合法音节判定）、FuzzyPinyin（声韵母规则表，
-//        必须复用，不允许在这里写第二套规则）。
-//  使用方：PinyinEngine（候选生成收尾阶段，见 `PinyinEngine+TypoCorrection.swift`）。
+//  输入纠错，当原始输入「无候选」或「候选过少」时，猜测用户可能想打的
+//  拼音串，产出带 `[纠错]` 标记的候选，追加到候选列表尾部。
 //
 //  规则来源（全部复用 `FuzzyPinyinRule`，共 9 条）：
 //  声母 zh/z、ch/c、sh/s、l/n；韵母 in/ing、en/eng、an/ang、ian/iang、uan/uang。
-//  额外补「单音节内编辑距离 1」（漏打 / 多打一个字母）——这一层 `FuzzyPinyin` 不覆盖。
+//  额外补「单音节内编辑距离 1」（漏打 / 多打一个字母），这一层 `FuzzyPinyin` 不覆盖。
 //
 //  性能：典型单音节输入实测 ≤ 0.1ms（见 `tools/dict/_probe_typo.py` 的实测输出），
 //        总工作量上限约 9 次规则变体 + (n + 26(n+1)) 次编辑距离候选（n ≤ 8）。
@@ -23,11 +20,11 @@ import Foundation
 /// 输入纠错（纯函数，无状态、无 I/O）。
 ///
 /// 设计原则：
-/// 1. **声韵母类规则不自己实现**，一律走 `FuzzyPinyin.variants(of:rules:)`——保证
+/// 1. 声韵母类规则不自己实现，一律走 `FuzzyPinyin.variants(of:rules:)`，保证
 ///    与模糊音功能用的是同一张规则表，改规则只改一处；
-/// 2. 在此基础上补**编辑距离 1**（漏打 / 多打一个字母），这是 `FuzzyPinyin` 不做的；
+/// 2. 在此基础上补编辑距离 1（漏打 / 多打一个字母），这是 `FuzzyPinyin` 不做的；
 /// 3. 候选必须能切成合法音节，且 `knownInitials` 回调判定为「词库里有词」，
-///    否则不产出——宁可少纠，不可把用户正确的输入改坏；
+///    否则不产出，宁可少纠，不可把用户正确的输入改坏；
 /// 4. 输入长度 ≤ `maximumInputLength`，超长直接放弃（防组合爆炸）。
 public enum TypoCorrector {
 
@@ -80,7 +77,7 @@ public enum TypoCorrector {
             record(correction, into: &best)
         }
 
-        // 先过滤再排序再截断——顺序不能反，否则「前 limit 条里有一条不可用」会白白少给一条。
+        // 先过滤再排序再截断，顺序不能反，否则「前 limit 条里有一条不可用」会白白少给一条。
         var results = Array(best.values).filter { isUsable($0.corrected, knownInitials: knownInitials) }
         results.sort { lhs, rhs in
             if lhs.confidence != rhs.confidence { return lhs.confidence > rhs.confidence }
@@ -94,7 +91,7 @@ public enum TypoCorrector {
 
     /// 用 `FuzzyPinyin` 的规则表产出声韵母类纠错候选。
     ///
-    /// 单音节输入：逐条规则单独调用 `variants`，这样每条结果都能标出**命中的是哪一条规则**
+    /// 单音节输入：逐条规则单独调用 `variants`，这样每条结果都能标出命中的是哪一条规则
     /// （`zh/z`、`in/ing`…），便于 UI 显示与用户反馈。
     /// 多音节输入：用 `expand` 一次拿到「改 1 个音节」的整串变体，统一标 `声韵母`。
     private static func fuzzyCorrections(of base: String) -> [Correction] {

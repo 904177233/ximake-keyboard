@@ -2,11 +2,9 @@
 //  GeminiClient.swift
 //  ios/Shared/Networking
 //
-//  模块职责：实现 Google Gemini 协议（`POST {base}/v1beta/models/{model}:streamGenerateContent?alt=sse&key=...`）
-//            的流式与一次性对话。**实验性**：国内直连不可用，且返回结构随版本变化较大，
-//            解析失败时会给出明确的 `notSupported` 风格提示。
-//  依赖：Foundation、Models、SSEParser、HTTPTransport、AIError。
-//  使用方：AIClientFactory.makeLLM（kind == .gemini）→ 宿主 App 的调试页。
+//  实现 Google Gemini 协议（`POST {base}/v1beta/models/{model}:streamGenerateContent?alt=sse&key=...`）
+//  的流式与一次性对话。实验性：国内直连不可用，且返回结构随版本变化较大，
+//  解析失败时会给出明确的 `notSupported` 风格提示。
 //
 
 import Foundation
@@ -42,7 +40,7 @@ public final class GeminiClient: LLMClient, @unchecked Sendable {
 
     /// 流式对话。
     ///
-    /// 注意这里必须**强持有** `self`（`Task { [self] in … }`，不能写 `[weak self]`）：
+    /// 注意这里必须强持有 `self`（`Task { [self] in … }`，不能写 `[weak self]`）：
     /// 调用方常见写法是 `let client = AIClientFactory.makeLLM(...)` 后立刻
     /// `return client.stream(request)`，若 Task 只弱引用 self，client 在函数返回瞬间
     /// 被释放，流会立刻以 `AIError.cancelled` 结束，上层当成「用户取消」静默忽略。

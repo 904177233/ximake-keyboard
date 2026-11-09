@@ -2,19 +2,14 @@
 //  PromptLibrary.swift
 //  ios/Shared/Prompts
 //
-//  模块职责：提示词模板的统一入口——内置模板查询、自定义模板的读写（持久化到 SharedStore）、
-//            模板 → `[ChatMessage]` 的渲染，以及生图提示词增强 / AI 对话 / 智能联想
-//            三类专用请求的构造与联想结果解析。
-//  依赖：Foundation、`Models`（AIFeature / ChatMessage / ChatRequest）、`Storage`（SharedStore）。
-//  使用方：键盘扩展 AI 面板、键盘 AI 对话面板（`chatRequest(...)`）、
-//          候选栏智能联想（`suggestionRequest(...)` / `parseSuggestionCandidates(_:)`）、
-//          宿主 App 的 PlaygroundView / PromptLibraryView、
-//          `ios/AIKeyboard/Support/SharedBridge.swift`（PromptCatalog）。
+//  提示词模板的统一入口，内置模板查询、自定义模板的读写（持久化到 SharedStore）、
+//  模板 → `[ChatMessage]` 的渲染，以及生图提示词增强 / AI 对话 / 智能联想
+//  三类专用请求的构造与联想结果解析。
 //
 //  存储键：`moyu.prompts.custom.v1`（JSON 数组，见 `SharedStore`）。
 //  渲染约定：见 `PromptTemplate` 的文档；「回复建议」输出格式为恰好 N 条、每条一行、
-//            行首 `1.` `2.` `3.`（N 由 `{{reply_count}}` 注入，默认 3）。
-//            「智能联想」输出格式为 JSON 数组（design/04 §4.4），解析失败静默为空。
+//  行首 `1.` `2.` `3.`（N 由 `{{reply_count}}` 注入，默认 3）。
+//  「智能联想」输出格式为 JSON 数组（design/04 §4.4），解析失败静默为空。
 //
 
 import Foundation
@@ -310,7 +305,7 @@ public enum PromptLibrary {
     /// 构造 AI 对话的一轮请求（单轮问答，多轮历史由调用方拼进 `history`）。
     ///
     /// 为什么单开这个方法而不是复用 `render(...)`：
-    /// 1. 对话需要**多轮历史**（`[user, assistant, …, user]`），`render` 只产出 `[system, user]`；
+    /// 1. 对话需要多轮历史（`[user, assistant, …, user]`），`render` 只产出 `[system, user]`；
     /// 2. 对话的 `maxTokens` 要比改写类大（默认 512），而 `PromptTemplate` 没有 `maxTokens` 字段
     ///    （docs/02 §4.4 的字段是冻结契约，不能加），只能在请求构造处注入；
     /// 3. 对话不需要 `tone / targetLanguage / replyCount` 这些改写类占位符。
@@ -318,7 +313,7 @@ public enum PromptLibrary {
     /// - Parameters:
     ///   - text: 用户这一轮说的话。
     ///   - context: 聊天窗口里的上文（可空；为空时模板里的「（聊天窗口上文）」整段消失）。
-    ///   - history: **本轮之前**的对话轮次（按时间正序，可含 system / user / assistant）。
+    ///   - history: 本轮之前的对话轮次（按时间正序，可含 system / user / assistant）。
     ///     若调用方把本轮用户消息也塞进了 `history`（末尾已与 `text` 渲染结果相同），
     ///     这里会自动跳过追加，避免出现两条一样的 user 消息。
     ///   - maxTokens: 回答上限；`nil`（默认）交给客户端按模型兜底（推理模型抬到 4096）。

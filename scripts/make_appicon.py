@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""墨语（Moyu）iOS 输入法 —— AppIcon / AccentColor 生成器。
+"""墨语（Moyu）iOS 输入法，AppIcon / AccentColor 生成器。
 
 用 Pillow 生成 iOS 14+ 单尺寸（1024x1024）AppIcon，并写入 Assets.xcassets：
     ios/Resources/Assets.xcassets/
@@ -23,7 +23,7 @@
     背景：#0B1020 → #16324F 对角线性渐变（比纯黑更有层次，和品牌蓝 #0A84FF 同色相）
     前景：白色「墨」字骨架 + 一枚圆角键帽轮廓，表达「输入法 + AI」；
           右下角一颗 #0A84FF 的圆点作为 AI 高光。
-    厚度：iOS 会自己切圆角，所以 PNG 必须是**满幅直角**的 1024x1024，不要预先画圆角。
+    厚度：iOS 会自己切圆角，所以 PNG 必须是满幅直角的 1024x1024，不要预先画圆角。
 
 退出码：0 成功；1 失败（含 Pillow 未安装、源图不合规）。
 """

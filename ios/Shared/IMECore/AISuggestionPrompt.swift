@@ -2,10 +2,8 @@
 //  AISuggestionPrompt.swift
 //  墨语 · 输入法内核（IMECore）
 //
-//  模块职责：上下文联想（L2）的提示词构造与返回结果解析——纯函数，不做网络请求。
-//            上游由 UI 层按 `AISuggestionPolicy` 的防抖/超时/取消规则调用任意 `LLMClient`。
-//  依赖：Foundation、ContextualSuggestion.swift（`ContextualSuggestion` / `AISuggestionPolicy`）
-//  使用方：keyboard-ui（AI 联想调度器）、IMEKit（门面转发）
+//  上下文联想（L2）的提示词构造与返回结果解析，纯函数，不做网络请求。
+//  上游由 UI 层按 `AISuggestionPolicy` 的防抖/超时/取消规则调用任意 `LLMClient`。
 //
 
 import Foundation

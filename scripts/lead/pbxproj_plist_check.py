@@ -5,12 +5,12 @@
 背景
 ----
 `ios/AIKeyboard.xcodeproj/project.pbxproj` 不是 JSON、不是 XML，而是 Apple 的
-**Old-style / OpenStep property list** 格式。它的"裸字符串"(unquoted string) 允许
+Old-style / OpenStep property list 格式。它的"裸字符串"(unquoted string) 允许
 字符集由 CoreFoundation 的 `CFPropertyList.c` 决定，实测为：
 
     A-Z a-z 0-9 . _ $ / : -
 
-**不包含** `+`、`~`、`#`、`@`、`&`、`=`、`,`、`?`、`*`、`!`、`'`、`(`、`)`、`%` 等。
+不包含 `+`、`~`、`#`、`@`、`&`、`=`、`,`、`?`、`*`、`!`、`'`、`(`、`)`、`%` 等。
 
 一旦某个 `path = ...;` 的取值里出现这些字符却没加引号，xcodebuild 会直接报：
 
@@ -18,10 +18,10 @@
     xcodebuild: error: Unable to read project '...'
     Reason: The project '...' is damaged and cannot be opened due to a parse error
 
-——整个工程打不开，连 `xcodebuild -list` 都跑不到。
+，整个工程打不开，连 `xcodebuild -list` 都跑不到。
 
 这个检查器补的正是自研校验器（括号平衡、UUID 引用完整性）查不出的那一层：
-**词法层**。它按 OpenStep plist 的词法规则逐字符扫描，遇到非法裸字符就报错并
+词法层。它按 OpenStep plist 的词法规则逐字符扫描，遇到非法裸字符就报错并
 给出应加引号的位置。
 
 用法
@@ -43,7 +43,7 @@ import sys
 
 DEFAULT_PBXPROJ = pathlib.Path("ios/AIKeyboard.xcodeproj/project.pbxproj")
 
-# CoreFoundation OpenStep plist 允许出现在 **裸字符串** 里的字符。
+# CoreFoundation OpenStep plist 允许出现在 裸字符串 里的字符。
 # 依据：CFPropertyList.c 中 isUnquotedStringChar() 的实现。
 UNQUOTED_CHARS = set(
     "abcdefghijklmnopqrstuvwxyz"

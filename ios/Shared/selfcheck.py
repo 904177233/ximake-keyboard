@@ -357,7 +357,7 @@ def check_theme_tokens(theme_text):
 
 # --------------------------------------------------------------------------
 # 7) 跨文件符号存在性
-#    (a) 重复类型声明 —— Swift 编译期直接报错，必须先查
+#    (a) 重复类型声明，Swift 编译期直接报错，必须先查
 #    (b) 其它层对共享层类型成员的访问（Theme.accent / KeychainStore.shared.apiKey …）
 # --------------------------------------------------------------------------
 
@@ -375,7 +375,7 @@ EXT_RE = re.compile(r"\bextension\s+(\w+)")
 def collect_declared(swift_files):
     """返回 (顶层类型声明 {name: [rel]}, 全部成员名集合)。
 
-    只统计**顶格（indent == 0）**的类型声明：嵌套类型（如各 struct 内部的
+    只统计顶格（indent == 0）的类型声明：嵌套类型（如各 struct 内部的
     `private enum CodingKeys`）在不同作用域内同名是合法的，不能当成重复。
     `extension X` 不计入重复判定（对既有类型追加成员是正常写法）。
     """
@@ -402,7 +402,7 @@ def check_duplicate_types(declared_types):
 
 
 def collect_all_shared_types():
-    """扫描 `ios/Shared/` 下**所有**子目录（含 IMECore 等他人层）的顶格类型声明。
+    """扫描 `ios/Shared/` 下所有子目录（含 IMECore 等他人层）的顶格类型声明。
 
     本层五目录的规则（纯 Foundation、契约符号…）只作用于自己的层，
     但「顶层类型重名」是全 `ios/Shared/` 共享一个 Swift 模块的编译期错误，
@@ -641,7 +641,7 @@ def main():
     if not swift_files:
         fail("没找到任何 .swift 文件")
     else:
-        # 注意：不能用 `r.endswith("Theme.swift")` —— 同目录新增了 `AppTheme.swift`，
+        # 注意：不能用 `r.endswith("Theme.swift")`，同目录新增了 `AppTheme.swift`，
         # 它同样以 "Theme.swift" 结尾且排序更靠前，会顶掉真正的 Theme.swift。
         # 这里改成严格的 basename 比较。
         theme_entry = next(

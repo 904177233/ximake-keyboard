@@ -2,10 +2,8 @@
 //  PhraseSuggestion.swift
 //  墨语 · 输入法内核（IMECore）
 //
-//  模块职责：加载 `phrases.tsv` 短语联想库，按"上屏文本的尾部触发词"检索下一句建议词，
-//            供 PinyinEngine.predictNext(after:) 使用。
-//  依赖：Foundation
-//  使用方：PinyinEngine、IMEKit
+//  加载 `phrases.tsv` 短语联想库，按"上屏文本的尾部触发词"检索下一句建议词，
+//  供 PinyinEngine.predictNext(after:) 使用。
 //
 
 import Foundation

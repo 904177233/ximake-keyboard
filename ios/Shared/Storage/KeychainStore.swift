@@ -2,13 +2,11 @@
 //  KeychainStore.swift
 //  ios/Shared/Storage
 //
-//  模块职责：API Key 的安全存储（Keychain，`kSecClassGenericPassword`）。
-//            只存「服务商 id → API Key」这一对映射，不存任何别的配置；
-//            配置快照里永远只有 `id`，Key 永远不会进入 JSON / 剪贴板导出（除非用户显式选择）。
-//  依赖：Foundation、Security。
-//  使用方：宿主 App（设置页填写 Key）、键盘扩展（发请求前取 Key）、`PasteboardBridge`（可选导出）。
+//  API Key 的安全存储（Keychain，`kSecClassGenericPassword`）。
+//  只存「服务商 id → API Key」这一对映射，不存任何别的配置；
+//  配置快照里永远只有 `id`，Key 永远不会进入 JSON / 剪贴板导出（除非用户显式选择）。
 //
-//  可访问性：`kSecAttrAccessibleAfterFirstUnlock` —— 设备首次解锁后可读，
+//  可访问性：`kSecAttrAccessibleAfterFirstUnlock`，设备首次解锁后可读，
 //  键盘扩展（独立进程、可能后台唤起）可用；不选 `WhenUnlocked` 是因为键盘可能在锁屏后
 //  被系统预热的场景下读取，选 `AfterFirstUnlock` 更稳。
 //  注意：无 App Group 时，App 与扩展的 Keychain 各自独立（与 SharedStore 一样），

@@ -4,15 +4,15 @@
 
 两条耗时线必须分开看，混在一起会得出错误结论：
 
-1. **同步加载**（进首帧）＝ 读文件 + 解码 + 逐行解析 + 按全拼分组 + 排序键 + 聊天权重表。
-   这一段进 `PinyinDictionary.loadDurationMilliseconds`，预算 **80 ms**。
-2. **首字母索引 DP**（懒加载）＝ 33k 条词跑音节切分 DP。它由 `ensureInitialsIndex()`
-   在**第一次打简拼时**构建，不在启动路径上，所以**不计入上面那段预算**；但它决定
+1. 同步加载（进首帧）＝ 读文件 + 解码 + 逐行解析 + 按全拼分组 + 排序键 + 聊天权重表。
+   这一段进 `PinyinDictionary.loadDurationMilliseconds`，预算 80 ms。
+2. 首字母索引 DP（懒加载）＝ 33k 条词跑音节切分 DP。它由 `ensureInitialsIndex()`
+   在第一次打简拼时构建，不在启动路径上，所以不计入上面那段预算；但它决定
    第一次打 `wq` 的延迟，因此单独测、单独报。
 
 冷/热各测一次：冷＝进程内首次（页缓存未命中），热＝紧接着再跑一次（页缓存命中）。
 
-Python 的解释执行比 Swift 慢 3-10 倍，因此这里得到的数字只能作为**上界估算**，
+Python 的解释执行比 Swift 慢 3-10 倍，因此这里得到的数字只能作为上界估算，
 真实耗时必须在 macOS 上用 `PinyinDictionary.loadDurationMilliseconds` 实测。
 
 运行：python tools/dict/_probe_loadtime.py

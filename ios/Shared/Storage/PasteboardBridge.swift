@@ -2,17 +2,14 @@
 //  PasteboardBridge.swift
 //  ios/Shared/Storage
 //
-//  模块职责：免费签名（无 App Group）下 App ↔ 键盘扩展的**配置搬运通道**。
-//            用命名剪贴板 `com.moyu.config` 传一段带 magic / 版本 / 校验和的 JSON，
-//            两边各自解析后落到自己的 `ConfigStore`，从而实现「一键搬家」。
-//  依赖：Foundation、UIKit（仅 `UIPasteboard`；**不使用** `UIApplication.shared`）、
-//        `Models`（ConfigSnapshot）、KeychainStore（可选导出 API Key）。
-//  使用方：宿主 App 设置页「导出配置 / 导入配置」、键盘内设置 Sheet。
+//  免费签名（无 App Group）下 App ↔ 键盘扩展的配置搬运通道。
+//  用命名剪贴板 `com.moyu.config` 传一段带 magic / 版本 / 校验和的 JSON，
+//  两边各自解析后落到自己的 `ConfigStore`，从而实现「一键搬家」。
 //
-//  安全说明：默认导出**不含** API Key（只含服务商配置与偏好）。
-//            `includeAPIKeys: true` 时会把 API Key 明文放进剪贴板，
-//            **不做加密**——因为剪贴板内容任何 App 都能读，加密只是把明文换成一个
-//            同样能被读走的密钥。UI 必须对此弹二次确认（见 README「风险提示」）。
+//  安全说明：默认导出不含 API Key（只含服务商配置与偏好）。
+//  `includeAPIKeys: true` 时会把 API Key 明文放进剪贴板，
+//  不做加密，因为剪贴板内容任何 App 都能读，加密只是把明文换成一个
+//  同样能被读走的密钥。UI 必须对此弹二次确认（见 README「风险提示」）。
 //
 
 import Foundation
@@ -116,7 +113,7 @@ public enum PasteboardBridge {
     /// 从命名剪贴板导入配置快照。
     ///
     /// 依次校验：magic 行 → 信封版本 → 校验和 → JSON 结构。
-    /// **不读取也不写入 Keychain**（API Key 需要用户另行导出/填写）。
+    /// 不读取也不写入 Keychain（API Key 需要用户另行导出/填写）。
     ///
     /// - Returns: 解析成功的快照；剪贴板为空 / 不是墨语配置 / 校验失败时返回 nil。
     public static func importSnapshot() -> ConfigSnapshot? {
@@ -233,7 +230,7 @@ public struct ExportPayload: Codable, Equatable, Sendable {
     public var snapshot: ConfigSnapshot
     /// API Key 映射（`providerID -> key`）；默认导出为 nil。
     ///
-    /// 注意：这是**明文**。存在值说明用户显式选择了「连同 API Key 一起导出」。
+    /// 注意：这是明文。存在值说明用户显式选择了「连同 API Key 一起导出」。
     public var apiKeys: [String: String]?
 
     /// 成员初始化。

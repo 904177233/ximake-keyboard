@@ -2,11 +2,9 @@
 //  OpenAICompatibleClient.swift
 //  ios/Shared/Networking
 //
-//  模块职责：实现 OpenAI 兼容协议（`POST {base}/chat/completions`）的流式与一次性对话，
-//            覆盖 DeepSeek / 通义千问（兼容模式）/ Kimi / 智谱 GLM / 火山方舟 / OpenRouter /
-//            硅基流动 / OpenAI 以及绝大多数中转站。
-//  依赖：Foundation、Models、SSEParser、HTTPTransport、AIError。
-//  使用方：AIClientFactory.makeLLM → 键盘扩展 AIService、宿主 App PlaygroundView。
+//  实现 OpenAI 兼容协议（`POST {base}/chat/completions`）的流式与一次性对话，
+//  覆盖 DeepSeek / 通义千问（兼容模式）/ Kimi / 智谱 GLM / 火山方舟 / OpenRouter /
+//  硅基流动 / OpenAI 以及绝大多数中转站。
 //
 
 import Foundation
@@ -20,7 +18,7 @@ import Foundation
 /// - 流式响应：`data: {"choices":[{"delta":{"content":"..."},"finish_reason":null}]}`，末尾 `data: [DONE]`
 ///
 /// 关于 `reasoning_content`：DeepSeek Reasoner / o1 / o3 / QwQ 等推理模型会在 delta 里
-/// 附带思维链，并且**先长时间只吐思维链、之后才吐正文**。本客户端始终把它解析出来，
+/// 附带思维链，并且先长时间只吐思维链、之后才吐正文。本客户端始终把它解析出来，
 /// 通过 `ChatDelta.reasoning` 旁路交给上层（不会拼进 `text`，避免把「内心独白」当答案），
 /// 同时给推理模型的 `max_tokens` 兜底（见 `resolvedMaxTokens`），避免预算全被思维链吃掉、
 /// 正文一个字都不剩。
@@ -32,7 +30,7 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
     private let apiKey: String
     /// 是否收集推理模型的 `reasoning_content`。
     ///
-    /// - Note: 保留此参数只为源码兼容（既有调用方仍在传），行为上**已不再生效**：
+    /// - Note: 保留此参数只为源码兼容（既有调用方仍在传），行为上已不再生效：
     ///   思维链现在一律解析并转发到 `ChatDelta.reasoning`，由 UI 自行决定是否展示。
     private let capturesReasoning: Bool
     /// 复用的 URLSession。
@@ -55,11 +53,11 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
 
     /// 流式对话。取消 `Task` 会立即中断底层 URLSession 任务。
     ///
-    /// 注意这里必须**强持有** `self`（`Task { [self] in … }`，不能写 `[weak self]`）：
+    /// 注意这里必须强持有 `self`（`Task { [self] in … }`，不能写 `[weak self]`）：
     /// 调用方常见的写法是 `let client = AIClientFactory.makeLLM(...)` 然后立刻
     /// `return client.stream(request)`（探活探针 `ConnectivityProbe.makeHelloStream` 就是这样）。
     /// 若 Task 只弱引用 self，client 在函数返回瞬间被释放，流会立刻以
-    /// `AIError.cancelled` 结束 —— 上层把它当成「用户主动取消」而静默忽略，
+    /// `AIError.cancelled` 结束，上层把它当成「用户主动取消」而静默忽略，
     /// 表现就是「点测试连接没有任何反应」。`onTermination` 里仍会取消 task，
     /// 因此不存在强引用循环。
     public func stream(_ request: ChatRequest) -> AsyncThrowingStream<ChatDelta, Error> {
@@ -104,7 +102,7 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
     ///
     /// 「配置好却报错」绝大多数是 baseURL 或模型名写错，而错误文案里原本只有
     /// 服务端那一句话，用户根本不知道客户端到底把请求发去了哪。
-    /// 这里把**解析后的完整 URL + 模型名**追加进去，一次就能看出问题。
+    /// 这里把解析后的完整 URL + 模型名追加进去，一次就能看出问题。
     ///
     /// 只装饰「排查类」错误（服务端报错 / 解析失败 / 正文为空 / 未知），
     /// 鉴权、限流、超时、网络这些文案本身已经足够明确，不再加噪。
@@ -161,12 +159,12 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
             "max_tokens": AIProviderConfig.clampMaxTokens(maxTokens),
             "stream": stream
         ]
-        // 推理模型**不下发** `temperature`。
+        // 推理模型不下发 `temperature`。
         //
         // OpenAI 的 o1 / o3 只接受 temperature = 1，给别的值直接 400
         // `Unsupported value: 'temperature' does not support 0.7 with this model`；
         // DeepSeek 的 `deepseek-reasoner` 则是「不报错也不生效」。
-        // 两种情况下唯一正确的做法都是别发 —— 少一个字段永远不会导致失败。
+        // 两种情况下唯一正确的做法都是别发，少一个字段永远不会导致失败。
         if !OpenAICompatibleClient.isReasoningModel(config.model) {
             let temperature = request.temperature ?? config.temperature
             body["temperature"] = AIProviderConfig.clampTemperature(temperature)
@@ -176,7 +174,7 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
                 body[key] = value
             }
         }
-        // 注意：这里**不加** `stream_options`。
+        // 注意：这里不加 `stream_options`。
         //
         // 它是 OpenAI 专有参数，大量「OpenAI 兼容」端点并不认识：DeepSeek 部分版本、
         // 通义 compatible-mode、Kimi、智谱 GLM、硅基流动、部分 OpenRouter 模型都会直接
@@ -206,13 +204,13 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
 
     /// 计算本次请求的 `max_tokens`。
     ///
-    /// 推理模型（`deepseek-reasoner`、`o1` / `o3`、`QwQ`、`*-thinking` …）会**先**把
+    /// 推理模型（`deepseek-reasoner`、`o1` / `o3`、`QwQ`、`*-thinking` …）会先把
     /// token 预算全部花在思维链（`reasoning_content`）上，思维链收敛之后才开始产出正文。
     /// 配置里的默认预算（1024）经常连思维链都不够，于是正文一个字都拿不到，
-    /// 用户看到的就是「服务商没有返回内容」—— 明明接口是通的。
+    /// 用户看到的就是「服务商没有返回内容」，明明接口是通的。
     ///
     /// 规则：
-    /// - 调用方**显式**给了 `maxTokens` → 原样尊重（探活探针只发 "hi"，要的就是小预算快返回）；
+    /// - 调用方显式给了 `maxTokens` → 原样尊重（探活探针只发 "hi"，要的就是小预算快返回）；
     /// - 调用方没给、且模型命中推理模型特征 → `max(config.maxTokens, 4096)`，给正文留出预算；
     /// - 其余情况 → `config.maxTokens`。
     private func resolvedMaxTokens(_ request: ChatRequest) -> Int {
@@ -343,13 +341,13 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
                 continuation.yield(ChatDelta(text: payload.text, isFinal: false))
             }
         }
-        // 二级兜底：整段流里一个正文字符都没拿到 —— 说明服务端忽略了 `stream: true`，
+        // 二级兜底：整段流里一个正文字符都没拿到，说明服务端忽略了 `stream: true`，
         // 一次性回了个非流式体（或者回了不符合 SSE 规范的分片，被 SSEParser 全部漏掉）。
         // 把缓冲区按非流式响应再解析一次，把完整回复一次性吐出来。
         //
         // v2.5 修正：早期这里要求「缓冲区第一个非空白字节是 `{`」才肯兜底，
         // 但实测的网关回的是 `data：{…}`（前缀是 `d`、且冒号是全角），
-        // 于是这个判断永远不成立、兜底形同不存在 —— 用户在聊天里照样看到
+        // 于是这个判断永远不成立、兜底形同不存在，用户在聊天里照样看到
         // 「服务商没有返回内容」。现在只要缓冲区非空就尝试宽松解析，
         // 解析不出来（真的是垃圾）自然返回 nil，不会误吐内容。
         if !didEmitText, !rawBuffer.isEmpty {
@@ -368,7 +366,7 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
         }
         // 正文为空时给出「用户能照着改」的中文错误，而不是让上层只显示「服务商没有返回内容」。
         //
-        // v2.3：把**原始响应片段**一起带上。用户报「测试连接返回空内容」时，
+        // v2.3：把原始响应片段一起带上。用户报「测试连接返回空内容」时，
         // 之前只有一句笼统文案，完全看不出服务端到底回了什么（是空 body、
         // 是 HTML 错误页、还是字段名不一样）。带片段后一次就能定位。
         try throwIfNoTextEmitted(
@@ -425,7 +423,7 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
                     + snippet
             )
         }
-        // 既没有正文也没有思维链：多半是「200 但内容不合格」——例如服务端只回了
+        // 既没有正文也没有思维链：多半是「200 但内容不合格」，例如服务端只回了
         // `{"error":...}`、回了 HTML、或字段名不是 choices/delta.content。
         // 只有拿到原始片段，用户（和开发者）才知道下一步该改什么。
         if !snippet.isEmpty {
@@ -472,9 +470,9 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
 
     /// 解析非流式响应体。
     ///
-    /// **同时接受两种形态**（v2.4 起）：
+    /// 同时接受两种形态（v2.4 起）：
     /// 1. 标准非流式 JSON：`{"choices":[{"message":{"content":"..."}}]}`
-    /// 2. **SSE 流式分片**：`data: {"choices":[{"delta":{"content":"..."}}]}\n\n…`
+    /// 2. SSE 流式分片：`data: {"choices":[{"delta":{"content":"..."}}]}\n\n…`
     ///
     /// 为什么要接受第 2 种：请求里虽然写了 `stream: false`，但**很多中转/网关会忽略
     /// 这个字段、仍然按流式回**（实测某网关：即使 `stream:false`，返回体依然是

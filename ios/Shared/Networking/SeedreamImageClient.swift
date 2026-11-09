@@ -2,10 +2,8 @@
 //  SeedreamImageClient.swift
 //  ios/Shared/Networking
 //
-//  模块职责：即梦（Seedream / 火山方舟 Ark）生图客户端。Ark 采用 OpenAI 兼容的
-//            `POST {base}/images/generations` 同步接口，默认返回 `url`，需再下载图片数据。
-//  依赖：Foundation、Models、HTTPTransport、AIError。
-//  使用方：ImageClientRouter（baseURL 含 ark.cn-beijing.volces.com，或 model 含 seedream/doubao）。
+//  即梦（Seedream / 火山方舟 Ark）生图客户端。Ark 采用 OpenAI 兼容的
+//  `POST {base}/images/generations` 同步接口，默认返回 `url`，需再下载图片数据。
 //
 
 import Foundation

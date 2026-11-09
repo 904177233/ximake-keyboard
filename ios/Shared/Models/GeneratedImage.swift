@@ -2,9 +2,7 @@
 //  GeneratedImage.swift
 //  ios/Shared/Models
 //
-//  模块职责：一张生成完成图片的数据载体（二进制 + 远端地址 + MIME 类型）。
-//  依赖：仅 Foundation。
-//  使用方：Networking（ImageGenerating.generate 的返回值）、键盘扩展（写入 UIPasteboard.general.image）。
+//  一张生成完成图片的数据载体（二进制 + 远端地址 + MIME 类型）。
 //
 
 import Foundation

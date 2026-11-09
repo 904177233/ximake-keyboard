@@ -2,11 +2,11 @@
 # -*- coding: utf-8 -*-
 """iOS 17+ / macOS-only API 粗查（Lead 专用）。
 
-工程部署目标是 **iOS 16.0**（ios/Config/Base.xcconfig 的 IPHONEOS_DEPLOYMENT_TARGET）。
+工程部署目标是 iOS 16.0（ios/Config/Base.xcconfig 的 IPHONEOS_DEPLOYMENT_TARGET）。
 在 Windows 上无法编译，所以「用了 iOS 17 才有的 SwiftUI/UIKit API」这类错误只有到 CI 才炸。
-本脚本按**已知的 iOS 17+ 符号清单**扫描 ios/**.swift，命中即报。
+本脚本按已知的 iOS 17+ 符号清单扫描 ios/**.swift，命中即报。
 
-清单来源：Apple 文档标注「iOS 17.0+」的高频 SwiftUI/UIKit API。只收**确定**在 iOS 16 上不可用的，
+清单来源：Apple 文档标注「iOS 17.0+」的高频 SwiftUI/UIKit API。只收确定在 iOS 16 上不可用的，
 避免误报（有 `if #available` / `@available` 包裹的会降级为 INFO）。
 
 用法：python scripts/lead/ios16_availability.py [--verbose]
@@ -24,7 +24,7 @@ IOS = ROOT / "ios"
 
 # (符号/正则, 引入版本, 说明)
 BANNED: list[tuple[str, str, str]] = [
-    # —— iOS 17 SwiftUI ——
+    # iOS 17 SwiftUI，
     (r"\.scrollTargetBehavior\b", "iOS 17", "ScrollView 分页行为"),
     (r"\.scrollTargetLayout\b", "iOS 17", "ScrollView 分页布局"),
     (r"\.defaultScrollAnchor\b", "iOS 17", "ScrollView 默认锚点"),
@@ -61,11 +61,11 @@ BANNED: list[tuple[str, str, str]] = [
     (r"\.navigationTransition\(", "iOS 18", "导航转场"),
     (r"\bMeshGradient\b", "iOS 18", "网格渐变"),
     (r"\.textRenderer\(", "iOS 18", ""),
-    # —— UIKit ——
+    # UIKit，
     (r"\bUIViewController\.requestInputViewHeightUpdate\b", "非公开", "键盘高度私有 API"),
     (r"\.traitOverrides\b", "iOS 17", ""),
     (r"\bUITraitChangeObservable\b", "iOS 17", ""),
-    # —— 其它 ——
+    # 其它，
     (r"\bTipKit\b", "iOS 17", "TipKit"),
     (r"\bSwiftData\b", "iOS 17", "SwiftData"),
 ]

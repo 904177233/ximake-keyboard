@@ -2,13 +2,11 @@
 //  ContextualSuggestion.swift
 //  墨语 · 输入法内核（IMECore）
 //
-//  模块职责：上下文联想（ContextualSuggestion）的「数据模型 + L1 本地实现」。
-//            `ContextualSuggestion`：一条「下一句」候选（完整短句，点一下整条上屏）；
-//            `AISuggestionPolicy`：L2 的防抖/超时/条数参数与准入判断；
-//            `LocalSuggestionIndex`：L1，纯本地、同步、无网络，主线程秒出（<5ms）。
-//            L2 的提示词构造与结果解析在 `AISuggestionPrompt.swift`。
-//  依赖：Foundation、SharedStore（仅 data(forKey:)/setData(_:forKey:)）、ContextualSeedTemplates
-//  使用方：keyboard-ui（候选栏「下一句」区）、IMEKit（门面转发）
+//  上下文联想（ContextualSuggestion）的「数据模型 + L1 本地实现」。
+//  `ContextualSuggestion`：一条「下一句」候选（完整短句，点一下整条上屏）；
+//  `AISuggestionPolicy`：L2 的防抖/超时/条数参数与准入判断；
+//  `LocalSuggestionIndex`：L1，纯本地、同步、无网络，主线程秒出（<5ms）。
+//  L2 的提示词构造与结果解析在 `AISuggestionPrompt.swift`。
 //
 
 import Foundation
@@ -72,7 +70,7 @@ public struct ContextualSuggestion: Identifiable, Equatable, Sendable {
 /// 使用约定（keyboard-ui 侧）：
 /// 1. 用户每敲一个字符都重置一个 `debounceInterval` 的定时器，只有静默超过它才发请求；
 /// 2. 新请求发出前必须 `cancel()` 旧任务（避免旧响应覆盖新结果）；
-/// 3. 请求超过 `requestTimeout` 直接放弃，**不显示错误、不打扰用户**；
+/// 3. 请求超过 `requestTimeout` 直接放弃，不显示错误、不打扰用户；
 /// 4. 请求失败 / 超时 / 结果为空时保持 L1 的结果，不要清空候选栏。
 public enum AISuggestionPolicy {
 
@@ -112,9 +110,9 @@ public enum AISuggestionPolicy {
 /// 纯本地、同步、无网络依赖的 L1 提供者。
 ///
 /// 算法（两级匹配，均为 O(1)/O(规则数)，实测远低于 5ms）：
-/// 1. **学到的映射**：以「上下文末句的后 2~4 个字」为键，查 `record(context:committed:)` 累积的
+/// 1. 学到的映射：以「上下文末句的后 2~4 个字」为键，查 `record(context:committed:)` 累积的
 ///    「这个上下文之后我说过什么」；最长键优先，命中即用（更精确的上下文优先）。
-/// 2. **内置模板兜底**：没学过时用 `ContextualSeedTemplates` 的 81 组触发词，
+/// 2. 内置模板兜底：没学过时用 `ContextualSeedTemplates` 的 81 组触发词，
 ///    取「能匹配上下文末尾的最长触发词」那一组，产出该组的候选短句。
 ///
 /// 线程模型：内部 `NSLock` 保护，可从任意线程调用；`suggestions` 只做内存查表，不碰磁盘。
@@ -198,8 +196,8 @@ public final class LocalSuggestionIndex: @unchecked Sendable {
 
     /// 记录一次上屏，用于学习「上下文 → 下一句」。
     ///
-    /// 调用时机：用户点选了**上下文联想**候选并上屏之后。
-    /// 注意 `context` 必须是「当时用来生成候选的那段上下文」，
+    /// 调用时机：用户点选了上下文联想候选并上屏之后。
+    /// 注意：`context` 必须是「当时用来生成候选的那段上下文」，
     /// 而不是上屏之后再从输入框读到的文本（后者已经包含刚上屏的内容，会把映射学歪）。
     /// - Parameters:
     ///   - context: 生成候选时使用的上下文（宿主 `documentContextBeforeInput`）。
@@ -282,7 +280,7 @@ public final class LocalSuggestionIndex: @unchecked Sendable {
         }
 
         // 2) 再用内置模板兜底（只取最长命中的那一组，避免不同触发词的建议混在一起）。
-        //    注意：这里**不能**排除「触发词 == 整句」的情况——「在吗」「谢谢你」这类最常见的
+        //    注意：这里不能排除「触发词 == 整句」的情况，「在吗」「谢谢你」这类最常见的
         //    上下文本身就是触发词，排除掉会让 L1 几乎永远命中不了；重复上屏由下面的 text != sentence 挡住。
         //    触发词比对面稍宽：末句尾部的语气词（啊/呀/呢/吧…）会先被剥掉再比，见 `triggerMatches`。
         if results.count < budget {
@@ -303,7 +301,7 @@ public final class LocalSuggestionIndex: @unchecked Sendable {
             }
         }
 
-        // 稳定排序：置信度降序；置信度相同时**保持生成时的顺序**（模板里排在前面的候选更口语，
+        // 稳定排序：置信度降序；置信度相同时保持生成时的顺序（模板里排在前面的候选更口语，
         // 学到的候选按 count/updatedAt 已排好）。Swift 的 sort 不保证稳定，故显式带上序号。
         let ordered = results.enumerated()
             .map { (offset: $0.offset, item: $0.element) }
@@ -387,7 +385,7 @@ public final class LocalSuggestionIndex: @unchecked Sendable {
 
     /// 句末语气词：真人聊天几乎不会完整打出「怎么办」，多半是「怎么办啊」。
     ///
-    /// 这些字只在**句尾**被剥掉，且必须剩下比触发词更长的部分，避免把
+    /// 这些字只在句尾被剥掉，且必须剩下比触发词更长的部分，避免把
     /// 「好啊」剥成「好」这种把短句削没的情况。
     static let sentenceFinalParticles: Set<Character> = [
         "啊", "呀", "呢", "吧", "嘛", "哦", "啦", "咯", "呐", "哈"

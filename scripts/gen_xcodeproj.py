@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""墨语（Moyu）iOS 输入法 —— Xcode 工程生成器（gen_xcodeproj.py）。
+"""墨语（Moyu）iOS 输入法，Xcode 工程生成器（gen_xcodeproj.py）。
 
 为什么不用手写 pbxproj / 不用 XcodeGen
 --------------------------------------
 本机是 Windows，没有 Xcode、没有 xcodegen、没有 ruby。pbxproj 是 OpenStep 风格的
 plist，手写极易出现「括号不平衡 / UUID 引用断裂 / build phase 漏文件」导致 Xcode
-直接拒绝打开。因此本脚本用 **Python 标准库** 程序化生成，并保证：
+直接拒绝打开。因此本脚本用 Python 标准库 程序化生成，并保证：
 
-1. **确定性 UUID**：每个对象 UUID = MD5(种子字符串) 的前 24 位十六进制大写。
-   种子由「对象类型 + 相对路径 + target 名」组成，因此**重跑输出逐字节一致**（幂等）。
-2. **文件动态发现**：不硬编码任何文件名。每次运行都重新扫描磁盘：
+1. 确定性 UUID：每个对象 UUID = MD5(种子字符串) 的前 24 位十六进制大写。
+   种子由「对象类型 + 相对路径 + target 名」组成，因此重跑输出逐字节一致（幂等）。
+2. 文件动态发现：不硬编码任何文件名。每次运行都重新扫描磁盘：
       ios/Shared/**/*.swift              → 两个 target 的 Sources
       ios/AIKeyboard/**/*.swift          → 仅 App 的 Sources
       ios/AIKeyboardExtension/**/*.swift → 仅 Extension 的 Sources
@@ -18,16 +18,16 @@ plist，手写极易出现「括号不平衡 / UUID 引用断裂 / build phase �
       ios/Resources/Assets.xcassets      → 仅 App 的 Resources
       ios/Resources/ 下其他文件/目录      → 仅 App 的 Resources
       ios/Config/                         → 仅用于 Xcode 导航（不参与构建）
-   并行开发中某个目录还没落盘时，脚本打印 WARNING 并继续，**不会崩**；
+   并行开发中某个目录还没落盘时，脚本打印 WARNING 并继续，不会崩；
    等其它模块落盘后重跑本脚本即可自动纳入。
 
-   ⚠️ **词库文件夹必须叫 `dict`，绝不能叫 `Resources`**（即不能是 `ios/Shared/Resources/dict`）：
-   folder reference 会把文件夹**原样复制到 bundle 根**，若叫 `Resources` 就会产出
+   注意：词库文件夹必须叫 `dict`，绝不能叫 `Resources`（即不能是 `ios/Shared/Resources/dict`）：
+   folder reference 会把文件夹原样复制到 bundle 根，若叫 `Resources` 就会产出
    `AIKeyboard.app/Resources/`，而 iOS 27 的 installd / IXPlaceholder **会拒绝 app bundle
    根目录下存在名为 `Resources` 的目录**（真机实测：即使空目录也会导致安装失败，
    报 `IXErrorDomain Code=13 Missing bundle ID`）。叫 `dict` 则产出 `AIKeyboard.app/dict/`，
    安装正常。运行时用 `Bundle.main.url(forResource:withExtension:subdirectory:"dict")` 寻址。
-3. **配置单一真相源**：关键构建设置写在 ios/Config/*.xcconfig 里，本脚本会解析这些
+3. 配置单一真相源：关键构建设置写在 ios/Config/*.xcconfig 里，本脚本会解析这些
    xcconfig 并把其中的关键键回填进 pbxproj 的 target buildSettings（这样即使有人只用
    文本编辑器看 pbxproj 也能看出 bundle id / 部署目标；同时 xcconfig 仍是可读的真相源）。
 4. 同时生成 shared scheme（CI 里 `xcodebuild -scheme AIKeyboard` 必需）。
@@ -37,7 +37,7 @@ plist，手写极易出现「括号不平衡 / UUID 引用断裂 / build phase �
     # 生成（幂等，可反复运行）
     python scripts/gen_xcodeproj.py
 
-    # 只检查是否会发生变化（不写盘）；有差异退出码 1 —— CI / 自检用
+    # 只检查是否会发生变化（不写盘）；有差异退出码 1，CI / 自检用
     python scripts/gen_xcodeproj.py --check
 
     # 详细输出
@@ -87,7 +87,7 @@ PRODUCT_TYPE_APP = "com.apple.product-type.application"
 PRODUCT_TYPE_EXT = "com.apple.product-type.app-extension"
 
 # 词库等共享资源的物理目录（folder reference，同时加入 App 与 Extension 的 Resources phase）。
-# ⚠️ 目录名必须是 `dict`，**不能是 `Resources`**：folder reference 会把文件夹名原样复制到
+# 注意：目录名必须是 `dict`，不能是 `Resources`：folder reference 会把文件夹名原样复制到
 # bundle 根，若叫 Resources 就会产出 `AIKeyboard.app/Resources/`，而 iOS 27 的 installd /
 # IXPlaceholder 会拒绝 app bundle 根目录下存在名为 Resources 的目录（真机实测：即使空目录
 # 也会让安装失败，报 IXErrorDomain Code=13 Missing bundle ID；同样内容放 dict/ 就成功）。
@@ -156,12 +156,12 @@ INJECT_SCALAR_KEYS = [
 # 基础工具
 # ---------------------------------------------------------------------------
 
-# OpenStep plist（pbxproj 的格式）里，**裸字符串**允许的字符集由 CoreFoundation
+# OpenStep plist（pbxproj 的格式）里，裸字符串允许的字符集由 CoreFoundation
 # 的 CFPropertyList.c / isUnquotedStringChar() 决定，实测只有：
 #
 #     A-Z a-z 0-9 . _ $ / : -
 #
-# 特别注意 **不包含 `+`**。像 `KeyboardViewModel+AI.swift` 这种 Swift 常见命名，
+# 特别注意：不包含 `+`。像 `KeyboardViewModel+AI.swift` 这种 Swift 常见命名，
 # 如果不加引号直接写 `path = 某某+AI.swift;`，xcodebuild 会报
 #
 #     Old-style plist parser: missing semicolon in dictionary on line N
@@ -565,7 +565,7 @@ class ProjectModel:
         self.stats: dict[str, int] = {}
 
         # ---- 文件发现 ----
-        # ⚠️ 词库目录必须叫 `dict`，**不能叫 `Resources`**：
+        # 注意：词库目录必须叫 `dict`，不能叫 `Resources`：
         # folder reference 会把文件夹名原样复制到 bundle 根目录，若叫 Resources 就会产出
         # `AIKeyboard.app/Resources/`，而 iOS 27 的 installd / IXPlaceholder 会拒绝 app bundle
         # 根目录下存在名为 Resources 的目录（真机实测：空目录也导致安装失败，
@@ -600,7 +600,7 @@ class ProjectModel:
                 self.app_resources.append(FileRefSpec(rel=rel, filetype=file_type_for(rel), comment=entry.name))
 
         # 词库等共享资源：folder reference（蓝文件夹），同时加入 App 与 Extension 的 Resources
-        # phase。目录名必须是 `dict`（见顶部 SHARED_RESOURCES_REL 的注释）——绝不能叫
+        # phase。目录名必须是 `dict`（见顶部 SHARED_RESOURCES_REL 的注释），绝不能叫
         # Resources，否则会在 bundle 根产出 Resources/ 目录导致 iOS 27 安装失败。
         shared_res_rel = SHARED_RESOURCES_REL
         if (ios_root / shared_res_rel).is_dir():
@@ -838,7 +838,7 @@ def build_model(ios_root: Path, verbose: bool = False) -> ProjectModel:
 
     # ---------------- 依赖 ----------------
     # 注意：PBXContainerItemProxy.remoteGlobalIDString 与 PBXTargetDependency.target
-    # 都必须指向 **target 的 UUID**（不是 product 的 fileRef UUID）。
+    # 都必须指向 target 的 UUID（不是 product 的 fileRef UUID）。
     proxy_uid = m.uid("proxy", APP_TARGET, EXT_TARGET)
     dependency_uid = m.uid("dependency", APP_TARGET, EXT_TARGET)
     w.container_item_proxy(proxy_uid, project_uid, "Project object", ext_uuid, EXT_TARGET)

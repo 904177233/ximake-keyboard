@@ -2,23 +2,23 @@
 //  OpenAICompatibleClient+LenientParse.swift
 //  墨语 · Shared/Networking
 //
-//  「宽松解析」：应对**不守 SSE 规范的中转站 / 网关**。
+//  「宽松解析」：应对不守 SSE 规范的中转站 / 网关。
 //
 //  背景（v2.5 的实测证据）：
 //  请求里写了 `stream: false`，但部分网关无视该字段，仍按流式回
 //  `object: "chat.completion.chunk"` 的分片。而上游真正回给我们的报文
-//  **根本不符合 SSE 规范** —— 实测样本里同时出现三个问题：
+//  根本不符合 SSE 规范，实测样本里同时出现三个问题：
 //
 //      data：{"id":"…","object":"chat.completion.chunk","choices":[{"delta":{"content":"你"}}]}
 //      ^^^^                                                                                  ^^^
 //      ① 全角冒号            ② 分片之间没有空行（不按空行分派事件）    ③ 多个对象首尾相连
 //
 //  标准 `SSEParser` 依赖「空行分派事件」，遇到这种报文会把全部分片攒成
-//  一个巨大事件，`JSONSerialization` 直接失败 —— 用户看到的就是
+//  一个巨大事件，`JSONSerialization` 直接失败，用户看到的就是
 //  「服务商返回了 200，但没有解析出任何正文」。v2.4 曾先按 `SSEParser` 拼过一次，
 //  真机仍是 200 无正文，因此 v2.5 彻底放弃 SSE 语义。
 //
-//  现在的做法只有一个：**按花括号深度把原文里所有平衡的 JSON 对象抠出来**，
+//  现在的做法只有一个：按花括号深度把原文里所有平衡的 JSON 对象抠出来，
 //  逐个解析取 `choices`。这样无论网关怎么拼（有无 `data:`、有无空行、
 //  全角/半角冒号、一行一个还是全挤在一起、甚至整段就是一个 chunk 对象）都能还原正文。
 //
@@ -33,7 +33,7 @@ extension OpenAICompatibleClient {
     /// 把「本该是非流式、实际被网关按流式回了」的响应体拼成一次完整回复。
     ///
     /// - Parameter data: 完整响应体（可能是一整段普通 JSON，也可能是掺杂 `data:` 的分片）。
-    /// - Returns: 拼好的 `ChatResult`；**一个可用对象都没找到**、或拼出来正文为空时返回 `nil`，
+    /// - Returns: 拼好的 `ChatResult`；一个可用对象都没找到、或拼出来正文为空时返回 `nil`，
     ///   交回调用方走原有 JSON 分支与统一的空正文判定（普通 JSON 的行为完全不变）。
     static func parseSSEBodyAsCompletion(_ data: Data) -> ChatResult? {
         let plain = String(decoding: data, as: UTF8.self)
@@ -90,7 +90,7 @@ extension OpenAICompatibleClient {
         return ChatResult(text: trimmed, usage: usage, finishReason: finishReason)
     }
 
-    /// 从任意文本里按**花括号深度**抠出所有平衡的 JSON 对象字符串。
+    /// 从任意文本里按花括号深度抠出所有平衡的 JSON 对象字符串。
     ///
     /// 只在字符串字面量之外计深度，因此正文里出现 `{` / `}`（例如模型回答里的代码）
     /// 不会把括号算乱；`\"` 转义也能正确跳过。逐个 `Character` 遍历，

@@ -2,13 +2,9 @@
 //  PresetProviders.swift
 //  ios/Shared/Models
 //
-//  模块职责：内置 AI 服务商预设（国内常见 9 家 + 生图 2 家），提供名称/kind/baseURL/
-//            默认 model/生图 model/申请 Key 的中文说明，供"一键添加"使用；
-//            并对外提供 chatPresets() / imagePresets() 两个 [AIProviderConfig] 快捷工厂。
-//  依赖：仅 Foundation、AIProviderConfig、ProviderKind。
-//  使用方：宿主 App 的 ProviderListView / ProviderEditorView（添加服务商）、
-//          Storage（ConfigSnapshot.defaultValue 用 DeepSeek 预设初始化）、
-//          keyboard-ui / host-app-ui（选择默认对话 / 生图服务商时的候选列表）。
+//  内置 AI 服务商预设（国内常见 9 家 + 生图 2 家），提供名称/kind/baseURL/
+//  默认 model/生图 model/申请 Key 的中文说明，供"一键添加"使用；
+//  并对外提供 chatPresets() / imagePresets() 两个 [AIProviderConfig] 快捷工厂。
 //
 
 import Foundation
@@ -77,7 +73,7 @@ public enum PresetProviders {
     /// 1. id 命中内置生图预设集合（`preset-seedream` / `preset-wanx`）；
     /// 2. id 命中某个内置预设，且该预设"有 imageModel 但没有对话 model"。
     ///
-    /// 用户自定义的条目（UUID id）不在此判定内——那种情形由
+    /// 用户自定义的条目（UUID id）不在此判定内，那种情形由
     /// `AIProviderConfig.supportsChat` 依据 baseURL / 模型名判断。
     public static func isImageOnly(id: String) -> Bool {
         if imageOnlyPresetIDs.contains(id) {
@@ -281,7 +277,7 @@ public enum PresetProviders {
 
     /// 某个协议类型下已知可用的模型名（供设置页做「常用模型」快捷选择，仍允许用户自由输入）。
     ///
-    /// 注意：`ProviderKind` 只区分**协议**、不区分厂商 —— DeepSeek / 通义千问 / Kimi /
+    /// 注意：`ProviderKind` 只区分协议、不区分厂商，DeepSeek / 通义千问 / Kimi /
     /// 智谱 GLM / 火山方舟 / OpenRouter / OpenAI 全都走 `.openAICompatible`。
     /// 因此 `.openAICompatible` 返回的是「所有厂商的并集」（去重、顺序固定）；
     /// 想按厂商给精确清单，请用 `knownModels(forBaseURL:)`（设置页拿到的是用户填的
@@ -301,7 +297,7 @@ public enum PresetProviders {
 
     /// 按 baseURL 的域名推断厂商，返回该厂商已知可用的模型名。
     ///
-    /// 只收录**确认存在**的模型名（宁可少写，也不给用户一个点一下就 404 的候选）。
+    /// 只收录确认存在的模型名（宁可少写，也不给用户一个点一下就 404 的候选）。
     /// 用户仍然可以手输任意模型名（例如刚发布的版本），这里只是候选。
     ///
     /// - Parameter baseURL: 服务商根地址，如 `https://api.deepseek.com/v1`。
@@ -363,12 +359,12 @@ public enum PresetProviders {
 
     // MARK: - 快捷工厂（UI 直接用）
 
-    /// 全部**可对话**预设转成的 `[AIProviderConfig]`（每次调用返回新副本，可直接编辑）。
+    /// 全部可对话预设转成的 `[AIProviderConfig]`（每次调用返回新副本，可直接编辑）。
     public static func chatPresets() -> [AIProviderConfig] {
         chatPresetTemplates.map { $0.makeProvider() }
     }
 
-    /// 全部**生图**预设转成的 `[AIProviderConfig]`（id 为 preset-seedream / preset-wanx）。
+    /// 全部生图预设转成的 `[AIProviderConfig]`（id 为 preset-seedream / preset-wanx）。
     public static func imagePresets() -> [AIProviderConfig] {
         imagePresetTemplates.map { $0.makeProvider() }
     }

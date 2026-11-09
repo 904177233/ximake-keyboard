@@ -2,11 +2,9 @@
 //  ImageClient.swift
 //  ios/Shared/Networking
 //
-//  模块职责：OpenAI 风格生图客户端（`POST {base}/images/generations`），并实现
-//            `ImageClientRouter`——按 baseURL 与模型名把生图请求路由到
-//            即梦（Seedream/火山方舟）、通义万相（DashScope 异步任务）或 OpenAI 兼容实现。
-//  依赖：Foundation、Models、HTTPTransport、AIError。
-//  使用方：AIClientFactory.makeImage → 键盘扩展生图面板、宿主 App ImagePanelView。
+//  OpenAI 风格生图客户端（`POST {base}/images/generations`），并实现
+//  `ImageClientRouter`，按 baseURL 与模型名把生图请求路由到
+//  即梦（Seedream/火山方舟）、通义万相（DashScope 异步任务）或 OpenAI 兼容实现。
 //
 
 import Foundation

@@ -2,11 +2,9 @@
 //  PromptTemplate.swift
 //  ios/Shared/Prompts
 //
-//  模块职责：定义提示词模板数据结构（`PromptTemplate`）与占位符渲染工具。
-//            模板把「系统提示词 + 用户模板」打包成一个可持久化、可编辑的单元，
-//            UI 侧只需选择模板并传入文本即可得到渲染后的 `[ChatMessage]`。
-//  依赖：Foundation、`Models`（AIFeature / ChatMessage）。
-//  使用方：`PromptLibrary`（内置模板与自定义模板）、宿主 App 的提示词编辑页、键盘 AI 面板。
+//  定义提示词模板数据结构（`PromptTemplate`）与占位符渲染工具。
+//  模板把「系统提示词 + 用户模板」打包成一个可持久化、可编辑的单元，
+//  UI 侧只需选择模板并传入文本即可得到渲染后的 `[ChatMessage]`。
 //
 
 import Foundation
@@ -16,13 +14,13 @@ import Foundation
 /// 字段顺序与 docs/02 §4.4 一致：`id / title / systemImage / feature / systemPrompt / userTemplate / temperature / isBuiltIn`。
 ///
 /// 支持的占位符（在 `userTemplate` 与 `systemPrompt` 中均可使用）：
-/// - `{{text}}` —— 用户输入/选中的原文（必填，缺失时兜底为空串）
-/// - `{{context}}` —— 上下文（前文、剪贴板、聊天记录等，可空）
-/// - `{{tone}}` —— 语气（如「自然」「正式」「温柔」）
-/// - `{{target_language}}` —— 目标语言（翻译类模板使用）
-/// - `{{reply_count}}` —— 条数（回复建议类模板使用）
+/// - `{{text}}`，用户输入/选中的原文（必填，缺失时兜底为空串）
+/// - `{{context}}`，上下文（前文、剪贴板、聊天记录等，可空）
+/// - `{{tone}}`，语气（如「自然」「正式」「温柔」）
+/// - `{{target_language}}`，目标语言（翻译类模板使用）
+/// - `{{reply_count}}`，条数（回复建议类模板使用）
 ///
-/// 支持的**条件段落**（`{{#key}}…{{/key}}`，CONTRACT-ADD）：
+/// 支持的条件段落（`{{#key}}…{{/key}}`，CONTRACT-ADD）：
 /// - `values[key]` 非空 → 保留段落内容（标记去掉，内部占位符照常替换）；
 /// - 为空或不存在 → 整段（含标记与其中内容）删除；
 /// - 用于「有上文才显示（聊天窗口上文）」这类段落，避免 `context` 为空时留下

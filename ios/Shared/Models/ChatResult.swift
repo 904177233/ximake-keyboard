@@ -2,9 +2,7 @@
 //  ChatResult.swift
 //  ios/Shared/Models
 //
-//  模块职责：一次性（非流式）对话的完整结果，以及 token 用量统计。
-//  依赖：仅 Foundation。
-//  使用方：Networking（LLMClient.complete 的返回值）、UI（结果卡片与用量展示）。
+//  一次性（非流式）对话的完整结果，以及 token 用量统计。
 //
 
 import Foundation

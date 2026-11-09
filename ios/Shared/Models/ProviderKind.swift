@@ -2,12 +2,8 @@
 //  ProviderKind.swift
 //  ios/Shared/Models
 //
-//  模块职责：声明 AI 服务商的协议类型（决定走哪个网络客户端 / 哪种请求响应格式），
-//            并提供给 UI 直接使用的中文显示名与 SF Symbol。
-//  依赖：仅 Foundation（本文件不 import UIKit/SwiftUI）。
-//  使用方：Networking（AIClientFactory / ImageClientRouter）、Storage（ConfigSnapshot）、
-//          Models（AIProviderConfig / PresetProviders）、宿主 App 的 ProviderEditorView、
-//          键盘扩展内的设置 Sheet。
+//  声明 AI 服务商的协议类型（决定走哪个网络客户端 / 哪种请求响应格式），
+//  并提供给 UI 直接使用的中文显示名与 SF Symbol。
 //
 
 import Foundation

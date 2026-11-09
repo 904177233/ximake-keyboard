@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""墨语（Moyu）iOS 输入法 —— Swift 静态检查（QA-1）。
+"""墨语（Moyu）iOS 输入法，Swift 静态检查（QA-1）。
 
 对 `ios/**/*.swift` 做 8 类静态检查（Python 3 标准库，零依赖，可独立运行）：
 
@@ -418,11 +418,11 @@ def _is_likely_project_ui_type(name: str) -> bool:
     """判断一个未定义符号是否「几乎不可能是系统 API」。
 
     背景：`SYMBOL-UNDEFINED` 默认是 P2（`[粗查]`），因为白名单永远不够全，
-    把系统 API 误报成未定义是很常见的噪声。但有一类符号**系统 SDK 里根本不可能有**：
+    把系统 API 误报成未定义是很常见的噪声。但有一类符号系统 SDK 里根本不可能有：
     本项目自己的 View / 组件命名（`KeyRowsView`、`NumberPadView`、`AIPanelView`、
     `AIResultCardView`、`ExtensionSettingsSheet`、`PhraseBarView` …）。
 
-    这类符号如果「被使用但全项目无定义」，那就是**硬编译错误**
+    这类符号如果「被使用但全项目无定义」，那就是硬编译错误
     （`cannot find 'XxxView' in scope`），必须按 P0 处理，不能被「P2 不阻塞」放过。
 
     判定规则（任一命中即认为大概率本项目自造类型）：
@@ -465,7 +465,7 @@ def check_symbols(report: Report, relpath: str, src: str, lex, data: dict):
 
     严重度规则（Lead 定的冻结判定标准）：
       - 命中 `_is_likely_project_ui_type()`（明显是本项目自造的 UI 类型）
-        → **P0**，因为它不可能是系统 API，缺定义 = 硬编译错误；
+        → P0，因为它不可能是系统 API，缺定义 = 硬编译错误；
       - 其它 → P2 `[粗查]`（白名单不可能覆盖全部 SDK，宁漏不误报）。
     """
     known = data["declared_types"] | SYSTEM_TYPES | SYNTAX_WORDS
@@ -538,7 +538,7 @@ def check_file_properties(report: Report, tf, relpath: str, line_count: int):
 
 def _is_model_ref_context(lex, pos: int) -> bool:
     """判断命中位置是否在 `ModelRef(title: "...")` / `Preset(name: "...")` 等
-    技术标识符上下文里 —— 这类字符串是模型 ID / 品牌名，不是 UI 文案。
+    技术标识符上下文里，这类字符串是模型 ID / 品牌名，不是 UI 文案。
 
     也覆盖 `DispatchQueue(label:)` / `Logger(subsystem:category:)` 这类
     「反域名标识符」：`com.moyu.app.metrickit` 是日志/队列标识，不是给用户看的文案。
@@ -564,7 +564,7 @@ def check_english_ui_text(report: Report, relpath: str, src: str, lex):
     """Text(\"...\") / label: / title: 里出现纯英文（白名单除外）→ P2。
 
     注意排除两类"看起来像英文文案、实际不是"的情况，避免刷假警报：
-      1. 纯插值文案：`Text("\\(index)")`、`Text("\\(badge)")` —— 渲染时是数字/变量，
+      1. 纯插值文案：`Text("\\(index)")`、`Text("\\(badge)")`，渲染时是数字/变量，
          源码里出现的 `index`/`badge` 只是 Swift 变量名，不是给用户看的英文词。
       2. 插值表达式内部的函数名：`Text("\\(Int(x * 100))%")` 里的 `Int`/`min`。
     判定方式：把 `\\( ... )` 整体抹掉后再看还剩哪些英文词。
@@ -681,7 +681,7 @@ def run(root: Path) -> Report:
 
     for relpath, line, kind, name, p_file, p_line in data["dup_hits"]:
         # 顶层同名同类型 = Swift 硬编译错误（invalid redeclaration）。
-        # 注意：即便其中一个是 private / fileprivate 也一样报错 —— 访问控制不参与
+        # 注意：即便其中一个是 private / fileprivate 也一样报错，访问控制不参与
         # 重声明判定，所以这里必须给 P0，否则「编译不过」而 QA 只报了个 P2。
         report.add("P0", "DUP-DECL", relpath, line,
                    f"重复声明：{kind} `{name}` 与 {p_file}:{p_line} 同名同类型（Swift 会报 invalid redeclaration）",

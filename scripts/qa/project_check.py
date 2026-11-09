@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""墨语（Moyu）iOS 输入法 —— Xcode 工程结构校验（project_check.py）。
+"""墨语（Moyu）iOS 输入法，Xcode 工程结构校验（project_check.py）。
 
 Python 3 标准库，零第三方依赖，可在 Windows 直接运行（无需 Xcode）。
 
@@ -19,7 +19,7 @@ Python 3 标准库，零第三方依赖，可在 Windows 直接运行（无需 X
  11. 构建配置关键项：SWIFT_VERSION / IPHONEOS_DEPLOYMENT_TARGET / PRODUCT_BUNDLE_IDENTIFIER
      / CODE_SIGN_STYLE / TARGETED_DEVICE_FAMILY
 
-pbxproj 尚未生成时：打印 WARNING 并 **退出码 0**（不算失败，仅提示工程未落盘）。
+pbxproj 尚未生成时：打印 WARNING 并 退出码 0（不算失败，仅提示工程未落盘）。
 
 用法：
     python scripts/qa/project_check.py                # 彩色终端报告
@@ -357,7 +357,7 @@ def check_sources_membership(report: Report, stripped: str, table: dict[str, str
         report.add("P0", "PBX-EXT-EMPTY", PBXPROJ_REL, 0,
                    "Extension target 的 Sources 为空（键盘不可能被构建）", "把 ios/AIKeyboardExtension/** 加入")
 
-    # 磁盘上有、但没登记进任何 target 的 Sources —— 这些文件不会参与编译
+    # 磁盘上有、但没登记进任何 target 的 Sources，这些文件不会参与编译
     check_untracked_sources(report, app_src, ext_src)
 
 
@@ -365,7 +365,7 @@ def check_untracked_sources(report: Report, app_src: set[str], ext_src: set[str]
     """磁盘上存在但没进 Sources 的 .swift → P0/P1。
 
     典型场景：先跑了工程生成器，之后队友又新增了代码文件却没重跑生成器。
-    后果是这些文件不参与编译 —— 现象是"明明写了却报 cannot find xxx in scope"。
+    后果是这些文件不参与编译，现象是"明明写了却报 cannot find xxx in scope"。
     这里做双向核对：`ios/AIKeyboard/**` 必须出现在 App Sources，
     `ios/AIKeyboardExtension/**` 必须出现在 Extension Sources。
     """

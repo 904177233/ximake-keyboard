@@ -6,7 +6,7 @@ name: Build Unsigned IPA
 # 为什么需要这个 workflow
 # ----------------------
 # 本项目作者只有 Windows 电脑，没有 Mac、没有 Apple Developer Program（免费 Apple ID）。
-# iOS 应用只能在 macOS 上编译，所以用 GitHub Actions 的 macOS runner 编译出**未签名**
+# iOS 应用只能在 macOS 上编译，所以用 GitHub Actions 的 macOS runner 编译出未签名
 # 的 IPA（AIKeyboard-unsigned.ipa），再在 Windows 上用 Sideloadly / AltStore 之类工具
 # 用自己的免费 Apple ID 重签名装到 iPhone 上（签名 7 天有效，到期重装即可）。
 #
@@ -22,7 +22,7 @@ name: Build Unsigned IPA
 #
 # 重要约定
 # --------
-# * 必须用 `-project + -scheme`，**不要**用 `-workspace`：本仓库没有 .xcworkspace
+# * 必须用 `-project + -scheme`，不要用 `-workspace`：本仓库没有 .xcworkspace
 #   工作区文件（单工程、零第三方依赖，不需要 workspace）。
 # * CODE_SIGNING_ALLOWED=NO 产出的是未签名包；PlugIns 里的 .appex 必须保留，
 #   否则装到手机上键盘根本不会出现在"设置-通用-键盘"里（这是最常见的坑）。
@@ -68,7 +68,7 @@ env:
   BUILD_DIR: build
   CONFIGURATION: ${{ github.event.inputs.configuration || 'Release' }}
   # 版本号：Marketing 版本手工维护（改这里），Build 号用 CI 的 run 序号自动递增。
-  # 之前所有构建都写死 `1.0.0 build 1`，导致装到手机上根本无法区分是哪一版 ——
+  # 之前所有构建都写死 `1.0.0 build 1`，导致装到手机上根本无法区分是哪一版，
   # 用户反馈「好像没更新」，我在设备侧和包里都拿不到版本证据。现在改为：
   #   设置 › 通用 › iPhone 储存空间 › 墨语 → 版本 1.5.0，构建号 = run 序号
   MARKETING_VERSION: 3.0.7
@@ -279,7 +279,7 @@ jobs:
       #   只有最后一步 ValidateEmbeddedBinary 报
       #       error: Couldn't load Info dictionary for <.../AIKeyboard.app/PlugIns/AIKeyboardExtension.appex>
       #   这个校验步骤是给「已签名」的包做签名侧一致性检查的（读代码签名里的 Info dict），
-      #   而本 workflow 是刻意不签名的（CODE_SIGNING_ALLOWED=NO），它自然读不到 —— 属已知误报。
+      #   而本 workflow 是刻意不签名的（CODE_SIGNING_ALLOWED=NO），它自然读不到，属已知误报。
       #
       #   所以：archive 失败时，只要 .app 目录本身是完整的（含 PlugIns/*.appex 与
       #   appex/Info.plist），就直接采用它继续打包。真正的完整性由后面的
@@ -396,7 +396,7 @@ jobs:
           fi
           echo "OK：PlugIns/AIKeyboardExtension.appex 及可执行文件都在。"
 
-          # 关键校验：bundle 根下**不能**有 Resources/ 目录。
+          # 关键校验：bundle 根下不能有 Resources/ 目录。
           # iOS 27 的 installd / IXPlaceholder 会拒绝这种包（真机实测：即使目录是空的也会让
           # 安装失败，报 IXErrorDomain Code=13 Missing bundle ID，很容易被误判成签名问题）。
           # 词库必须以 folder reference 的形式落到 bundle 根下、文件夹名叫 dict。

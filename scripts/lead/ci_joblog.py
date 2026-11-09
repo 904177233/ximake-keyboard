@@ -5,7 +5,7 @@
     python scripts/lead/ci_joblog.py --run-id 40149646081 [--grep "error:"] [--tail 60]
 
 为什么要单独一个脚本：`/actions/jobs/{id}/logs` 会 302 到 Azure Blob，
-必须**去掉 Authorization 头**（否则 401）、并且接受 `*/*`（否则 415）。
+必须去掉 Authorization 头（否则 401）、并且接受 `*/*`（否则 415）。
 """
 
 import argparse

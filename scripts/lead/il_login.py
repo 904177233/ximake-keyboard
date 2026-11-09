@@ -1,6 +1,6 @@
 """通过 CDP 驱动 iloader 登录：先清空输入框，再键入，避免内容累加。
 
-关键教训：上一版直接用 `Input.insertText`，它会在光标处**追加**而不是替换，
+关键教训：上一版直接用 `Input.insertText`，它会在光标处追加而不是替换，
 重试几次后 Apple ID 变成 `z***3@icloud.comz904177233@icloud.com`，
 Apple 返回 `Auth error -20970: Your account information was entered incorrectly.`
 正确做法：先 focus + 全选（Ctrl+A）+ 退格清空，再 insertText。

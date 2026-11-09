@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""墨语（Moyu）iOS 输入法 —— IPA 包内布局校验（打包后立刻跑）。
+"""墨语（Moyu）iOS 输入法，IPA 包内布局校验（打包后立刻跑）。
 
-校验未签名 IPA 的 Payload 目录结构，重点保证**词库落在 `dict/` 而不是 `Resources/dict/`**：
+校验未签名 IPA 的 Payload 目录结构，重点保证词库落在 `dict/` 而不是 `Resources/dict/`：
 folder reference 会把目录名原样复制到 bundle 根，一旦出现 `Resources/` 目录，
 iOS 27 的 installd / IXPlaceholder 会拒绝安装（IXErrorDomain Code=13 Missing bundle ID，
 真机实测空目录也会失败）。历史上就是 `ios/Shared/Resources/dict/` 这个布局踩了这个坑。
@@ -18,7 +18,7 @@ iOS 27 的 installd / IXPlaceholder 会拒绝安装（IXErrorDomain Code=13 Miss
     [L1] `Payload/<App>.app/Info.plist` 存在
     [L2] `Payload/<App>.app/dict/{moyu.dict,phrases.tsv,dict_meta.json}` 三个齐全
     [L3] `Payload/<App>.app/PlugIns/<Ext>.appex/dict/` 三个齐全（缺 appex 为 P1 警告）
-    [L4] 全包**没有任何路径含 `Resources/`**（旧的 Shared/Resources 布局残留）
+    [L4] 全包没有任何路径含 `Resources/`（旧的 Shared/Resources 布局残留）
     [L5] `Info.plist` 里有非空 `CFBundleIdentifier`（app + appex 各查一次）
 
 退出码（与 scripts/qa/ 其它脚本统一）:
@@ -179,7 +179,7 @@ def check_ipa(ipa_path: Path) -> Report:
 
     - Parameter ipa_path: IPA 文件路径。
     - Returns: 校验报告。
-    - Raises: FileNotFoundError / zipfile.BadZipFile —— 由调用方转为退出码 2。
+    - Raises: FileNotFoundError / zipfile.BadZipFile，由调用方转为退出码 2。
     """
     report = Report(ipa_path=str(ipa_path))
 

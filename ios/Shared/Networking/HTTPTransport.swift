@@ -2,10 +2,8 @@
 //  HTTPTransport.swift
 //  ios/Shared/Networking
 //
-//  模块职责：所有 AI 客户端共用的 HTTP 基础设施——构造 URLRequest、统一的 HTTP 错误映射、
-//            服务端错误消息提取、Retry-After 解析、baseURL 智能拼接（resolvedURL(path:)）。
-//  依赖：仅 Foundation（不 import UIKit/SwiftUI），可在键盘扩展内安全使用。
-//  使用方：OpenAICompatibleClient / AnthropicClient / GeminiClient / ImageClient 系列。
+//  所有 AI 客户端共用的 HTTP 基础设施，构造 URLRequest、统一的 HTTP 错误映射、
+//  服务端错误消息提取、Retry-After 解析、baseURL 智能拼接（resolvedURL(path:)）。
 //
 
 import Foundation

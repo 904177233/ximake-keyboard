@@ -2,11 +2,8 @@
 //  LLMClient.swift
 //  ios/Shared/Networking
 //
-//  模块职责：定义文本对话与生图两类客户端的抽象协议（docs/02 §4.2 契约），
-//            以及统一的工厂 `AIClientFactory`。
-//  依赖：仅 Foundation + Models。
-//  使用方：键盘扩展（AIService 调 stream）、宿主 App（Playground 调 complete、
-//          设置页的"测试连接"按钮、生图面板调 generate）。
+//  定义文本对话与生图两类客户端的抽象协议（docs/02 §4.2 契约），
+//  以及统一的工厂 `AIClientFactory`。
 //
 
 import Foundation

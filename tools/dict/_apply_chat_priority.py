@@ -3,13 +3,13 @@
 
 做三件事：
 1. 生成 `ios/Shared/dict/chat_priority.tsv`（两列，UTF-8 无 BOM、纯 LF）；
-2. 把表里**原本不在**词库的词补进 `base_dict.tsv`（flags 含 `chat`，词频按权重给）；
+2. 把表里原本不在词库的词补进 `base_dict.tsv`（flags 含 `chat`，词频按权重给）；
 3. 同步 `dict_meta.json` 的条数 / 字节 / SHA256 / flags 分布。
 
 硬约束（`PinyinDictionary.parse` 依赖）：
 - `base_dict.tsv` 恒为 4 列 `拼音 <TAB> 词 <TAB> 词频 <TAB> flags`；
 - 无空行、无注释行（首行表头除外）、无 BOM、纯 LF；
-- **已有条目的词频一个都不改**（只追加缺失词），否则等于重新洗了一遍排序。
+- 已有条目的词频一个都不改（只追加缺失词），否则等于重新洗了一遍排序。
 
 用法：
     python tools/dict/_apply_chat_priority.py           # 应用

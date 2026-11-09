@@ -2,11 +2,8 @@
 //  AIFeature.swift
 //  ios/Shared/Models
 //
-//  模块职责：声明键盘内可一键调用的 AI 能力集合（润色/扩写/翻译/回复建议/生图/自定义/
-//            AI 对话/智能联想），并提供中文标题、SF Symbol 与默认 Prompt 模板 ID。
-//  依赖：仅 Foundation。
-//  使用方：键盘扩展（AIBar / KeyboardViewModel.startAI）、宿主 App（PlaygroundView /
-//          PromptLibraryView）、Prompts（PromptLibrary.templates(feature:)）。
+//  声明键盘内可一键调用的 AI 能力集合（润色/扩写/翻译/回复建议/生图/自定义/
+//  AI 对话/智能联想），并提供中文标题、SF Symbol 与默认 Prompt 模板 ID。
 //
 
 import Foundation
@@ -30,7 +27,7 @@ public enum AIFeature: String, Codable, CaseIterable, Sendable {
     case chat
     /// 上下文联想建议：根据上下文猜下一句。
     ///
-    /// CONTRACT-ADD（design/04 §4）：非传统联想词——不是词库 n-gram 的下一个词，
+    /// CONTRACT-ADD（design/04 §4）：非传统联想词，不是词库 n-gram 的下一个词，
     /// 而是 AI 结合「聊天窗口上文 + 已输入内容」给出的下一句话/短语（≤12 字、最多 3 条）。
     case suggestion
     /// 自定义：使用用户自己的 Prompt 模板。

@@ -2,9 +2,7 @@
 //  ImageRequest.swift
 //  ios/Shared/Models
 //
-//  模块职责：一次生图请求的参数载体（提示词 + 尺寸 + 质量 + 张数）。
-//  依赖：仅 Foundation。
-//  使用方：Networking（ImageGenerating.generate 的入参）、UI（生图面板）。
+//  一次生图请求的参数载体（提示词 + 尺寸 + 质量 + 张数）。
 //
 
 import Foundation

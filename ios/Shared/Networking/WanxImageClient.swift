@@ -2,10 +2,8 @@
 //  WanxImageClient.swift
 //  ios/Shared/Networking
 //
-//  模块职责：通义万相（DashScope 文生图）生图客户端。DashScope 文生图是**异步任务**接口：
-//            先创建任务拿到 `task_id`，再轮询任务状态直到 `SUCCEEDED`，最后下载 `results[].url`。
-//  依赖：Foundation、Models、HTTPTransport、AIError。
-//  使用方：ImageClientRouter（baseURL 含 dashscope.aliyuncs.com，或 model 含 wanx）。
+//  通义万相（DashScope 文生图）生图客户端。DashScope 文生图是异步任务接口：
+//  先创建任务拿到 `task_id`，再轮询任务状态直到 `SUCCEEDED`，最后下载 `results[].url`。
 //
 
 import Foundation
@@ -19,7 +17,7 @@ import Foundation
 ///    - Body：`{"model":"wanx2.1-t2i-turbo","input":{"prompt":"..."},"parameters":{"size":"1024*1024","n":1}}`
 ///    - 响应：`{"output":{"task_id":"...","task_status":"PENDING"},"request_id":"..."}`
 /// 2) 轮询任务
-///    - `GET https://dashscope.aliyuncs.com/api/v1/tasks/{task_id}`（**不带** `X-DashScope-Async`）
+///    - `GET https://dashscope.aliyuncs.com/api/v1/tasks/{task_id}`（不带 `X-DashScope-Async`）
 ///    - 响应：`{"output":{"task_status":"SUCCEEDED","results":[{"url":"https://..."}]}}`
 ///      `task_status` 取值：`PENDING` / `RUNNING` / `SUCCEEDED` / `FAILED` / `CANCELED` / `UNKNOWN`
 /// 3) 下载图片

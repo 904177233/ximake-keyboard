@@ -1,10 +1,10 @@
 """输入纠错（TypoCorrector）性能探针。
 
 用途：Windows 无 Swift 环境，用 Python 逐行复刻 `ios/Shared/IMECore/TypoCorrector.swift`
-的算法（复用 `FuzzyPinyin` 的 9 条规则 + 编辑距离 1），读**真实**词库 `base_dict.tsv`
+的算法（复用 `FuzzyPinyin` 的 9 条规则 + 编辑距离 1），读真实词库 `base_dict.tsv`
 判定「词库里是否有词」，测量 `correct()` 在典型输入下的耗时与产出。
 
-注意：Python 解释执行比 Swift 慢 3-10 倍，报出的数字是**上界**；真机耗时应以
+注意：Python 解释执行比 Swift 慢 3-10 倍，报出的数字是上界；真机耗时应以
 Xcode 上的 `measure {}` 为准（Swift 侧同类逻辑通常在 0.01-0.1ms）。
 
 用法：

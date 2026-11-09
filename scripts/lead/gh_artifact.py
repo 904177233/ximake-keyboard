@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""gh_artifact.py —— 从 GitHub Actions 下载构建产物到 dist/（只读 API + 下载）。
+"""gh_artifact.py，从 GitHub Actions 下载构建产物到 dist/（只读 API + 下载）。
 
 用法：
     python scripts/lead/gh_artifact.py --list
@@ -9,7 +9,7 @@
     python scripts/lead/gh_artifact.py --logs --run-id 40084131236 --grep "情形"
 
 设计要点：
-  * artifact 下载接口会 302 到 Azure Blob，**必须去掉 Authorization 头**，否则 401。
+  * artifact 下载接口会 302 到 Azure Blob，必须去掉 Authorization 头，否则 401。
   * token 从 %TEMP%\\dsh_gh_token.txt 读（GitHub Desktop 的 credential manager 缓存）。
   * 解出来的 .ipa 放到 dist/，并打印大小与 sha256，方便和 README 里记的数值对照。
 """

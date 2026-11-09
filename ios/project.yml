@@ -2,7 +2,7 @@
 # 墨语（Moyu）iOS 输入法 · XcodeGen 工程描述（参考文件）
 # =============================================================================
 #
-# ⚠️ 重要：本文件**不是**构建的必需文件，也**不是**被自动执行的脚本。
+# 注意：重要：本文件不是构建的必需文件，也不是被自动执行的脚本。
 #
 #   本项目真正生成 `ios/AIKeyboard.xcodeproj/project.pbxproj` 的是
 #   `scripts/gen_xcodeproj.py`（Python 标准库，Windows/macOS 都能跑，零第三方依赖）：
@@ -14,16 +14,16 @@
 #   用 Python 程序化生成 + 独立校验，才能在 Windows 上就确认工程结构是对的。
 #
 #   本 project.yml 的用途有两个：
-#     1) 作为一份**人类可读的工程声明**，让人一眼看清两个 target 的文件归属、依赖、
+#     1) 作为一份人类可读的工程声明，让人一眼看清两个 target 的文件归属、依赖、
 #        资源、签名配置分别是什么（pbxproj 太难读）。
 #     2) 兜底：如果哪天 pbxproj 被改坏了，而手边正好有 Mac，可以装 XcodeGen
 #        （`brew install xcodegen`）后用它在 ios/ 目录下执行 `xcodegen generate`
-#        重新生成一份工程。**但请注意**：XcodeGen 生成的 pbxproj 与
-#        gen_xcodeproj.py 生成的**不完全一致**（UUID 不同、分组顺序不同），
+#        重新生成一份工程。但请注意：XcodeGen 生成的 pbxproj 与
+#        gen_xcodeproj.py 生成的不完全一致（UUID 不同、分组顺序不同），
 #        提交前请以 scripts/gen_xcodeproj.py 的产物为准，或至少跑一遍
 #        `python scripts/validate_project.py` 确认结构仍达标。
 #
-#   维护约定：改了 target / 源文件归属 / 构建设置，请**同时**改
+#   维护约定：改了 target / 源文件归属 / 构建设置，请同时改
 #   `scripts/gen_xcodeproj.py`（权威）与本文档（镜像），并重跑生成 + 校验。
 # =============================================================================
 
@@ -65,7 +65,7 @@ configFiles:
 settings:
   base:
     # 免费 Apple ID 不支持 App Group / iCloud / Push（docs/01 §6 硬约束），
-    # 因此这里**不启用**任何 capability；entitlements 文件留空 dict。
+    # 因此这里不启用任何 capability；entitlements 文件留空 dict。
     ENABLE_USER_SCRIPT_SANDBOXING: NO
     CLANG_ENABLE_MODULES: YES
     CLANG_ENABLE_OBJC_ARC: YES
@@ -91,10 +91,10 @@ targets:
       # ③ 图片资源 / 颜色资源：只进 App
       - path: Resources/Assets.xcassets
         buildPhase: resources
-      # ④ 词库等运行时资源：作为 **folder reference（蓝色文件夹）** 加入，
+      # ④ 词库等运行时资源：作为 folder reference（蓝色文件夹） 加入，
       #    这样 Bundle.main.url(forResource:withExtension:subdirectory:) 能直接寻址，
       #    且新增词库文件不需要改工程文件。
-      #    ⚠️ 目录名必须是 `Shared/dict`，**绝不能是 `Shared/Resources`**：folder reference
+      #    注意：目录名必须是 `Shared/dict`，绝不能是 `Shared/Resources`：folder reference
       #    会把文件夹名原样复制到 bundle 根，而 iOS 27 的 installd / IXPlaceholder 拒绝
       #    app bundle 根目录下存在名为 Resources 的目录（真机实测：空目录也会导致安装失败，
       #    报 IXErrorDomain Code=13 Missing bundle ID）。
@@ -151,7 +151,7 @@ targets:
       - path: Shared/dict
         type: folder
         buildPhase: resources
-      # 注意：**没有** Resources/Assets.xcassets —— 资源目录只进 App，
+      # 注意：没有 Resources/Assets.xcassets，资源目录只进 App，
       # 扩展里不需要 AppIcon，ASSETCATALOG_COMPILER_APPICON_NAME 因此在
       # Extension.xcconfig 里被显式置空。
     settings:

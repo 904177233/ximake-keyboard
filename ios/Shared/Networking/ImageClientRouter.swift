@@ -2,14 +2,12 @@
 //  ImageClientRouter.swift
 //  ios/Shared/Networking
 //
-//  模块职责：生图客户端路由。按 `baseURL` 与 `imageModel` 判断该用哪家生图协议，
-//            返回统一的 `ImageGenerating`。这是"不新增 ProviderKind 枚举值"决策的落点。
-//  依赖：Foundation、Models、AIError。
-//  使用方：AIClientFactory.makeImage(config:apiKey:)。
+//  生图客户端路由。按 `baseURL` 与 `imageModel` 判断该用哪家生图协议，
+//  返回统一的 `ImageGenerating`。这是"不新增 ProviderKind 枚举值"决策的落点。
 //
 //  设计决策（见 ios/Shared/Networking/README.md「设计决策」）：
 //  即梦（Seedream/Ark）与通义万相（DashScope）的请求体与协议都与标准 OpenAI 生图不同，
-//  因此需要独立的客户端实现；但**不新增 `ProviderKind` 枚举值**——其他 agent 的 UI 代码里
+//  因此需要独立的客户端实现；但不新增 `ProviderKind` 枚举值，其他 agent 的 UI 代码里
 //  存在对 `ProviderKind` 的穷尽 switch，新增 case 会让它们编译失败。改用 `.custom` + 本路由。
 //
 

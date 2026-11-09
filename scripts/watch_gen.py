@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""watch_gen.py —— 源码变化时自动重跑 gen_xcodeproj.py 的守护脚本。
+"""watch_gen.py，源码变化时自动重跑 gen_xcodeproj.py 的守护脚本。
 
 背景
 ----
@@ -41,8 +41,8 @@
 
 注意
 ----
-- 这个脚本**不是**构建流程的一部分，纯开发期辅助工具，不参与 CI 的硬门禁。
-- 它只是把「手动跑 gen」变成「自动跑 gen」，**不替代** `scripts/finalize.ps1` /
+- 这个脚本不是构建流程的一部分，纯开发期辅助工具，不参与 CI 的硬门禁。
+- 它只是把「手动跑 gen」变成「自动跑 gen」，不替代 `scripts/finalize.ps1` /
   `scripts/finalize.sh` 的完整 5 闸门；冻结前仍然要跑一次 finalize。
 - 生成器本身是幂等的（同样的磁盘内容 -> 同样的 pbxproj 字节），所以多跑几次
   不会产生垃圾提交；`gen_xcodeproj.py --check` 就是用来验证这一点的。

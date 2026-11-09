@@ -2,11 +2,9 @@
 //  SSEParser.swift
 //  ios/Shared/Networking
 //
-//  模块职责：把任意切分的 SSE 字节流增量解析成 `SSEEvent`，正确处理跨 chunk 的半行、
-//            `\r\n` 与 `\n` 两种换行、`event:` / `data:` / `id:` / `retry:` 字段、
-//            多行 data 拼接、注释行（以 `:` 开头）以及 `[DONE]` 结束标记。
-//  依赖：仅 Foundation。
-//  使用方：OpenAICompatibleClient / AnthropicClient / GeminiClient（三者共用同一解析器）。
+//  把任意切分的 SSE 字节流增量解析成 `SSEEvent`，正确处理跨 chunk 的半行、
+//  `\r\n` 与 `\n` 两种换行、`event:` / `data:` / `id:` / `retry:` 字段、
+//  多行 data 拼接、注释行（以 `:` 开头）以及 `[DONE]` 结束标记。
 //
 
 import Foundation

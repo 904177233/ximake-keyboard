@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
-"""il_install.py —— 用 iloader 把未签名 IPA 签名并装到 iPhone 的一键脚本。
+"""il_install.py，用 iloader 把未签名 IPA 签名并装到 iPhone 的一键脚本。
 
-放在 `scripts/lead/` 下，与其它 Lead 只读检查器并列。它**不是构建的一部分**，
+放在 `scripts/lead/` 下，与其它 Lead 只读检查器并列。它不是构建的一部分，
 不进六闸门，只是一个「Windows 上装机」的自动化助手。
 
 前置条件：
   1. iPhone 已用数据线接上、已信任本机、Apple Mobile Device Service 在跑
      （认不出设备时按 docs/04 §4.2 清幽灵设备）；
-  2. iloader 已装好，并且**带 CDP 端口**启动（见下面用法）；
+  2. iloader 已装好，并且带 CDP 端口启动（见下面用法）；
   3. iloader 里已登录 Apple ID（首次会弹 2FA 验证码，需人工填）。
 
 用法：
@@ -30,7 +30,7 @@
   - CDP 握手必须带 `--remote-allow-origins=*`，否则 WebSocket 403；
   - 「打开」文件对话框是原生 Win32（类名 #32770），不走 CDP：
     文件名输入框用 WM_SETTEXT(0x000C)，「打开」按钮用 BM_CLICK(0x00F5)；
-  - 导入 IPA 后 iloader **会自动开始签名安装**，不需要也不应该再点按钮
+  - 导入 IPA 后 iloader 会自动开始签名安装，不需要也不应该再点按钮
     （旧版立刻找按钮会误判 NO_SIGN_BUTTON，见下方观察窗口）。
 """
 
@@ -271,7 +271,7 @@ def main():
         time.sleep(6)
 
     # 导入 IPA 后 iloader 的行为分两种（2026-10-25 实测为第①种）：
-    #   ① 自动开始签名安装 —— 此时**不该再点任何按钮**，直接等 "Operation completed"；
+    #   ① 自动开始签名安装，此时不该再点任何按钮，直接等 "Operation completed"；
     #   ② 弹出确认框等用户点「Sign & Install App」。
     # 旧版在填完文件框后立刻找按钮，第①种情况下按钮还没出现，误判 NO_SIGN_BUTTON。
     # 所以先观察一段时间：出现进度/结果就直接进等待循环，没出现再去找按钮点。

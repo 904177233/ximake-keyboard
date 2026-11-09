@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""check_workflow_bash.py —— 在 Windows 上校验 GitHub Actions workflow 里的 shell 脚本语法。
+"""check_workflow_bash.py，在 Windows 上校验 GitHub Actions workflow 里的 shell 脚本语法。
 
 背景
 ----
 CI 上的 workflow 跑在 Ubuntu/macOS 的 /bin/bash 上；Windows 本地没有 bash，
 只有 Git for Windows 自带的 bash。YAML 层 `yaml.safe_load` 能过，不代表里面的
-shell 能跑 —— 少一个 fi、多一个 done，只有 bash 自己知道。
+shell 能跑，少一个 fi、多一个 done，只有 bash 自己知道。
 
 本脚本做三件事：
   1) 用 yaml.safe_load 解析 workflow；

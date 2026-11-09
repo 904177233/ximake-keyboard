@@ -2,12 +2,9 @@
 //  ConfigStore.swift
 //  ios/Shared/Storage
 //
-//  模块职责：`ConfigSnapshot` 的持久化实现（`ConfigStoring`）。负责
-//            ① JSON 编解码；② 版本迁移（v1 → v2）；③ 首次启动的默认快照工厂；
-//            ④ 保存后回写归一化后的 version。
-//  依赖：Foundation、`Models`（ConfigSnapshot）、SharedStore。
-//  使用方：宿主 App（AppState 持有一个 `ConfigStore`）、键盘扩展（读取默认 Provider）、
-//          `PasteboardBridge`（导入后落盘）、设置页「恢复默认」。
+//  `ConfigSnapshot` 的持久化实现（`ConfigStoring`）。负责
+//  ① JSON 编解码；② 版本迁移（v1 → v2）；③ 首次启动的默认快照工厂；
+//  ④ 保存后回写归一化后的 version。
 //
 //  存储位置：`SharedStore.shared` 的 `moyu.config.snapshot` 键（JSON Data）。
 //  迁移规则：见 `migrate(_:)` 与 `ios/Shared/Storage/README.md`。
@@ -51,7 +48,7 @@ public final class ConfigStore: ConfigStoring, @unchecked Sendable {
     /// - Parameters:
     ///   - store: 共享存储，默认 `.shared`。
     ///   - key: 存储键，默认 `ConfigStore.defaultKey`（`moyu.config.snapshot`）。
-    ///     键盘扩展**不要**另起一个新键（否则 App 与扩展读到的不是同一份配置）。
+    ///     键盘扩展不要另起一个新键（否则 App 与扩展读到的不是同一份配置）。
     public init(store: SharedStore = .shared, key: String = ConfigStore.defaultKey) {
         self.store = store
         self.key = key
@@ -121,11 +118,11 @@ public final class ConfigStore: ConfigStoring, @unchecked Sendable {
     ///   （优先沿用 `providers` 里已存在的生图预设，其次 `preset-seedream`）。
     /// - v1 的 `replyCount` 若越界（老版本没有 clamp）→ 收敛到 1...5。
     /// - `providers` 为空（极端损坏）→ 灌入内置预设。
-    /// - 迁移只改内存中的结构，**不隐式写盘**；下一次 `save(_:)` 时自然落盘为 v2。
+    /// - 迁移只改内存中的结构，不隐式写盘；下一次 `save(_:)` 时自然落盘为 v2。
     ///
-    /// 另有两个**不升版本**的纯追加字段：`enableAISuggestion` / `enableTypoCorrection`
+    /// 另有两个不升版本的纯追加字段：`enableAISuggestion` / `enableTypoCorrection`
     /// （都默认 `true`）。它们缺失时由 `ConfigSnapshot.init(from:)` 的容错解码填默认值，
-    /// 因此不需要版本迁移分支，老快照读出来就是「两个开关都开」——与老版本的实际行为一致。
+    /// 因此不需要版本迁移分支，老快照读出来就是「两个开关都开」，与老版本的实际行为一致。
     ///
     /// - Parameter snapshot: 从磁盘解码出的快照。
     /// - Returns: 已迁移到当前版本的新快照。

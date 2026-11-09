@@ -2,11 +2,9 @@
 //  AIError.swift
 //  ios/Shared/Networking
 //
-//  模块职责：把网络层与解析层所有失败原因收敛成一个面向用户的错误类型，
-//            提供中文 errorDescription（一句话说清发生什么）与
-//            recoverySuggestion（一句话说清下一步该做什么）。
-//  依赖：仅 Foundation（本文件 import Foundation，不 import UIKit/SwiftUI）。
-//  使用方：Networking 全部客户端、键盘扩展（AI 结果卡片错误态）、宿主 App（测试连接按钮）。
+//  把网络层与解析层所有失败原因收敛成一个面向用户的错误类型，
+//  提供中文 errorDescription（一句话说清发生什么）与
+//  recoverySuggestion（一句话说清下一步该做什么）。
 //
 
 import Foundation
@@ -66,7 +64,7 @@ public enum AIError: LocalizedError, Equatable, Sendable {
         case .decoding:
             return "返回数据格式无法识别"
         case let .contentRejected(reason):
-            // v2：**不要把 reason 拼在「内容被拒绝：」后面**。
+            // v2：不要把 reason 拼在「内容被拒绝：」后面。
             // `contentRejected` 现在被复用为「正文为空」的兜底错误（推理模型把
             // token 预算全烧在思维链上、finish_reason=length 等），那些 reason
             // 讲的是长度/token 问题，前面加「内容被拒绝：」会让人以为说了敏感话。
@@ -78,7 +76,7 @@ public enum AIError: LocalizedError, Equatable, Sendable {
         case .cancelled:
             return "已取消"
         case let .unknown(message):
-            // v2.3：**把 message 透出来**。之前这里固定返回「发生了未知错误」，
+            // v2.3：把 message 透出来。之前这里固定返回「发生了未知错误」，
             // 把调用方精心构造的那句话（比如「模型没有返回内容」）整个丢掉了，
             // 用户只看到一句无信息量的「未知错误」，根本没法判断该改什么。
             if !message.isEmpty {

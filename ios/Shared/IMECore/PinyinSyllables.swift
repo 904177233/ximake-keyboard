@@ -2,12 +2,10 @@
 //  PinyinSyllables.swift
 //  墨语 · 输入法内核（IMECore）
 //
-//  模块职责：无声调拼音音节表（421 个）与音节切分 DP，供词库加载时建立首字母索引、
-//            以及引擎做多音节切分使用。
-//            本文件由 tools/dict/gen_swift_syllables.py 从 tools/dict/syllable_table.py
-//            自动生成，请勿手工编辑；修改音节表请改 Python 源后重新生成。
-//  依赖：Foundation
-//  使用方：PinyinEngine（九宫格音节表）、FuzzyPinyin（切分）
+//  无声调拼音音节表（421 个）与音节切分 DP，供词库加载时建立首字母索引、
+//  以及引擎做多音节切分使用。
+//  本文件由 tools/dict/gen_swift_syllables.py 从 tools/dict/syllable_table.py
+//  自动生成，请勿手工编辑；修改音节表请改 Python 源后重新生成。
 //
 
 import Foundation
@@ -130,7 +128,7 @@ public enum PinyinSyllables {
         return best[count]
     }
 
-    /// 把连写全拼切分成**恰好** `segments` 个音节（用于还原"词有几个字"）。
+    /// 把连写全拼切分成恰好 `segments` 个音节（用于还原"词有几个字"）。
     ///
     /// 词库里的全拼是逐字生成的，因此"汉字个数 == 音节个数"是硬约束：
     /// `zhongguo`（2 字）→ `["zhong", "guo"]`；`xian`（1 字）→ `["xian"]`；

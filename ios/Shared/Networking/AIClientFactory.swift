@@ -2,10 +2,8 @@
 //  AIClientFactory.swift
 //  ios/Shared/Networking
 //
-//  模块职责：根据 `AIProviderConfig.kind`（对话）或 baseURL/模型名（生图）创建对应客户端，
-//            是 UI 与网络层之间唯一的入口，保证"换服务商不改 UI 代码"。
-//  依赖：仅 Foundation + Models。
-//  使用方：键盘扩展 AIService、宿主 App PlaygroundView / ImagePanelView / 设置页测试按钮。
+//  根据 `AIProviderConfig.kind`（对话）或 baseURL/模型名（生图）创建对应客户端，
+//  是 UI 与网络层之间唯一的入口，保证"换服务商不改 UI 代码"。
 //
 
 import Foundation

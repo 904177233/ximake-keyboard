@@ -2,10 +2,7 @@
 //  ChatMessage.swift
 //  ios/Shared/Models
 //
-//  模块职责：对话消息的最小数据单元（角色 + 文本），是 Prompt 渲染与网络请求的共同货币。
-//  依赖：仅 Foundation。
-//  使用方：Prompts（PromptLibrary.render 产出 [ChatMessage]）、Networking（三个客户端把
-//          [ChatMessage] 映射为各自协议的 JSON）、UI（PlaygroundView 展示对话）。
+//  对话消息的最小数据单元（角色 + 文本），是 Prompt 渲染与网络请求的共同货币。
 //
 
 import Foundation

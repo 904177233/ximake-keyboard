@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """简拼候选排序探针（诊断用，不参与打包）。
 
-用途：给「聊天高频词权重表 + 简拼多样性」这次修复留一份**改前 / 改后对照**：
+用途：给「聊天高频词权重表 + 简拼多样性」这次修复留一份改前 / 改后对照：
     python tools/dict/_probe_initials_rank.py            # 打当前词库的简拼前 5 候选
     python tools/dict/_probe_initials_rank.py --words 我去 好的   # 查这批词在词库里的落点
 

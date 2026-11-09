@@ -2,11 +2,8 @@
 //  AIProviderConfig.swift
 //  ios/Shared/Models
 //
-//  模块职责：一个 AI 服务商的完整配置（协议类型 / baseURL / 模型 / 采样参数 / 自定义 header），
-//            是 App 与键盘扩展之间搬运的核心数据。
-//  依赖：Foundation、ProviderKind。
-//  使用方：Networking（三个 LLM 客户端与生图路由取参数）、Storage（ConfigSnapshot 持久化）、
-//          UI（ProviderEditorView 编辑、SettingsView 列表）。
+//  一个 AI 服务商的完整配置（协议类型 / baseURL / 模型 / 采样参数 / 自定义 header），
+//  是 App 与键盘扩展之间搬运的核心数据。
 //
 
 import Foundation
@@ -140,7 +137,7 @@ public struct AIProviderConfig: Identifiable, Codable, Equatable, Sendable {
         !normalizedBaseURL.isEmpty && !(imageModel ?? "").isEmpty
     }
 
-    /// 该 Provider 是否可以用于**文本对话**。
+    /// 该 Provider 是否可以用于文本对话。
     ///
     /// 三个不满足的情形：
     /// 1. 未填模型名（生图专用预设的 `model` 为空）；
@@ -168,7 +165,7 @@ public struct AIProviderConfig: Identifiable, Codable, Equatable, Sendable {
         return true
     }
 
-    /// 该 Provider 是否可以用于**生图**（有 imageModel 且有 baseURL）。
+    /// 该 Provider 是否可以用于生图（有 imageModel 且有 baseURL）。
     public var supportsImage: Bool {
         isImageConfigured
     }

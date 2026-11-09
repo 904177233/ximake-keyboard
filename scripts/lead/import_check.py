@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """Swift import 覆盖粗查（Lead 专用）。
 
-Swift 的 import 是**按文件**生效的，同模块不共享。在 Windows 上无法编译时，
+Swift 的 import 是按文件生效的，同模块不共享。在 Windows 上无法编译时，
 「用了 UIKit/SwiftUI/Combine 的符号但没 import 对应框架」是最常见的批量编译错误之一。
 
 本脚本对每个 .swift 文件：
@@ -99,7 +99,7 @@ UIKIT_TOKENS = [
     "UINavigationController", "UIStoryboard", "UIButton", "UITableView",
 ]
 
-# SwiftUI 用**词边界正则**判定：`Text(` 必须前面不是标识符字符（否则会误中 insertText( / extractText(），
+# SwiftUI 用词边界正则判定：`Text(` 必须前面不是标识符字符（否则会误中 insertText( / extractText(），
 # 且中间不能有点号（否则会误中 UIKit 的 UIColor. 之类无关项）。
 SWIFTUI_REGEXES = [
     r"(?<![\w.])Text\(",

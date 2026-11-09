@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""link_check.py —— 文档路径/链接真实性校验（墨语 iOS 输入法 · QA）
+"""link_check.py，文档路径/链接真实性校验（墨语 iOS 输入法 · QA）
 
 用途
 ----
@@ -10,18 +10,18 @@
 
 本脚本扫描指定 Markdown/文本文件，抽出所有"看起来像仓库内路径"的片段，逐个检查：
 
-  1. Markdown 链接 `[label](path)` —— 相对路径按**该 Markdown 文件所在目录**解析
-  2. 行内代码里的仓库路径 `` `ios/Config/Base.xcconfig` `` —— 按**仓库根**解析
+  1. Markdown 链接 `[label](path)`，相对路径按该 Markdown 文件所在目录解析
+  2. 行内代码里的仓库路径 `` `ios/Config/Base.xcconfig` ``，按仓库根解析
   3. 目录树代码块里的 `├── xxx/`（可选，默认关闭）
 
-并按**严重度**分级：
+并按严重度分级：
   - P1 LINK-MISSING   ：明确写成「文件路径」且带扩展名（`.swift/.json/.md/.py/.yml/.plist/.xcconfig`…）但不存在
-  - P2 LINK-MISSING-DIR：以 `/` 结尾的**目录**不存在
+  - P2 LINK-MISSING-DIR：以 `/` 结尾的目录不存在
   - P2 LINK-MISSING-REL：Markdown 链接目标不存在（相对该 md 文件解析）
   - P2 LINK-UNVERIFIABLE：提到了但无法判断（含占位符 `<...>`、`你的名字`、外部 URL 等）
 
-同时会输出「**反向检查**」：仓库里存在的关键构件是否被文档提到（覆盖度提示），
-以及「**未来文件**」白名单（阶段二才会落盘的东西），避免阶段一刷一堆假警报。
+同时会输出「反向检查」：仓库里存在的关键构件是否被文档提到（覆盖度提示），
+以及「未来文件」白名单（阶段二才会落盘的东西），避免阶段一刷一堆假警报。
 
 用法
 ----
@@ -36,8 +36,8 @@
 
 设计原则
 --------
-* **零误报优先**：识别不出是不是路径的一律跳过，不做模糊猜测。
-* 允许**未来文件白名单**（`FUTURE_OK`）：阶段二才落盘的构件单独列在报告末尾，
+* 零误报优先：识别不出是不是路径的一律跳过，不做模糊猜测。
+* 允许未来文件白名单（`FUTURE_OK`）：阶段二才落盘的构件单独列在报告末尾，
   不打扰 P0/P1/P2 计数，但会明确打印"以下路径文档已引用、仓库暂未落盘"。
 * 纯标准库，无第三方依赖；Windows 控制台 UTF-8 已由 qa_common 修复。
 """
@@ -77,7 +77,7 @@ FILE_EXTS = {
     ".c", ".h", ".m", ".mm", ".html", ".css",
 }
 
-#: 明显不是仓库内路径的片段（URL、绝对路径、占位符）—— 直接跳过
+#: 明显不是仓库内路径的片段（URL、绝对路径、占位符），直接跳过
 SKIP_PATTERNS = [
     re.compile(r"^(?:https?|ftp|mailto):", re.I),
     # 省略协议头的域名（`developer.apple.com/library/.../CustomKeyboard.html`、
@@ -95,7 +95,7 @@ SKIP_PATTERNS = [
     re.compile(r"^(?:Payload|ipa_check|build|DerivedData)[\\/]", re.I),
 ]
 
-#: 文档里合法提到、但当前仓库确实还没有的路径 —— 不算错，单独提示。
+#: 文档里合法提到、但当前仓库确实还没有的路径，不算错，单独提示。
 #: 维护方式：某个文件落盘后，就把它从这张表里删掉。
 FUTURE_OK = {
     "ios/AIKeyboard.xcodeproj",
@@ -296,7 +296,7 @@ def extract_tree_refs(doc_rel: str, text: str) -> list[Ref]:
     README 的「目录结构」是一个 ```text 代码块，里面的条目不是反引号路径，
     前两条正则都抽不到；但恰恰是这里最容易写出"文档有、仓库没有"的假目录。
 
-    只解析**根节点是仓库一级目录**的代码块（`README.md` / `docs` / `ios` …）；
+    只解析根节点是仓库一级目录的代码块（`README.md` / `docs` / `ios` …）；
     docs/04 里画的是「解压后的 IPA 包结构」（`Payload/`、`AIKeyboard.app/`），
     不是仓库目录树，必须排除，否则会刷一堆假死链。
     """

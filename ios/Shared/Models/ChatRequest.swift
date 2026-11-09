@@ -2,9 +2,7 @@
 //  ChatRequest.swift
 //  ios/Shared/Models
 //
-//  模块职责：一次文本对话请求的参数载体（消息列表 + 采样参数 + 是否流式）。
-//  依赖：仅 Foundation、ChatMessage。
-//  使用方：Networking（LLMClient.stream / complete 的入参）、UI（构造请求）。
+//  一次文本对话请求的参数载体（消息列表 + 采样参数 + 是否流式）。
 //
 
 import Foundation

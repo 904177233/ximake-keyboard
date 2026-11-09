@@ -2,10 +2,8 @@
 //  PhraseLibrary.swift
 //  墨语 · 输入法内核（IMECore）
 //
-//  模块职责：用户自定义短语库的增删改查与占位符展开（`{date}`/`{time}`/`{clipboard}`），
-//            数据经 SharedStore 持久化，App 与键盘扩展共用同一份。
-//  依赖：Foundation、SharedStore（同 target，仅使用公开方法）
-//  使用方：host-app-ui 的 SharedBridge.PhraseStore、keyboard-ui 的短语面板
+//  用户自定义短语库的增删改查与占位符展开（`{date}`/`{time}`/`{clipboard}`），
+//  数据经 SharedStore 持久化，App 与键盘扩展共用同一份。
 //
 
 import Foundation

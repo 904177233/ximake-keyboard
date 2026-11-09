@@ -2,17 +2,14 @@
 //  SharedStore.swift
 //  ios/Shared/Storage
 //
-//  模块职责：App 与键盘扩展之间的共享存储门面。按三级策略选择底层容器：
-//            ① App Group `UserDefaults(suiteName:)`（配置了 entitlements 且系统可用）
-//            ② `UserDefaults.standard`（同一进程内可用，App 与扩展各自独立）
-//            ③ 内存字典（最后兜底，写不落盘但不会崩溃）
-//  依赖：Foundation。
-//  使用方：ConfigStore（配置快照）、PromptLibrary（自定义模板）、PhraseLibrary（短语，IMECore）、
-//          宿主 App（首次启动标记 / 外观模式）、键盘扩展。
+//  App 与键盘扩展之间的共享存储门面。按三级策略选择底层容器：
+//  ① App Group `UserDefaults(suiteName:)`（配置了 entitlements 且系统可用）
+//  ② `UserDefaults.standard`（同一进程内可用，App 与扩展各自独立）
+//  ③ 内存字典（最后兜底，写不落盘但不会崩溃）
 //
 //  现实约束（免费 Apple ID，见 docs/01 §6）：
 //  免费个人团队签名无法为键盘扩展配置 App Group，因此 `isAppGroupAvailable` 通常为 false，
-//  App 与键盘扩展**各自持有独立的 UserDefaults**。用户可走的路径有两条：
+//  App 与键盘扩展各自持有独立的 UserDefaults。用户可走的路径有两条：
 //    1) 在宿主 App 里「导出配置」→ 复制到命名剪贴板 `com.moyu.config` → 键盘内「导入配置」；
 //    2) 购买付费开发者账号后补 App Group（`group.com.moyu.keyboard`），代码无需改动即自动升级到 ①。
 //  API Key 始终只存在 Keychain。
@@ -32,7 +29,7 @@ import Foundation
 /// 说明：
 /// - `defaults` 永远非 nil 且可直接使用：无 App Group 时返回 `.standard`，
 ///   再不可用时返回一个进程内的 `UserDefaults` 实例（不会崩溃，但重启后丢失）。
-/// - 本类型**不缓存**值，保证 App 与扩展在各自进程里读到的都是底层最新数据。
+/// - 本类型不缓存值，保证 App 与扩展在各自进程里读到的都是底层最新数据。
 public final class SharedStore: @unchecked Sendable {
 
     /// 全局单例。
@@ -241,7 +238,7 @@ public final class SharedStore: @unchecked Sendable {
 
     /// 非 App Group 时给键加前缀，避免与宿主 App 自身偏好同名互踩。
     ///
-    /// App Group 可用时**不加前缀**（保持与旧版 / 文档一致的原始键名）。
+    /// App Group 可用时不加前缀（保持与旧版 / 文档一致的原始键名）。
     private func scopedKey(_ key: String) -> String {
         guard !isAppGroupAvailable else { return key }
         guard !key.hasPrefix(SharedStore.fallbackPrefix) else { return key }

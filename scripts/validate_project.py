@@ -5,7 +5,7 @@
 用途
 ----
 `scripts/gen_xcodeproj.py` 用 Python 程序化生成 `ios/AIKeyboard.xcodeproj/project.pbxproj`，
-本脚本是它的**独立第二道门**：不依赖生成脚本的任何内部数据结构，
+本脚本是它的独立第二道门：不依赖生成脚本的任何内部数据结构，
 完全重新解析落盘的 pbxproj 文本，逐项校验结构正确性。
 
 因为开发者（以及 CI）都在 Windows / Linux 上，没有 Xcode 可用来"打开工程验证"，
@@ -96,7 +96,7 @@ RE_UUID = re.compile(r"^[0-9A-Fa-f]{24}$")
 EMBED_DST_SUBFOLDER_PLUGINS = 13
 
 #: 共享资源目录（folder reference，两个 target 都要引；目录不存在时降级为 WARNING）。
-#: ⚠️ 目录名必须是 `dict`，**不能是 `Resources`**：folder reference 会把文件夹名原样复制到
+#: 注意：目录名必须是 `dict`，不能是 `Resources`：folder reference 会把文件夹名原样复制到
 #: bundle 根，而 iOS 27 的 installd / IXPlaceholder 会拒绝 app bundle 根目录下存在名为
 #: Resources 的目录（真机实测：空目录也会导致安装失败，IXErrorDomain Code=13 Missing bundle ID）。
 SHARED_RESOURCES_REL = "Shared/dict"

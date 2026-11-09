@@ -2,12 +2,9 @@
 //  FuzzyPinyin.swift
 //  墨语 · 输入法内核（IMECore）
 //
-//  模块职责：模糊音（fuzzy pinyin）——把「南方口音拼音」折叠成等价类，让 zh/z、ch/c、sh/s、
-//            in/ing、en/eng、l/n、an/ang、ian/iang、uan/uang 不分的用户也能打出正确候选。
-//            本文件只做字符串变换 + 词库命中收集，不改变候选打分公式（降权由引擎侧统一处理）。
-//  依赖：Foundation、PinyinSyllables（421 音节表与最少音节切分）
-//  使用方：PinyinEngine（候选生成时展开模糊变体）、IMEKit（门面暴露与诊断）、
-//          keyboard-ui 的 ExtensionSettingsSheet（设置页开关）
+//  模糊音（fuzzy pinyin），把「南方口音拼音」折叠成等价类，让 zh/z、ch/c、sh/s、
+//  in/ing、en/eng、l/n、an/ang、ian/iang、uan/uang 不分的用户也能打出正确候选。
+//  本文件只做字符串变换 + 词库命中收集，不改变候选打分公式（降权由引擎侧统一处理）。
 //
 
 import Foundation
@@ -16,7 +13,7 @@ import Foundation
 
 /// 模糊音等价规则（一条规则 = 一对可互换的音节片段）。
 ///
-/// 规则只作用于**音节内部**：`zhong` → `zong` 合法，但不会把跨音节的 `z` 与 `h`
+/// 规则只作用于音节内部：`zhong` → `zong` 合法，但不会把跨音节的 `z` 与 `h`
 /// 硬拼成 `zh`（那种做法会产生 `xingi` 这类垃圾串）。
 public enum FuzzyPinyinRule: String, CaseIterable, Codable, Sendable {
     /// `zh` 与 `z` 不分，如 `zhong` / `zong`。
@@ -178,7 +175,7 @@ public enum FuzzyPinyin {
 
     // MARK: 公开 API
 
-    /// 返回一个音节的等价变体（**含自身且自身在第 0 位**，去重、限流）。
+    /// 返回一个音节的等价变体（含自身且自身在第 0 位，去重、限流）。
     ///
     /// 例：`variants(of: "zong", rules: [.zhZ])` → `["zong", "zhong"]`。
     /// 只有通过 `PinyinSyllables.isSyllable` 校验的变体才会返回，避免产出非法音节。
@@ -205,7 +202,7 @@ public enum FuzzyPinyin {
         return results
     }
 
-    /// 展开整串拼音的模糊变体（**含原文且原文在第 0 位**，按改动数从少到多排序）。
+    /// 展开整串拼音的模糊变体（含原文且原文在第 0 位，按改动数从少到多排序）。
     ///
     /// 例：`expand("zongguo", rules: [.zhZ])` → `["zongguo", "zhongguo"]`。
     /// 末尾还没打完的音节会被保留为尾巴原样拼接（`zongg` → `["zongg", "zhongg"]`），

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""墨语（Moyu）iOS 输入法 —— QA 脚本公共库。
+"""墨语（Moyu）iOS 输入法，QA 脚本公共库。
 
 Python 3.8+ 标准库，零第三方依赖，可在 Windows 直接运行。
 

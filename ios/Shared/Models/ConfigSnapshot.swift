@@ -2,11 +2,8 @@
 //  ConfigSnapshot.swift
 //  ios/Shared/Models
 //
-//  模块职责：App 与键盘扩展之间共享的**完整配置快照**（服务商列表 + 默认项 + 偏好开关）。
-//            这是唯一被序列化成 JSON 放进 App Group / UserDefaults / 剪贴板的数据结构。
-//  依赖：仅 Foundation、AIProviderConfig。
-//  使用方：Storage（ConfigStore 读写、PasteboardBridge 导入导出）、
-//          UI（AppConfigStore 构造、SettingsView 编辑）、键盘扩展（读取默认 Provider）。
+//  App 与键盘扩展之间共享的完整配置快照（服务商列表 + 默认项 + 偏好开关）。
+//  这是唯一被序列化成 JSON 放进 App Group / UserDefaults / 剪贴板的数据结构。
 //
 
 import Foundation
@@ -27,7 +24,7 @@ public struct ConfigSnapshot: Codable, Equatable, Sendable {
     public var version: Int
     /// 用户配置的全部服务商（含内置预设的副本与自定义条目）。
     public var providers: [AIProviderConfig]
-    /// 默认**对话**服务商的 id（指向 `providers` 中某条的 `id`）。
+    /// 默认对话服务商的 id（指向 `providers` 中某条的 `id`）。
     public var defaultProviderID: String?
     /// 默认语气（润色/扩写/回复建议会用到），例如 "自然"。
     public var defaultTone: String
@@ -39,7 +36,7 @@ public struct ConfigSnapshot: Codable, Equatable, Sendable {
     public var enableLearning: Bool
     /// 默认生图尺寸，取值形如 "1024x1024" / "864x1152"。
     public var imageSize: String
-    /// 默认**生图**服务商的 id（v2 新增）。与 `defaultProviderID` 相互独立：
+    /// 默认生图服务商的 id（v2 新增）。与 `defaultProviderID` 相互独立：
     /// 对话与生图可以是两家不同的服务商（例如 DeepSeek 对话 + 即梦生图）。
     public var imageProviderID: String?
     /// 是否启用「AI 联想词」胶囊（候选栏尾部独立区域的上下文猜测词），默认开启。
