@@ -201,10 +201,10 @@ public final class PinyinEngine {
             position += 1
             // 全拼对不上了（wb 不是任何拼音的开头），但简拼还能试：wbzd -> 我不知道、wcgl -> 我吃过了。
             // 以前这里直接 break，多字母简拼一次都没试过，只能一个字母一个字地拼（我从个了）。
-            if range.isEmpty, position - start > 6 { break }
-
             let sub = Array(input[start..<position])
             let subString = String(decoding: sub, as: UTF8.self)
+            // 词库里没有、只在新词表里的长词（moyujianpan）也要能走到底
+            if range.isEmpty, position - start > 6, hotWords?.hasPrefix(subString) != true { break }
             // 这串字母本身就是一个音节时，切成两个音节的词不加奖励：lve 是「略」，不是 lv'e（绿萼）
             let oneSyllable = PinyinSyllables.isSyllable(subString)
             var matchedExact = false

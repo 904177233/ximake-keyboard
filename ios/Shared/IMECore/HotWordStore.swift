@@ -22,6 +22,8 @@ public final class HotWordStore {
 
     private var byKey: [String: [Word]] = [:]
     private var byInitials: [String: [Word]] = [:]
+    /// 所有全拼的开头（引擎查到一半判断还要不要往下查）。
+    private var prefixes: Set<String> = []
 
     /// 一共多少个词。
     public private(set) var count = 0
@@ -47,6 +49,11 @@ public final class HotWordStore {
                   syllables.allSatisfy({ PinyinSyllables.isSyllable($0) }) else { continue }
             let word = Word(text: text, key: syllables.joined(), syllables: syllables, frequency: min(frequency, 200_000))
             byKey[word.key, default: []].append(word)
+            var prefix = ""
+            for letter in word.key {
+                prefix.append(letter)
+                prefixes.insert(prefix)
+            }
             byInitials[String(syllables.compactMap(\.first)), default: []].append(word)
             count += 1
         }
@@ -57,6 +64,11 @@ public final class HotWordStore {
     /// 全拼正好是 key 的词。
     public func words(forKey key: String) -> [Word] {
         byKey[key] ?? []
+    }
+
+    /// 有没有哪个词的全拼以 text 开头。
+    public func hasPrefix(_ text: String) -> Bool {
+        prefixes.contains(text)
     }
 
     /// 简拼正好是 initials 的词（两个字母以上才查）。

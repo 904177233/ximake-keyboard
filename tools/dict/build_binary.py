@@ -413,7 +413,7 @@ def write_next_words(builder: Builder, path: Path) -> int:
         follow = [w for w, c in counter.most_common(12) if c >= 2 and w not in words][:FOLLOW_KEEP]
         follow += [w for w in followers.get(head, []) if w not in words and w not in follow][:max(0, FOLLOW_KEEP - len(follow))]
         # 第五列：连着出现很多次的，整句转换时也加分
-        strong = [w for w, c in counter.most_common(30) if c >= TATOEBA_STRONG and w not in SENTENCE_PARTICLES]
+        strong = [w for w, c in counter.most_common() if c >= TATOEBA_STRONG and w not in SENTENCE_PARTICLES]
         if words or rest or follow or strong:
             lines.append(f"{head}\t{' '.join(words)}\t{' '.join(rest)}\t{' '.join(follow)}\t{' '.join(strong)}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
