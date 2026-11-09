@@ -37,6 +37,7 @@ struct PanelRootView: View {
                 EmptyView()
             }
         }
+        .hideEdgeBlur()
         .environment(\.palette, session.palette)
     }
 }

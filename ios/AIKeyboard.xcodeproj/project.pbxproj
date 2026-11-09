@@ -79,6 +79,7 @@
 		85F8D037E1C0B4F5E8DDE522 /* ChatModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5716BEA91985B2AAED6FD94 /* ChatModel.swift */; };
 		FF36DFE49AE80ED3A89B62D2 /* ImageHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 285DFA4263F04A661D2AC1E2 /* ImageHistory.swift */; };
 		52602BCF8F9671A5C924DFA3 /* SuggestEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D3E12D9F7ECCBEC2294C1D /* SuggestEngine.swift */; };
+		41DEFB129B8DF94316876BAE /* ScrollEdgeBlur.swift in Sources */ = {isa = PBXBuildFile; fileRef = E174A61432AF6CCC5CCBBCD0 /* ScrollEdgeBlur.swift */; };
 		39C8DC06CF6485AFBD2B47A6 /* TopBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BA320ACDC57132C1786A2F1 /* TopBarView.swift */; };
 		5FCD42FE57AEE55B89117769 /* HotWordUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F5B7E87127B28791077E14C /* HotWordUpdater.swift */; };
 		541ED14A00F120C42E0F3585 /* KeyboardSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4088504AFC6B41895A4BFE1 /* KeyboardSession.swift */; };
@@ -194,6 +195,7 @@
 		B5716BEA91985B2AAED6FD94 /* ChatModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/AI/ChatModel.swift; sourceTree = SOURCE_ROOT; };
 		285DFA4263F04A661D2AC1E2 /* ImageHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/AI/ImageHistory.swift; sourceTree = SOURCE_ROOT; };
 		09D3E12D9F7ECCBEC2294C1D /* SuggestEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/AI/SuggestEngine.swift; sourceTree = SOURCE_ROOT; };
+		E174A61432AF6CCC5CCBBCD0 /* ScrollEdgeBlur.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Bar/ScrollEdgeBlur.swift; sourceTree = SOURCE_ROOT; };
 		0BA320ACDC57132C1786A2F1 /* TopBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Bar/TopBarView.swift; sourceTree = SOURCE_ROOT; };
 		8F5B7E87127B28791077E14C /* HotWordUpdater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Core/HotWordUpdater.swift; sourceTree = SOURCE_ROOT; };
 		D4088504AFC6B41895A4BFE1 /* KeyboardSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Core/KeyboardSession.swift; sourceTree = SOURCE_ROOT; };
@@ -359,6 +361,7 @@
 		A7E25B106C293E90B8830C42 /* Bar */ = {
 			isa = PBXGroup;
 			children = (
+				E174A61432AF6CCC5CCBBCD0 /* ScrollEdgeBlur.swift */,
 				0BA320ACDC57132C1786A2F1 /* TopBarView.swift */,
 			);
 			name = Bar;
@@ -747,6 +750,7 @@
 				85F8D037E1C0B4F5E8DDE522 /* ChatModel.swift in Sources */,
 				FF36DFE49AE80ED3A89B62D2 /* ImageHistory.swift in Sources */,
 				52602BCF8F9671A5C924DFA3 /* SuggestEngine.swift in Sources */,
+				41DEFB129B8DF94316876BAE /* ScrollEdgeBlur.swift in Sources */,
 				39C8DC06CF6485AFBD2B47A6 /* TopBarView.swift in Sources */,
 				5FCD42FE57AEE55B89117769 /* HotWordUpdater.swift in Sources */,
 				541ED14A00F120C42E0F3585 /* KeyboardSession.swift in Sources */,

@@ -83,6 +83,7 @@ final class TopBarView: UIView {
         super.init(frame: frame)
         toolsScroll.showsHorizontalScrollIndicator = false
         toolsScroll.alwaysBounceHorizontal = false
+        toolsScroll.hideEdgeBlur()
         addSubview(toolsScroll)
 
         knob.setImage(Self.symbol("drop.fill", size: 17), for: .normal)
@@ -313,6 +314,7 @@ final class CandidateStripView: UIScrollView {
         super.init(frame: frame)
         showsHorizontalScrollIndicator = false
         alwaysBounceHorizontal = true
+        hideEdgeBlur()
         delaysContentTouches = false
         underline.layer.cornerRadius = 1.25
         addSubview(underline)

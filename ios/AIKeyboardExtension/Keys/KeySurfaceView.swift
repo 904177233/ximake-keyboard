@@ -597,6 +597,7 @@ final class T9SideStrip: UIScrollView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
+        hideEdgeBlur()
         layer.cornerRadius = 9
         showsVerticalScrollIndicator = false
         alwaysBounceVertical = false
