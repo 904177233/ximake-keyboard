@@ -1,9 +1,9 @@
 {
-  "version": "3.0.6",
-  "generated_at": "2026-11-07",
-  "entries": 274111,
-  "keys": 210265,
-  "bytes": 14495801,
+  "version": "3.0.7",
+  "generated_at": "2026-11-09",
+  "entries": 274161,
+  "keys": 210313,
+  "bytes": 14498922,
   "sources": [
     {
       "name": "jieba dict.txt",
@@ -29,6 +29,16 @@
       "name": "rime-ice cn_dicts/base.dict.yaml + 8105.dict.yaml",
       "license": "GPL-3.0",
       "url": "https://github.com/iDvel/rime-ice"
+    },
+    {
+      "name": "Tatoeba cmn_sentences",
+      "license": "CC BY 2.0 FR",
+      "url": "https://tatoeba.org"
+    },
+    {
+      "name": "wordfreq (English word list)",
+      "license": "CC BY-SA 4.0 (data)",
+      "url": "https://github.com/rspeer/wordfreq"
     }
   ]
 }

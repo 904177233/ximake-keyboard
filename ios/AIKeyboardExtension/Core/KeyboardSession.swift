@@ -112,6 +112,10 @@ final class KeyboardSession: ObservableObject {
     private var lastCommit = ""
     /// 上一次上屏的最后一个词（整句时是句子的最后一个词），用来记「后面常跟什么」。
     private var lastWord = ""
+    /// 英文模式下正在打的这个词（给补全用）。
+    private var englishWord = ""
+    /// 候选栏现在放的是英文补全。
+    private var showingEnglishCompletions = false
     private var documentIdentifier: UUID?
     private var isActive = false
     private var toastTask: Task<Void, Never>?
@@ -165,7 +169,40 @@ final class KeyboardSession: ObservableObject {
         setUpVoiceSignals()
         VoiceSignals.post(.ping)
         resumeVoice()
+        englishWord = ""
+        updateHotWordsIfNeeded()
         render()
+    }
+
+    // MARK: - 新词
+
+    /// 一天拉一次新词表。
+    private func updateHotWordsIfNeeded(force: Bool = false) {
+        guard prefs.autoUpdateHotWords || force, host?.hostHasFullAccess == true else {
+            if force { showToast("要先打开完全访问才能下载新词") }
+            return
+        }
+        HotWordUpdater.updateIfNeeded(force: force) { [weak self] count in
+            guard let self else { return }
+            if count != nil { self.kit.reloadHotWords() }
+            if force {
+                self.showToast(count.map { "新词已更新，共 \($0) 个" } ?? "没连上，过会儿再试")
+            }
+            self.render()
+        }
+    }
+
+    /// 设置页的「现在更新」。
+    func refreshHotWords() {
+        updateHotWordsIfNeeded(force: true)
+    }
+
+    /// 设置页显示的新词情况。
+    var hotWordStatus: String {
+        let count = kit.hotWordCount
+        guard count > 0, let date = HotWordUpdater.lastSuccess else { return "用的是内置词库" }
+        let days = Calendar.current.dateComponents([.day], from: date, to: Date()).day ?? 0
+        return "\(count) 个 · " + (days == 0 ? "今天更新" : "\(days) 天前更新")
     }
 
     /// 读配置。默认的那家没填 Key、别的填了的话，用填了的。
@@ -373,6 +410,12 @@ final class KeyboardSession: ObservableObject {
     /// 处理一个按键动作。
     func handle(_ action: KeyAction) {
         switch action {
+        case .letter, .backspace, .shift:
+            break
+        default:
+            endEnglishWord()
+        }
+        switch action {
         case let .letter(character):
             handleLetter(character)
         case let .t9(digit):
@@ -402,6 +445,8 @@ final class KeyboardSession: ObservableObject {
         case .language:
             commitTopCandidate()
             isChinese.toggle()
+            englishWord = ""
+            clearEnglishCompletions()
             shift = .off
             updateAutoCapitalization()
         case .showNumbers:
@@ -442,7 +487,51 @@ final class KeyboardSession: ObservableObject {
             leaveIdleState()
         } else {
             insert(String(output))
+            englishWord.append(output)
+            updateEnglishCompletions()
         }
+    }
+
+    // MARK: - 英文补全
+
+    /// 英文模式下按正在打的词给补全。
+    private func updateEnglishCompletions() {
+        guard !isChinese, prefs.englishSuggestions, !writesToDraft else {
+            clearEnglishCompletions()
+            return
+        }
+        let words = kit.english.completions(for: englishWord)
+        guard !words.isEmpty else {
+            clearEnglishCompletions()
+            return
+        }
+        predictions = words
+        aiSuggestions = []
+        suggest.cancel()
+        showingEnglishCompletions = true
+        showingTools = false
+    }
+
+    private func clearEnglishCompletions() {
+        guard showingEnglishCompletions else { return }
+        showingEnglishCompletions = false
+        predictions = []
+        showingTools = true
+    }
+
+    private func endEnglishWord() {
+        englishWord = ""
+        clearEnglishCompletions()
+    }
+
+    /// 点了英文补全：把正在打的词换成整个词，后面加空格。
+    private func chooseEnglishCompletion(_ word: String) {
+        for _ in englishWord {
+            host?.documentProxy.deleteBackward()
+        }
+        insert(word + " ")
+        englishWord = ""
+        clearEnglishCompletions()
     }
 
     private func handlePunctuation(_ text: String) {
@@ -485,8 +574,13 @@ final class KeyboardSession: ObservableObject {
         predictions = []
         aiSuggestions = []
         showingTools = true
+        showingEnglishCompletions = false
         suggest.cancel()
         updateAutoCapitalization()
+        if !isChinese, !englishWord.isEmpty {
+            englishWord.removeLast()
+            updateEnglishCompletions()
+        }
     }
 
     private func handleShift() {
@@ -762,6 +856,11 @@ final class KeyboardSession: ObservableObject {
         let words = aiSuggestions + predictions
         guard words.indices.contains(index) else { return }
         let word = words[index]
+        if showingEnglishCompletions, index >= aiSuggestions.count {
+            chooseEnglishCompletion(word)
+            render()
+            return
+        }
         insert(word)
         if index < aiSuggestions.count {
             suggest.recordAccepted(word)

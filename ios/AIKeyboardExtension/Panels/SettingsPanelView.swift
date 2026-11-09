@@ -279,6 +279,25 @@ struct SettingsPanelView: View {
                 _ = FuzzyPinyinSettings.shared.setEnabled(value)
                 session.updatePrefs { $0.fuzzyPinyin = value }
             }
+            toggleRow("背景跟随系统", isOn: session.prefs.systemBackground) { value in
+                session.updatePrefs { $0.systemBackground = value }
+            }
+            toggleRow("英文联想", isOn: session.prefs.englishSuggestions) { value in
+                session.updatePrefs { $0.englishSuggestions = value }
+            }
+            toggleRow("每天更新新词", isOn: session.prefs.autoUpdateHotWords) { value in
+                session.updatePrefs { $0.autoUpdateHotWords = value }
+            }
+            row("新词") {
+                HStack(spacing: 8) {
+                    Text(session.hotWordStatus)
+                        .font(.system(size: 12))
+                        .foregroundColor(palette.secondary.color)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    PanelChip(title: "现在更新", isSelected: false) { session.refreshHotWords() }
+                }
+            }
             row("按键震动") {
                 segmented(KeyboardPrefs.HapticLevel.allCases.map { ($0.title, session.prefs.haptics == $0) }) { index in
                     session.updatePrefs { $0.haptics = KeyboardPrefs.HapticLevel.allCases[index] }

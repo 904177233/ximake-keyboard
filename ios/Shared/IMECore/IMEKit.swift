@@ -16,6 +16,8 @@ public final class IMEKit {
     public private(set) var phrases: PhraseLibrary
     public let clipboard: ClipboardHistory
     public let contextual: LocalSuggestionIndex
+    /// 英文补全词表，第一次用到时才读。
+    public private(set) lazy var english = EnglishLexicon()
 
     private let store: SharedStore
 
@@ -30,7 +32,16 @@ public final class IMEKit {
         self.clipboard = ClipboardHistory(store: store, enabled: clipboardEnabled)
         self.contextual = LocalSuggestionIndex(store: store)
         FuzzyPinyinSettings.shared.configure(store: store)
+        reloadHotWords()
     }
+
+    /// 重新读拉到的新词表。
+    public func reloadHotWords() {
+        engine.hotWords = HotWordStore.cacheURL.flatMap { HotWordStore(url: $0) }
+    }
+
+    /// 拉到的新词有多少个。
+    public var hotWordCount: Int { engine.hotWords?.count ?? 0 }
 
     /// 重新读短语（可能刚在 App 里改过）。
     public func reloadPhrases() {

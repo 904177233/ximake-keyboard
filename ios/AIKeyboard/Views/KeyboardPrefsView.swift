@@ -50,8 +50,17 @@ struct KeyboardPrefsView: View {
                 toggle("模糊音", detail: "z/zh、c/ch、s/sh、in/ing、l/n 不分也能打对", isOn: model.prefs.fuzzyPinyin) { value in
                     model.updatePrefs { $0.fuzzyPinyin = value }
                 }
-                toggle("打错字时帮我猜", detail: "候选很少时，试着纠正打错的字母", isOn: model.snapshot.enableTypoCorrection) { value in
+                toggle("打错字时帮我猜", detail: "句子里有一个字母打错时帮你纠正，候选上标「纠错」", isOn: model.snapshot.enableTypoCorrection) { value in
                     model.update { $0.enableTypoCorrection = value }
+                }
+                toggle("背景跟随系统", detail: "键盘底色透明，和系统键盘下面那一排连成一片；关掉用主题颜色", isOn: model.prefs.systemBackground) { value in
+                    model.updatePrefs { $0.systemBackground = value }
+                }
+                toggle("英文联想", detail: "英文模式下打字时在候选栏给补全，点一下换成整个词", isOn: model.prefs.englishSuggestions) { value in
+                    model.updatePrefs { $0.englishSuggestions = value }
+                }
+                toggle("每天更新新词", detail: "打开完全访问后，键盘每天从项目仓库下载一次新词表，只下载不上传", isOn: model.prefs.autoUpdateHotWords) { value in
+                    model.updatePrefs { $0.autoUpdateHotWords = value }
                 }
                 pickerRow("按键震动", items: KeyboardPrefs.HapticLevel.allCases.map { ($0.title, model.prefs.haptics == $0) }) { index in
                     model.updatePrefs { $0.haptics = KeyboardPrefs.HapticLevel.allCases[index] }

@@ -125,6 +125,29 @@ check("整句后面不按单字补全（很忙 -> 碌）", !afterBusy.contains("
 let afterHome = engine.predictions(after: "我到家", lastWord: "到家", limit: 14)
 check("到家 后面有了", afterHome.contains("了"), "\(afterHome)")
 
+print("新词和英文")
+check("视频号是一个词", qwerty("shipinhao").candidates.first?.text == "视频号", "\(texts(qwerty("shipinhao")))")
+check("拼多多是一个词", qwerty("pinduoduo").candidates.first?.text == "拼多多", "\(texts(qwerty("pinduoduo")))")
+if CommandLine.arguments.count >= 5 {
+    let fileStore = HotWordStore(url: URL(fileURLWithPath: CommandLine.arguments[4]))
+    check("仓库里的新词表能读", (fileStore?.count ?? 0) > 200, "\(fileStore?.count ?? 0)")
+}
+engine.hotWords = HotWordStore(text: "# 墨语新词表 v1\n墨语键盘\tmo'yu'jian'pan\t20000\n坏行\n")
+check("拉到的新词能打出来", qwerty("moyujianpan").candidates.first?.text == "墨语键盘", "\(texts(qwerty("moyujianpan")))")
+check("拉到的新词简拼也有", texts(qwerty("myjp"), 6).contains("墨语键盘"), "\(texts(qwerty("myjp")))")
+engine.hotWords = nil
+if CommandLine.arguments.count >= 4 {
+    let english = EnglishLexicon(url: URL(fileURLWithPath: CommandLine.arguments[3]))
+    check("英文词表能读", english.count > 30000, "\(english.count)")
+    check("hel 补全有 hello", english.completions(for: "hel").contains("hello"), "\(english.completions(for: "hel"))")
+    check("Hel 补全首字母大写", english.completions(for: "Hel").first?.first?.isUppercase == true, "\(english.completions(for: "Hel"))")
+    check("一个字母不补全", english.completions(for: "h").isEmpty)
+}
+let afterTogether = engine.predictions(after: "我们一起", lastWord: "一起", limit: 14)
+check("一起 后面有去", afterTogether.contains("去"), "\(afterTogether)")
+check("我妈不被打成我吗", qwerty("womarangwohuijiachifan").candidates.first?.text == "我妈让我回家吃饭",
+      "\(texts(qwerty("womarangwohuijiachifan")))")
+
 print("逐词选词")
 let long = qwerty("woxihuanni")
 let wo = long.candidates.first { $0.text == "我" }

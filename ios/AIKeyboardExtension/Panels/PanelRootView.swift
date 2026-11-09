@@ -17,7 +17,7 @@ struct PanelRootView: View {
 
     var body: some View {
         ZStack {
-            session.palette.canvas.color
+            (session.prefs.systemBackground ? Color.clear : session.palette.canvas.color)
             switch session.page {
             case .symbols:
                 SymbolPanelView(session: session)

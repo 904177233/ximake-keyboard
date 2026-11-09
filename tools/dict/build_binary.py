@@ -56,6 +56,19 @@ BASE_V1 = HERE / "source" / "base_dict_v1.tsv"
 EXTRA = HERE / "extra_words.tsv"
 CHAT_PRIORITY = OUT_DIR / "chat_priority.tsv"
 NEXT_WORDS = HERE / "next_words.tsv"
+#: 新词和日常词（手工整理），构建时并进词库，也原样发一份给键盘每天拉取。
+HOT_WORDS = HERE / "hot_words.tsv"
+#: Tatoeba 的中文句子（CC BY 2.0 FR），用来数「这个词后面常跟什么」。
+TATOEBA = HERE / ".cache" / "tatoeba" / "cmn_sentences.tsv.bz2"
+#: 两个词在 Tatoeba 里连着出现这么多次以上，整句转换时也当常见搭配加分。
+TATOEBA_STRONG = 10
+#: 语气词不当整句转换的常见搭配：「是我吗」很常见，可它会让 woma 变成「我吗」而不是「我妈」。句末另有规则。
+SENTENCE_PARTICLES = {"吗", "呢", "吧", "啊", "呀", "啦", "嘛", "哦", "哈", "了", "的"}
+#: Tatoeba 例句里常用的外国人名，不拿来做联想。
+TATOEBA_NAMES = {"汤姆", "玛丽", "约翰", "爱丽丝", "鲍勃", "杰克", "迈克", "露西", "比尔", "托尼", "吉姆", "保罗",
+                 "凯特", "贝蒂", "南希", "肯", "简", "莉莉", "亚当", "布朗", "史密斯", "杰克逊", "汤米", "汤姆的", "玛莉", "麦克"}
+#: 英文联想的词表：wordfreq 的英文词频（数据 CC BY-SA 4.0），取最常用的这么多个。
+ENGLISH_WORDS = 40000
 #: 这两份不进仓库，放在 .cache 里，下载地址见 docs/16-交接文档.md。
 ESSAY = HERE / ".cache" / "rime-essay" / "essay.txt"
 OPENCC = HERE / ".cache" / "opencc"
@@ -87,8 +100,8 @@ FOLLOW_MIN_PHRASES = 3
 #: 推出来的下一个词本身要够常用（去掉 债、债券 这类书面词）。
 FOLLOW_WORD_MIN = 3000
 
-DICT_VERSION = "3.0.6"
-GENERATED_DATE = "2026-11-07"
+DICT_VERSION = "3.0.7"
+GENERATED_DATE = "2026-11-09"
 
 #: jieba 词频下限。词频再低的多是专名和噪声，收进来只会占地方。
 MIN_FREQ = 5
@@ -220,6 +233,96 @@ def load_next_words() -> dict[str, list[str]]:
     return table
 
 
+def opencc_simplifier():
+    """繁体转简体：先按短语表，再按单字表。"""
+    def read(name: str) -> dict[str, str]:
+        table = {}
+        for line in (OPENCC / name).read_text(encoding="utf-8").splitlines():
+            if line and not line.startswith("#") and "\t" in line:
+                head, rest = line.split("\t", 1)
+                table[head] = rest.split()[0]
+        return table
+
+    chars = read("TSCharacters.txt")
+    phrases = read("TSPhrases.txt")
+
+    def simplify(text: str) -> str:
+        out = []
+        i = 0
+        while i < len(text):
+            for size in (4, 3, 2):
+                piece = text[i:i + size]
+                if len(piece) == size and piece in phrases:
+                    out.append(phrases[piece])
+                    i += size
+                    break
+            else:
+                out.append(chars.get(text[i], text[i]))
+                i += 1
+        return "".join(out)
+
+    return simplify
+
+
+def word_frequencies(builder: "Builder") -> dict[str, int]:
+    freq: dict[str, int] = {}
+    for (_key, _mask), words in builder.table.items():
+        for text, (f, flags) in words.items():
+            if flags & (FLAG_EMOJI | FLAG_PUNCT | FLAG_ASCII) or not CJK.match(text):
+                continue
+            freq[text] = max(freq.get(text, 0), f)
+    return freq
+
+
+def tatoeba_pairs(builder: "Builder") -> dict[str, Counter]:
+    """Tatoeba 的句子按词库切成词，数前后两个词连着出现的次数。结果存在 builder 上，只算一次。"""
+    cached = getattr(builder, "tatoeba", None)
+    if cached is not None:
+        return cached
+    if not TATOEBA.exists():
+        builder.tatoeba = {}
+        return builder.tatoeba
+    import bz2
+
+    simplify = opencc_simplifier()
+    freq = word_frequencies(builder)
+
+    def split(text: str) -> list[str] | None:
+        n = len(text)
+        best: list[tuple[float, list[str]] | None] = [None] * (n + 1)
+        best[0] = (0.0, [])
+        for i in range(n):
+            if best[i] is None:
+                continue
+            for j in range(i + 1, min(n, i + 6) + 1):
+                word = text[i:j]
+                f = freq.get(word)
+                if f is None:
+                    continue
+                score = best[i][0] + math.log(f + 1) - 12
+                if best[j] is None or score > best[j][0]:
+                    best[j] = (score, best[i][1] + [word])
+        return best[n][1] if best[n] else None
+
+    pairs: dict[str, Counter] = defaultdict(Counter)
+    for line in bz2.open(TATOEBA, "rt", encoding="utf-8"):
+        parts = line.rstrip("\n").split("\t")
+        if len(parts) < 3:
+            continue
+        # 著 在口语例句里几乎都是「着」（忙著、看著），OpenCC 的单字表默认给「著」
+        for clause in re.findall(r"[一-鿿]+", simplify(parts[2]).replace("著", "着")):
+            words = split(clause)
+            if not words:
+                continue
+            for left, right in zip(words, words[1:]):
+                if left in TATOEBA_NAMES or right in TATOEBA_NAMES:
+                    continue
+                pairs[left][right] += 1
+            builder.stats["tatoeba_clauses"] += 1
+    builder.tatoeba = dict(pairs)
+    return builder.tatoeba
+
+
 def phrase_followers(builder: "Builder") -> dict[str, list[str]]:
     """把 rime-ice 的多字短语（我吃过了）按词库切成词（我|吃过|了），数前后两个词连在一起的情况。
 
@@ -299,14 +402,20 @@ def write_next_words(builder: Builder, path: Path) -> int:
                 if len(text) - cut <= 2:
                     weights[text[:cut]][text[cut:]] += freq
     followers = phrase_followers(builder)
+    corpus = tatoeba_pairs(builder)
     lines = []
-    heads = set(authored) | {h for h in weights if len(h) == 1 or h in known} | set(followers)
+    heads = set(authored) | {h for h in weights if len(h) == 1 or h in known} | set(followers) | set(corpus)
     for head in sorted(heads):
         words = authored.get(head, [])
         rest = [w for w, _ in weights[head].most_common(14) if w not in words][:10] if head in weights else []
-        follow = [w for w in followers.get(head, []) if w not in words]
-        if words or rest or follow:
-            lines.append(f"{head}\t{' '.join(words)}\t{' '.join(rest)}\t{' '.join(follow)}")
+        counter = corpus.get(head, Counter())
+        # 第四列：真实句子里的下一个词（Tatoeba）优先，不够再用短语库推的
+        follow = [w for w, c in counter.most_common(12) if c >= 2 and w not in words][:FOLLOW_KEEP]
+        follow += [w for w in followers.get(head, []) if w not in words and w not in follow][:max(0, FOLLOW_KEEP - len(follow))]
+        # 第五列：连着出现很多次的，整句转换时也加分
+        strong = [w for w, c in counter.most_common(30) if c >= TATOEBA_STRONG and w not in SENTENCE_PARTICLES]
+        if words or rest or follow or strong:
+            lines.append(f"{head}\t{' '.join(words)}\t{' '.join(rest)}\t{' '.join(follow)}\t{' '.join(strong)}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     return len(lines)
 
@@ -349,6 +458,58 @@ def load_essay(known: set[str]) -> dict[str, int]:
         if len(parts) == 2 and parts[1].isdigit() and CJK.match(parts[0]) and len(parts[0]) <= MAX_WORD_LEN:
             merged[simplify(parts[0])] += int(parts[1])
     return dict(merged)
+
+
+def load_hot_words() -> list[tuple[str, list[str], int]]:
+    """读 hot_words.tsv：(词, 音节, 词频)。"""
+    from pypinyin import lazy_pinyin
+
+    rows = []
+    if not HOT_WORDS.exists():
+        return rows
+    for line in HOT_WORDS.read_text(encoding="utf-8").splitlines():
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split("\t")
+        if len(parts) < 2 or not CJK.match(parts[0]) or not parts[1].isdigit():
+            continue
+        syllables = parts[2].split() if len(parts) >= 3 and parts[2].strip() else [x.lower() for x in lazy_pinyin(parts[0])]
+        if len(syllables) != len(parts[0]) or not all(x in SYL_SET for x in syllables):
+            print("新词注音不对，跳过：", parts[0], syllables)
+            continue
+        rows.append((parts[0], syllables, int(parts[1])))
+    return rows
+
+
+def write_hot_words(path: Path) -> int:
+    """给键盘的新词表：词<TAB>音节（' 隔开）<TAB>词频。键盘每天从仓库拉一次这个文件。"""
+    rows = load_hot_words()
+    lines = [f"{word}\t{chr(39).join(syllables)}\t{freq}" for word, syllables, freq in rows]
+    path.write_text("# 墨语新词表 v1\n" + "\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    return len(rows)
+
+
+def write_english_words(path: Path) -> int:
+    """英文联想词表：词<TAB>每十亿词出现次数。数据来自 wordfreq（CC BY-SA 4.0），没装 wordfreq 就不动旧文件。"""
+    try:
+        import wordfreq
+    except ImportError:
+        print("没装 wordfreq，英文词表沿用旧的")
+        return -1
+    rows = []
+    for word in wordfreq.top_n_list("en", ENGLISH_WORDS * 2):
+        if not re.fullmatch(r"[a-z]+(?:'[a-z]+)?", word) or (len(word) == 1 and word not in ("a", "i")):
+            continue
+        count = max(1, int(wordfreq.word_frequency(word, "en") * 1e9))
+        # 带撇号的只留常用缩写（don't、i'm），两个字母的只留常见的，去掉 a's、aa 这类
+        if ("'" in word and count < 200_000) or (len(word) == 2 and count < 100_000):
+            continue
+        rows.append((word, count))
+        if len(rows) >= ENGLISH_WORDS:
+            break
+    rows.sort()
+    path.write_text("\n".join(f"{w}\t{c}" for w, c in rows) + "\n", encoding="utf-8", newline="\n")
+    return len(rows)
 
 
 def load_rime_ice() -> dict[str, tuple[list[str], int]]:
@@ -591,6 +752,14 @@ def collect() -> Builder:
             slot[word] = [freq, flags]
             builder.stats["extra"] += 1
 
+    # ④′ 新词和日常词：没有的加上，有的只抬不压
+    for word, syllables, freq in load_hot_words():
+        key = "".join(syllables)
+        slot = builder.table[(key, mask_of(syllables))]
+        old = slot.get(word, [0, 0])
+        slot[word] = [max(old[0], freq), old[1] | FLAG_CHAT | chat_bits(word)]
+        builder.stats["hot_words"] += 1
+
     # ⑤ 略、虐也能打 lue、nue（很多人这么打）。字母数一样，切分位置不变。
     for (key, mask), words in list(builder.table.items()):
         syllables = split_by_mask(key, mask)
@@ -728,7 +897,11 @@ class Eval:
     def __init__(self, builder: Builder) -> None:
         self.by_key: dict[str, list[tuple[str, int, int, int]]] = defaultdict(list)
         self.init: dict[str, list[tuple[int, str, str]]] = defaultdict(list)
-        self.pairs = load_next_words()
+        self.pairs = {k: list(v) for k, v in load_next_words().items()}
+        for left, counter in tatoeba_pairs(builder).items():
+            for right, count in counter.items():
+                if count >= TATOEBA_STRONG and right not in SENTENCE_PARTICLES and right not in self.pairs.setdefault(left, []):
+                    self.pairs[left].append(right)
         self.two_char: set[str] = set()
         for (key, mask), words in builder.table.items():
             syllables = bin(mask).count("1") or 1
@@ -839,6 +1012,8 @@ def main() -> int:
     print(dict(builder.stats))
     print(info)
     print("下一词表行数", write_next_words(builder, OUT_DIR / "next.tsv"))
+    print("新词表", write_hot_words(OUT_DIR / "hot_words.tsv"))
+    print("英文词表", write_english_words(OUT_DIR / "en_words.tsv"))
 
     (OUT_DIR / "dict_meta.json").write_text(json.dumps({
         "version": DICT_VERSION,
@@ -852,6 +1027,8 @@ def main() -> int:
             {"name": "rime-essay essay.txt", "license": "LGPL-3.0", "url": "https://github.com/rime/rime-essay"},
             {"name": "OpenCC TSCharacters / TSPhrases", "license": "Apache-2.0", "url": "https://github.com/BYVoid/OpenCC"},
             {"name": "rime-ice cn_dicts/base.dict.yaml + 8105.dict.yaml", "license": "GPL-3.0", "url": "https://github.com/iDvel/rime-ice"},
+            {"name": "Tatoeba cmn_sentences", "license": "CC BY 2.0 FR", "url": "https://tatoeba.org"},
+            {"name": "wordfreq (English word list)", "license": "CC BY-SA 4.0 (data)", "url": "https://github.com/rspeer/wordfreq"},
         ],
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 

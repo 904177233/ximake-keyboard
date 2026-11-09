@@ -11,6 +11,8 @@ The lexicon files `ios/Shared/dict/moyu.dict` and `ios/Shared/dict/next.tsv` are
 | [rime-essay](https://github.com/rime/rime-essay) `essay.txt` | 网络文本词频 / web-text word frequencies | LGPL-3.0 |
 | [OpenCC](https://github.com/BYVoid/OpenCC) `TSCharacters` / `TSPhrases` | 繁体转简体 / Traditional-to-Simplified conversion | Apache-2.0 |
 | [rime-ice（雾凇拼音）](https://github.com/iDvel/rime-ice) `base.dict.yaml`、`8105.dict.yaml` | 常用词、聊天短语、单字各读音的字频 / common words, chat phrases, per-reading character frequencies | GPL-3.0 |
+| [Tatoeba](https://tatoeba.org) 中文句子 `cmn_sentences` | 数「这个词后面常跟什么」，用于联想和整句转换 / word-pair counts for next-word prediction and sentence conversion | CC BY 2.0 FR |
+| [wordfreq](https://github.com/rspeer/wordfreq) 英文词频 | 英文补全词表 `en_words.tsv` / English completion list | 数据 CC BY-SA 4.0，代码 Apache-2.0 / data CC BY-SA 4.0, code Apache-2.0 |
 
 因为安装包里带了由 rime-ice 数据生成的词库，带词库分发的墨语整体按 GPL-3.0 处理；本仓库的代码也以 GPL-3.0 发布，见 [LICENSE](LICENSE)。
 

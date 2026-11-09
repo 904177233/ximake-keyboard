@@ -3,9 +3,10 @@
 //  墨语 · 输入法内核
 //
 //  「这个词后面常跟什么」。数据来自 tools/dict/build_binary.py 生成的 next.tsv，每行：
-//      词 <TAB> 手工整理的下一个词 <TAB> 从词库推出来的后半截 <TAB> 从短语库推出来的下一个词
+//      词 <TAB> 手工整理的下一个词 <TAB> 从词库推出来的后半截 <TAB> 真实句子里的下一个词 <TAB> 很常连着出现的词
 //
-//  第四列：把 rime-ice 里的多字短语（我吃过了）切成词（我|吃过|了），数前后两个词连在一起的次数。
+//  第四列：Tatoeba 的中文句子按词库切成词，数前后两个词连着出现的次数；不够再用 rime-ice 短语推的补。
+//  第五列：连着出现 10 次以上的（不含语气词），整句转换时和手工表一样当常见搭配加分。
 //
 //  手工整理的部分质量高，既用于上屏后的联想，也用于整句转换时判断两个词连在一起是否自然
 //  （「我想」比「我向」常见）。后半截只用于联想：打了「今」，下一个可能是「天」。
@@ -20,6 +21,7 @@ public final class NextWordIndex {
     private var authoredSets: [String: Set<String>] = [:]
     private var compound: [String: [String]] = [:]
     private var following: [String: [String]] = [:]
+    private var strongSets: [String: Set<String>] = [:]
 
     /// 最长按几个字匹配上屏内容的结尾。
     private static let maximumHeadLength = 4
@@ -46,6 +48,9 @@ public final class NextWordIndex {
             if fields.count >= 4, !fields[3].isEmpty {
                 following[head] = fields[3].split(separator: " ").map(String.init)
             }
+            if fields.count >= 5, !fields[4].isEmpty {
+                strongSets[head] = Set(fields[4].split(separator: " ").map(String.init))
+            }
         }
     }
 
@@ -60,7 +65,7 @@ public final class NextWordIndex {
 
     /// 两个词连在一起是否常见。
     public func isCommonPair(_ previous: String, _ next: String) -> Bool {
-        authoredSets[previous]?.contains(next) ?? false
+        authoredSets[previous]?.contains(next) == true || strongSets[previous]?.contains(next) == true
     }
 
     /// 手工整理的下一个词：优先按最长的结尾匹配。

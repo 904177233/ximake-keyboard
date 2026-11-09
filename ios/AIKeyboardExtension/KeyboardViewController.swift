@@ -375,7 +375,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
     private func render() {
         guard isViewLoaded else { return }
         let palette = session.palette
-        view.backgroundColor = palette.canvas
+        view.backgroundColor = session.prefs.systemBackground ? .clear : palette.canvas
         let page = session.page
 
         // 面板
@@ -468,10 +468,10 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
     private func startSimCheck() {
         guard !simStarted else { return }
         simStarted = true
-        simLabel.font = .monospacedSystemFont(ofSize: 11, weight: .bold)
+        simLabel.font = .monospacedSystemFont(ofSize: 8, weight: .bold)
         simLabel.textColor = .green
-        simLabel.backgroundColor = .black
-        simLabel.numberOfLines = 2
+        simLabel.backgroundColor = UIColor.black.withAlphaComponent(0.55)
+        simLabel.numberOfLines = 1
         view.addSubview(simLabel)
         let session = self.session
         let steps: [(String, () -> Void)] = [
@@ -486,7 +486,18 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
             ("填设置项", { session.setPage(.keys); session.beginField(title: "API Key", value: "", isSecret: true, preferEnglish: true) { _ in } }),
             ("设置", { session.finishField(save: false); session.openSettings() }),
             ("长按空格动画", { session.setPage(.keys); session.showVoiceHoldForSimCheck() }),
-            ("真的长按空格", { session.endVoiceHold(cancelled: true); session.beginVoiceHold() })
+            ("真的长按空格", { session.endVoiceHold(cancelled: true); session.beginVoiceHold() }),
+            ("打中文", {
+                session.endVoiceHold(cancelled: true)
+                session.setPage(.keys)
+                for letter in "nihaoya" { session.handle(.letter(letter)) }
+            }),
+            ("英文补全", {
+                session.handle(.clearComposition)
+                session.handle(.language)
+                for letter in "hel" { session.handle(.letter(letter)) }
+            }),
+            ("回中文", { session.handle(.language) })
         ]
         Task { @MainActor [weak self] in
             var index = 0
@@ -494,8 +505,9 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
                 let step = steps[index % steps.count]
                 step.1()
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
-                self.simLabel.text = "S\(index % steps.count) \(step.0)\n\(self.heightDiagnostic)"
-                self.simLabel.frame = CGRect(x: 0, y: 0, width: self.view.bounds.width, height: 30)
+                // 小字放在最下面，不挡候选栏
+                self.simLabel.text = "S\(index % steps.count) \(step.0) | \(self.heightDiagnostic)"
+                self.simLabel.frame = CGRect(x: 0, y: self.view.bounds.height - 11, width: self.view.bounds.width, height: 11)
                 self.view.bringSubviewToFront(self.simLabel)
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
                 index += 1

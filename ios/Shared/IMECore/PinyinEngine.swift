@@ -76,6 +76,8 @@ public final class PinyinEngine {
     private let learning: UserLearningStore
     private let suggestions: PhraseSuggestionIndex
     private let nextWords: NextWordIndex
+    /// 发版以后从仓库拉到的新词，补在词库后面。
+    public var hotWords: HotWordStore?
 
     /// 九宫格：数字串 -> 能打出的音节。
     private static let syllablesByDigits: [String: [String]] = {
@@ -225,6 +227,17 @@ public final class PinyinEngine {
                 cursor += 1
             }
 
+            if let hotWords {
+                for word in hotWords.words(forKey: subString).prefix(2) {
+                    matchedExact = true
+                    let score = scoreWord(frequency: word.frequency,
+                                          syllableCount: oneSyllable ? 1 : word.syllables.count,
+                                          text: word.text, previous: previous)
+                    tiles.append(Tile(end: position, text: word.text, key: subString, score: score,
+                                      syllables: word.syllables, lastSyllable: word.syllables.last))
+                }
+            }
+
             for phrase in learning.phrases(forKey: subString) {
                 matchedExact = true
                 let score = log(60000.0) - Self.tilePenalty + 1.2 * log2(Double(learning.count(of: phrase)) + 1)
@@ -258,6 +271,13 @@ public final class PinyinEngine {
                                         text: entry.text, firstSyllable: syllables.first, dictionary: dictionary)
                     tiles.append(Tile(end: position, text: entry.text, key: dictionary.keyString(key: index),
                                       score: score, syllables: nil, lastSyllable: syllables.last, isLoose: true))
+                }
+                for word in hotWords?.words(forInitials: subString).prefix(Self.initialTopK) ?? [] {
+                    let score = scoreWord(frequency: word.frequency, syllableCount: 1, text: word.text, previous: previous)
+                        - penalty
+                        + Self.initialsLengthBonus * Double(sub.count - 1)
+                    tiles.append(Tile(end: position, text: word.text, key: word.key,
+                                      score: score, syllables: nil, lastSyllable: word.syllables.last, isLoose: true))
                 }
             }
             tailHasExact = matchedExact
@@ -690,7 +710,10 @@ public final class PinyinEngine {
             addInitials(input: input, dictionary: dictionary, into: &builder)
         }
 
-        // 整串对得上的词
+        // 整串对得上的词（新词表里的排在词库前面：它们是特意补进来的）
+        for word in hotWords?.words(forKey: inputString).prefix(4) ?? [] {
+            builder.add(IMECandidate(text: word.text, key: word.key, consumed: count))
+        }
         addEntries(of: dictionary.exactRange(input), consumed: count, limit: 40, dictionary: dictionary, into: &builder)
 
         // 还没打完的词
@@ -765,6 +788,9 @@ public final class PinyinEngine {
                 let score = log(Double(entry.frequency) + 1) * (1 + 0.35 * entry.chatWeight) + 3 * log2(learned + 1)
                 rows.append((entry.text, dictionary.keyString(key: index), score))
             }
+        }
+        for word in hotWords?.words(forInitials: String(decoding: input, as: UTF8.self)).prefix(4) ?? [] {
+            rows.append((word.text, word.key, log(Double(word.frequency) + 1) * 1.35))
         }
         rows.sort { $0.score > $1.score }
         for row in rows.prefix(20) {
@@ -976,10 +1002,8 @@ public final class PinyinEngine {
         let anchor = lastWord.map { text.hasSuffix($0) ? text : $0 } ?? text
         add(nextWords.authoredWords(after: anchor))
         add(suggestions.suggestions(after: text, limit: limit).map { $0.text })
-        // 短语库推的带点书面味（工作 -> 人员），只在前面不够时补几个
-        if result.count < 8 {
-            add(Array(nextWords.followingWords(after: anchor).prefix(4)))
-        }
+        // 真实句子（Tatoeba）里这个词后面常跟的词
+        add(nextWords.followingWords(after: anchor))
         // 后半截是「把词打完」（今 -> 天）。一整句后面接单个字的后半截没有意义（很忙 -> 碌），
         // 只用两个字以上的结尾（想你 -> 了、太贵了 -> 吧）。
         add(nextWords.compoundWords(after: text, minimumHeadLength: sentence ? 2 : 1))

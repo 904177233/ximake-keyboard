@@ -97,15 +97,15 @@ public struct MoyuPalette {
                 surface = UIColor(hex: 0x30302E)
             } else {
                 accentText = UIColor(hex: 0xB85A38)
-                canvas = UIColor(hex: 0xE8E5DB)
-                function = UIColor(hex: 0xD3CFC1)
-                key = UIColor(hex: 0xFBFAF6)
+                canvas = UIColor(hex: 0xECE9E2)
+                function = UIColor(hex: 0xD5D2CA)
+                key = UIColor(hex: 0xFDFCF9)
                 keyPressed = UIColor(hex: 0xF3DFD3)
                 functionPressed = UIColor(hex: 0xFBFAF6)
                 text = UIColor(hex: 0x1F1E1D)
                 secondary = UIColor(hex: 0x73726C)
                 line = UIColor(hex: 0x1F1E1D).withAlphaComponent(0.13)
-                edge = UIColor(hex: 0x1F1E1D).withAlphaComponent(0.22)
+                edge = UIColor(hex: 0x1F1E1D).withAlphaComponent(0.16)
                 page = UIColor(hex: 0xFAF9F5)
                 surface = UIColor(hex: 0xF0EEE6)
             }
@@ -138,7 +138,7 @@ public struct MoyuPalette {
             text = UIColor(hex: 0x15161A)
             secondary = UIColor(hex: 0x6E7078).mixed(with: base, amount: isInk ? 0 : 0.14)
             line = UIColor(red: 20 / 255, green: 22 / 255, blue: 30 / 255, alpha: 0.13)
-            edge = UIColor(red: 20 / 255, green: 22 / 255, blue: 30 / 255, alpha: 0.24)
+            edge = UIColor(red: 20 / 255, green: 22 / 255, blue: 30 / 255, alpha: 0.18)
         }
     }
 }
@@ -249,11 +249,18 @@ public struct KeyboardPrefs: Codable, Equatable, Sendable {
     public var fuzzyPinyin: Bool = true
     /// 在键盘上拖出来的键区高度（竖屏）。nil 表示用「矮、标准、高」。
     public var customSurfaceHeight: Double?
+    /// 英文模式下打字时在候选栏给补全（hel -> hello）。
+    public var englishSuggestions: Bool = true
+    /// 每天从仓库拉一次新词表。
+    public var autoUpdateHotWords: Bool = true
+    /// 键盘背景透明，透出系统键盘的底（和下面地球键那一排连成一片）。关掉用主题的底色。
+    public var systemBackground: Bool = true
 
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
         case theme, mascot, layout, height, haptics, keySound, fuzzyPinyin, customSurfaceHeight
+        case englishSuggestions, autoUpdateHotWords, systemBackground
     }
 
     /// 容错解码：缺字段或值不认识都用默认值。
@@ -268,6 +275,9 @@ public struct KeyboardPrefs: Codable, Equatable, Sendable {
         keySound = (try? container.decodeIfPresent(Bool.self, forKey: .keySound)) ?? false
         fuzzyPinyin = (try? container.decodeIfPresent(Bool.self, forKey: .fuzzyPinyin)) ?? true
         customSurfaceHeight = try? container.decodeIfPresent(Double.self, forKey: .customSurfaceHeight)
+        englishSuggestions = (try? container.decodeIfPresent(Bool.self, forKey: .englishSuggestions)) ?? true
+        autoUpdateHotWords = (try? container.decodeIfPresent(Bool.self, forKey: .autoUpdateHotWords)) ?? true
+        systemBackground = (try? container.decodeIfPresent(Bool.self, forKey: .systemBackground)) ?? true
     }
 
     /// 读取。

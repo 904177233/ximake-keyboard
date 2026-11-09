@@ -158,7 +158,7 @@ final class KeySurfaceView: UIView, UIInputViewAudioFeedback {
             drawKey(key, isPressed: isPressed(index))
         }
         if cursorActive {
-            palette.canvas.withAlphaComponent(0.72).setFill()
+            palette.canvas.withAlphaComponent(0.85).setFill()
             UIRectFillUsingBlendMode(bounds, .normal)
             drawCentered("◀   左右滑动移动光标   ▶", in: bounds,
                          font: .systemFont(ofSize: 15, weight: .medium), color: palette.secondary)
@@ -182,7 +182,7 @@ final class KeySurfaceView: UIView, UIInputViewAudioFeedback {
         }
         if key.style != .accent {
             palette.edge.setFill()
-            UIBezierPath(roundedRect: key.frame.offsetBy(dx: 0, dy: 1), cornerRadius: cornerRadius).fill()
+            UIBezierPath(roundedRect: key.frame.offsetBy(dx: 0, dy: 0.75), cornerRadius: cornerRadius).fill()
         }
         (isPressed && key.style == .accent ? fill.withAlphaComponent(0.82) : fill).setFill()
         path.fill()
@@ -210,11 +210,11 @@ final class KeySurfaceView: UIView, UIInputViewAudioFeedback {
 
         if let hint = key.hint {
             let attributes: [NSAttributedString.Key: Any] = [
-                .font: UIFont.systemFont(ofSize: 10),
-                .foregroundColor: palette.secondary
+                .font: UIFont.systemFont(ofSize: 9, weight: .medium),
+                .foregroundColor: palette.secondary.withAlphaComponent(0.55)
             ]
             let size = (hint as NSString).size(withAttributes: attributes)
-            (hint as NSString).draw(at: CGPoint(x: key.frame.maxX - size.width - 3.5, y: key.frame.minY + 1.5),
+            (hint as NSString).draw(at: CGPoint(x: key.frame.maxX - size.width - 4, y: key.frame.minY + 2),
                                     withAttributes: attributes)
         }
 
