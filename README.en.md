@@ -57,6 +57,9 @@ The engine doesn't depend on Rime or the system IME. It lives in [`ios/Shared/IM
 - **Abbreviated sentences**: `wbzd` → 我不知道 ("I don't know"). Choices you make are learned, so after one pick `wcgl` → 我吃过了.
 - **Sentence-level typo correction**: a two-layer DP allows one mistyped letter anywhere in the sentence (adjacent key, swapped letters, extra or missing letter). `jintianhebmang` → 今天很忙, `nihap` → 你好.
 - **Personal dictionary**: words you typed rank higher next time, and the app lets you view, search and delete them.
+- **New words every day**: a new-word list lives in the repo ([`tools/dict/hot_words.tsv`](tools/dict/hot_words.tsv)) and the keyboard fetches it daily, so new slang works without reinstalling.
+- **Next-word prediction** learned from real Chinese sentences (Tatoeba); after a full sentence it offers fitting punctuation first.
+- **English completion**: type `hel` in English mode and get hello, help; one tap completes the word.
 - **ü and polyphones**: `lve` and `lue` both give 略. Each reading of a polyphonic character is ranked by its real frequency, so rare classical readings don't take over sentences.
 - **Lexicon**: 274k entries in a memory-mapped binary file. Keyboard extensions get very little memory, so the dictionary can't be loaded whole. It's built from jieba, rime-essay, OpenCC and rime-ice by the scripts in [`tools/dict`](tools/dict).
 
@@ -64,8 +67,8 @@ Measured numbers, without cherry-picking:
 
 | Metric | Result |
 |---|---|
-| Converting a long sentence (CI Mac) | ~1.2 ms; ~7 ms with typo correction |
-| Fully correct sentences, held-out sets of 45 / 50 | 40 / 42 |
+| Converting a long sentence (CI Mac) | ~1.4 ms; ~9 ms with typo correction |
+| Fully correct sentences, held-out sets of 45 / 50 | 41 / 43 |
 | One random typo per sentence (182 sentences) | 100 fixed and ranked first, 15 more ranked second |
 | Correctly typed input wrongly "corrected" to first place | 0 of 225 |
 
