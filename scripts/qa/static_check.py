@@ -42,6 +42,7 @@ from qa_common import (
 # ---------------------------------------------------------------------------
 
 SYSTEM_TYPES = frozenset("""
+UITraitUserInterfaceStyle UITraitVerticalSizeClass
 CAReplicatorLayer CATransform3DMakeTranslation CFNotificationCenterAddObserver CFNotificationCenterGetDarwinNotifyCenter CFNotificationCenterPostNotification CFNotificationName CFStringTransform CGImageSourceCreateThumbnailAtIndex CGImageSourceCreateWithURL NSMutableString PHAssetCreationRequest UIRectFillUsingBlendMode Unmanaged OpenFunction NSClassFromString SystemSoundID AudioServicesPlaySystemSound TextInputAutocapitalization UITextAutocapitalizationType ObjectIdentifier NSData UInt32 UnsafeRawBufferPointer
 # ---- Swift 语言内置 ----
 Self Any AnyObject Void Never Type Optional Result Error Bool String Substring Character
