@@ -332,13 +332,18 @@ struct SettingsPanelView: View {
                     .font(.system(size: 13))
                     .foregroundColor(palette.secondary.color)
             }
-            row("App 和键盘") {
-                Text(SharedBlob.statusText)
+            // 两边的情况比较长，单独一段多行显示，出问题时截这一段
+            VStack(alignment: .leading, spacing: 3) {
+                Text("App 和键盘")
+                    .font(.system(size: 14))
+                    .foregroundColor(palette.text.color)
+                Text(syncSummary.replacingOccurrences(of: "｜", with: "\n"))
                     .font(.system(size: 11))
                     .foregroundColor(palette.secondary.color)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 8)
             row("键盘高度情况") {
                 Text(session.host?.heightDiagnostic ?? "")
                     .font(.system(size: 11))
@@ -356,6 +361,9 @@ struct SettingsPanelView: View {
         let build = info?["CFBundleVersion"] as? String ?? "?"
         return "\(version) (\(build))"
     }
+
+    /// 只在打开设置页时算一次，不在每次重画时去读系统通知。
+    @State private var syncSummary = SyncStatus.summary(for: .keyboard)
 
     private var providerSummary: String {
         guard let provider = session.snapshot.defaultProvider else { return "还没配" }

@@ -92,6 +92,10 @@ correctedFirst("jintianhebmang", "今天很忙")
 correctedFirst("woxiangchifna", "我想吃饭")
 correctedFirst("zhegewenttizenmebanne", "这个问题怎么办呢")
 correctedFirst("xiexienu", "谢谢你")
+// 打成了另一句也通顺的话（你好好嘛），纠成常用短语的那句排在前两个里
+let haiHao = typed("nihaohaoma")
+check("nihaohaoma 前两个里有纠错的你还好吗",
+      haiHao.candidates.prefix(2).contains { $0.text == "你还好吗" && $0.kind == .corrected }, "\(texts(haiHao))")
 let clean = typed("wozhen")
 check("拼对了不出纠错", !clean.candidates.prefix(3).contains { $0.kind == .corrected }, "\(texts(clean))")
 for input in ["jintianhenmang", "woxihuanni", "nichifanlema", "zhegedongxihenhaoyong"] {
@@ -157,6 +161,19 @@ check("前面有没配上的引号就给后引号", SmartPunctuation.adjusted("�
 check("配上以后又是前引号", SmartPunctuation.adjusted("“", before: "他说“你好”然后") == "“")
 check("换了段不管上一段没配上的", SmartPunctuation.adjusted("“", before: "他说“你好\n") == "“")
 check("英文补全后的空格遇到句号要去掉", SmartPunctuation.closesUpSpace(".") && !SmartPunctuation.closesUpSpace("("))
+
+print("App 和键盘同步")
+let envelope = SharedSync.wrap(Data("abc".utf8), revision: 42)
+let opened = SharedSync.unwrap(envelope)
+check("带时间的数据能拆回来", opened.revision == 42 && opened.payload == Data("abc".utf8))
+check("旧版没带时间的数据当作时间 0", SharedSync.unwrap(Data("old".utf8)).revision == 0)
+let prefsJSON = Data("{\"theme\":\"coral\",\"layout\":\"qwerty\"}".utf8)
+SharedSync.writeNotify(prefsJSON, key: SharedStoreKey.keyboardPrefs, revision: 7)
+let notified = SharedSync.readNotify(key: SharedStoreKey.keyboardPrefs)
+check("键盘偏好走系统通知能读回来", notified?.payload == prefsJSON && notified?.revision == 7, "\(String(describing: notified))")
+let withHeaders = Data("{\"providers\":[{\"extraHeaders\":{\"Authorization\":\"x\"}}]}".utf8)
+check("配置里有请求头时不走系统通知", !SharedSync.safeForNotify(withHeaders, key: SharedStoreKey.configSnapshot))
+check("短语不走系统通知", !SharedSync.safeForNotify(Data("x".utf8), key: SharedStoreKey.phrases))
 
 print("逐词选词")
 let long = qwerty("woxihuanni")

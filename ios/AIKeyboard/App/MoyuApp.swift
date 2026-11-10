@@ -49,6 +49,9 @@ struct RootTabs: View {
         .environment(\.palette, palette)
         .onChange(of: scenePhase) { phase in
             if phase == .active {
+                // 键盘那边可能改过 Key 和设置：缓存清掉重读，再报一下这边能用哪几条路
+                KeychainStore.shared.invalidateCache()
+                SyncStatus.publish(.app)
                 model.reload()
             }
         }

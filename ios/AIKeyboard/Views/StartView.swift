@@ -56,8 +56,8 @@ struct StartView: View {
                 SectionLabel(text: "这台手机")
                 LineRow(title: "App 和键盘的配置",
                         detail: model.isSharedWithKeyboard
-                            ? "在这里填一次，键盘里就能用。\(SharedBlob.statusText)"
-                            : "\(SharedBlob.statusText)。可以直接在键盘里填，也可以把这边的配置发过去") {
+                            ? "在这里填一次，键盘里就能用。\(SyncStatus.summary(for: .app))"
+                            : "\(SyncStatus.summary(for: .app))。设置会自动同步；API Key 可以直接在键盘里填，也可以把这边的配置发过去") {
                     if model.isSharedWithKeyboard {
                         StateText(text: "已打通", isGood: true)
                     } else {

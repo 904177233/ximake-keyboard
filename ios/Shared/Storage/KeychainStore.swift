@@ -25,8 +25,15 @@ import Security
 /// try KeychainStore.shared.deleteAPIKey(for: "preset-deepseek")
 /// ```
 ///
-/// 线程安全：`SecItem*` 系列本身就是线程安全的；本类型无可变状态，标记 `@unchecked Sendable`。
+/// 线程安全：`SecItem*` 系列本身就是线程安全的；读过的结果缓存在内存里，缓存用锁保护。
 public final class KeychainStore: @unchecked Sendable {
+
+    /// 读过的 Key（nil 表示查过、没有）。
+    ///
+    /// 设置页每次重画都要知道每家服务有没有填 Key，以前每次都去查钥匙串，
+    /// 十来家服务一画就是二三十次系统调用，键盘设置页因此发卡、甚至卡死。
+    private var cache: [String: String?] = [:]
+    private let cacheLock = NSLock()
 
     /// 全局单例（默认 service `com.moyu.apikey`）。
     public static let shared = KeychainStore()
@@ -77,8 +84,45 @@ public final class KeychainStore: @unchecked Sendable {
     /// - Returns: 明文 Key；不存在或读取失败返回 nil。
     public func apiKey(for providerID: String) -> String? {
         guard !providerID.isEmpty else { return nil }
+        cacheLock.lock()
+        if let cached = cache[providerID] {
+            cacheLock.unlock()
+            return cached
+        }
+        cacheLock.unlock()
+        let found = readAPIKey(for: providerID)
+        cacheLock.lock()
+        cache[providerID] = .some(found)
+        cacheLock.unlock()
+        return found
+    }
+
+    /// 清掉缓存。另一边（App 或键盘）可能改过 Key，键盘弹出、App 回到前台时调。
+    public func invalidateCache() {
+        cacheLock.lock()
+        cache.removeAll()
+        cacheLock.unlock()
+    }
+
+    private func remember(_ key: String?, for providerID: String) {
+        cacheLock.lock()
+        cache[providerID] = .some(key)
+        cacheLock.unlock()
+    }
+
+    /// App Group 里存 Key 用的名字。只有 App Group 打通时才用：钥匙串共享没打通、App Group 打通了，
+    /// Key 也要能从 App 到键盘（App Group 是 App 和键盘专用的共享目录，别的 App 读不到）。
+    private static func groupAccount(_ providerID: String) -> String {
+        "moyu.apikey.\(providerID)"
+    }
+
+    private func readAPIKey(for providerID: String) -> String? {
         if let shared = SharedVault.shared.data(forKey: Self.vaultAccount(providerID)),
            let key = String(data: shared, encoding: .utf8), !key.isEmpty {
+            return key
+        }
+        let group = SharedStore.shared
+        if group.isAppGroupAvailable, let key = group.defaults.string(forKey: Self.groupAccount(providerID)), !key.isEmpty {
             return key
         }
         let query: [String: Any] = [
@@ -122,7 +166,11 @@ public final class KeychainStore: @unchecked Sendable {
         guard let data = trimmed.data(using: .utf8) else {
             throw KeychainError.encodingFailed
         }
+        remember(trimmed, for: providerID)
         SharedVault.shared.set(data, forKey: Self.vaultAccount(providerID))
+        if SharedStore.shared.isAppGroupAvailable {
+            SharedStore.shared.defaults.set(trimmed, forKey: Self.groupAccount(providerID))
+        }
 
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -155,7 +203,11 @@ public final class KeychainStore: @unchecked Sendable {
     /// - Throws: `KeychainError.unexpectedStatus`（除「未找到」之外的非成功状态）。
     public func deleteAPIKey(for providerID: String) throws {
         guard !providerID.isEmpty else { return }
+        remember(nil, for: providerID)
         SharedVault.shared.set(nil, forKey: Self.vaultAccount(providerID))
+        if SharedStore.shared.isAppGroupAvailable {
+            SharedStore.shared.defaults.removeObject(forKey: Self.groupAccount(providerID))
+        }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -169,6 +221,7 @@ public final class KeychainStore: @unchecked Sendable {
 
     /// 清空本 service 下的全部 API Key（「重置所有服务商」用）。
     public func deleteAllAPIKeys() {
+        invalidateCache()
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service

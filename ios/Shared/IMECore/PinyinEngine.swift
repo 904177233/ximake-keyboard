@@ -49,7 +49,10 @@ public final class PinyinEngine {
     static let extraLetterCost = 5.0
     static let missingLetterCost = 5.5
     /// 纠错后的整句比原来高出这么多分才排第一，否则排第二。
-    static let correctionLead = 2.0
+    static let correctionLead = 2.5
+    /// 纠成三个字以上的现成短语时，每多一个字少扣的分：整串对上一个长短语本身就很能说明问题
+    /// （nihaohaoma -> 你还好吗）。tools/dict/typo_eval.py 里的 long。
+    static let longPhraseDiscount = 1.0
     /// 纠错只看这么长以内的词块。
     static let maxEditTileLength = 12
     /// 少打一个字母时，只试补这几个（韵母、zh/ch/sh 的 h、ng 的 g）。
@@ -387,7 +390,8 @@ public final class PinyinEngine {
             let score = scoreWord(frequency: entry.frequency,
                                   syllableCount: PinyinSyllables.isSyllable(key) ? 1 : syllables.count,
                                   text: entry.text,
-                                  previous: previous) - hit.cost
+                                  previous: previous)
+                - max(hit.cost - Self.longPhraseDiscount * Double(max(syllables.count - 2, 0)), 1.0)
             tiles.append(Tile(end: hit.end, text: entry.text, key: key, score: score,
                               syllables: syllables, lastSyllable: syllables.last, isEdited: true))
         }
@@ -899,7 +903,7 @@ public final class PinyinEngine {
         let gain = corrected.score - original.score
         let hasMismatch = original.path.contains { $0.isLoose && !$0.isPartial }
         if gain > Self.correctionLead { return (candidate, true) }
-        if gain > 0 || (hasMismatch && gain > -Self.correctionLead * 2) { return (candidate, false) }
+        if gain > 0 || (hasMismatch && gain > -4) { return (candidate, false) }
         return nil
     }
 

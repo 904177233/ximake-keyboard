@@ -71,7 +71,7 @@ env:
   # 之前所有构建都写死 `1.0.0 build 1`，导致装到手机上根本无法区分是哪一版，
   # 用户反馈「好像没更新」，我在设备侧和包里都拿不到版本证据。现在改为：
   #   设置 › 通用 › iPhone 储存空间 › 墨语 → 版本 1.5.0，构建号 = run 序号
-  MARKETING_VERSION: 3.0.8
+  MARKETING_VERSION: 3.0.9
   BUILD_NUMBER: ${{ github.run_number }}
 
 jobs:
@@ -206,6 +206,8 @@ jobs:
             ios/Shared/Storage/SharedStore.swift \
             ios/Shared/Storage/SharedVault.swift \
             ios/Shared/Storage/SharedBlob.swift \
+            ios/Shared/Storage/SharedSync.swift \
+            ios/Shared/Voice/NotifyChannel.swift \
             tools/imecheck/main.swift
           "${BUILD_DIR}/imecheck" ios/Shared/dict/moyu.dict ios/Shared/dict/next.tsv ios/Shared/dict/en_words.tsv ios/Shared/dict/hot_words.tsv
 

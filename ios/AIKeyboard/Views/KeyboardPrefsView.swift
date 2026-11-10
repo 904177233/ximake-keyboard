@@ -53,7 +53,7 @@ struct KeyboardPrefsView: View {
                 toggle("打错字时帮我猜", detail: "句子里有一个字母打错时帮你纠正，候选上标「纠错」", isOn: model.snapshot.enableTypoCorrection) { value in
                     model.update { $0.enableTypoCorrection = value }
                 }
-                toggle("背景跟随系统", detail: "键盘底色透明，和系统键盘下面那一排连成一片；关掉用主题颜色", isOn: model.prefs.systemBackground) { value in
+                toggle("背景跟随系统", detail: "打开后键盘底色透明、按键用系统那种灰，和下面地球键那一排连成一片；默认用主题颜色", isOn: model.prefs.systemBackground) { value in
                     model.updatePrefs { $0.systemBackground = value }
                 }
                 toggle("英文联想", detail: "英文模式下打字时在候选栏给补全，点一下换成整个词", isOn: model.prefs.englishSuggestions) { value in

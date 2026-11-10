@@ -164,6 +164,9 @@ final class KeyboardSession: ObservableObject {
         page = .keys
         fieldEdit = nil
         draft = ""
+        // App 那边可能改过 Key：缓存清掉重读；再报一下键盘这边能用哪几条路
+        KeychainStore.shared.invalidateCache()
+        SyncStatus.publish(.keyboard)
         prefs = KeyboardPrefs.load()
         snapshot = loadedSnapshot()
         kit.learning.isEnabled = snapshot.enableLearning

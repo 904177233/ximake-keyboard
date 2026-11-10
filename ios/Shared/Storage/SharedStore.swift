@@ -154,24 +154,61 @@ public final class SharedStore: @unchecked Sendable {
 
     /// 读 Data。
     ///
-    /// 配置类数据优先读保险箱：App 和键盘打通时，两边看到的是同一份。
+    /// 要在 App 和键盘之间共享的数据（`vaultKeys`），从每条走得通的路上各拿一份，用最新的。见 SharedSync.swift。
     public func data(forKey key: String) -> Data? {
-        if !isAppGroupAvailable, Self.vaultKeys.contains(key), let shared = SharedVault.shared.data(forKey: key) {
-            return shared
+        guard Self.vaultKeys.contains(key), backing != .memory else {
+            return defaults.data(forKey: scopedKey(key))
         }
-        return defaults.data(forKey: scopedKey(key))
+        return syncedData(forKey: key)
     }
 
     /// 写 Data。
     public func setData(_ value: Data?, forKey key: String) {
+        guard Self.vaultKeys.contains(key), backing != .memory else {
+            if let value {
+                defaults.set(value, forKey: scopedKey(key))
+            } else {
+                defaults.removeObject(forKey: scopedKey(key))
+            }
+            return
+        }
+        setSyncedData(value, forKey: key)
+    }
+
+    /// 同时写进本地（或 App Group）、钥匙串、系统通知，每份都带写的时间。
+    public func setSyncedData(_ value: Data?, forKey key: String) {
+        let revision = SharedSync.now()
         if let value {
             defaults.set(value, forKey: scopedKey(key))
+            defaults.set(Double(revision), forKey: scopedKey(key) + ".rev")
         } else {
             defaults.removeObject(forKey: scopedKey(key))
+            defaults.removeObject(forKey: scopedKey(key) + ".rev")
         }
-        if !isAppGroupAvailable, Self.vaultKeys.contains(key) {
-            SharedVault.shared.set(value, forKey: key)
+        if SharedVault.shared.isAvailable {
+            SharedVault.shared.set(value.map { SharedSync.wrap($0, revision: revision) }, forKey: key)
         }
+        SharedSync.writeNotify(value, key: key, revision: revision)
+    }
+
+    /// 从每条路上各拿一份，用最新的。时间一样（都是旧版写的、没带时间）时：
+    /// 有 App Group 就信 App Group，否则信钥匙串，和以前的行为一样。
+    public func syncedData(forKey key: String) -> Data? {
+        var candidates: [(revision: UInt64, priority: Int, data: Data)] = []
+        if let local = defaults.data(forKey: scopedKey(key)) {
+            let revision = UInt64(max(defaults.double(forKey: scopedKey(key) + ".rev"), 0))
+            candidates.append((revision, isAppGroupAvailable ? 2 : 0, local))
+        }
+        if SharedVault.shared.isAvailable, let stored = SharedVault.shared.data(forKey: key) {
+            let unpacked = SharedSync.unwrap(stored)
+            candidates.append((unpacked.revision, isAppGroupAvailable ? 1 : 2, unpacked.payload))
+        }
+        if let notified = SharedSync.readNotify(key: key) {
+            candidates.append((notified.revision, -1, notified.payload))
+        }
+        return candidates.max { left, right in
+            left.revision != right.revision ? left.revision < right.revision : left.priority < right.priority
+        }?.data
     }
 
     /// 需要在 App 和键盘之间共享的数据（都是小数据，学习记录这种大的不放进来）。

@@ -6,8 +6,9 @@ ios/Shared/IMECore/PinyinEngine.swift 里的纠错（solveCorrected / editedTile
     python tools/dict/typo_eval.py              # 默认参数
     python tools/dict/typo_eval.py first=3      # 改参数试
 
-2026-11-07 的结果：182 句打错一处的，100 句纠对排第一、15 句排第二；
-225 条打对的句子和简拼里 3 条出了纠错候选，0 条排第一。
+2026-11-10 的结果（3.0.9）：182 句打错一处的，102 句纠对排第一、16 句排第二；
+225 条打对的句子和简拼里 5 条出了纠错候选，1 条排第一。
+纠成三个字以上的现成短语时，每多一个字少扣 1 分（nihaohaoma -> 你还好吗 排第二）。
 """
 import math
 import random
@@ -120,7 +121,7 @@ def typo(query, rng):
 
 
 
-P = dict(sub=5.0, swap=4.0, delete=5.0, insert=5.5, first=2.0, maxlen=12)
+P = dict(sub=5.0, swap=4.0, delete=5.0, insert=5.5, first=2.5, maxlen=12, long=1.0, second=0.0)
 INSERTABLE = "aeiouhgn"
 
 
@@ -179,7 +180,8 @@ class DP(Engine):
                     text, freq, syl, _ = rows[0]
                     pair = b.BIGRAM_BONUS if prev and text in self.pairs.get(prev, ()) else 0.0
                     bonus = 0.0 if one else b.SYLLABLE_BONUS * (syl - 1)
-                    res.append((j, text, math.log(freq + 1) - b.TILE_PENALTY + bonus + pair - cost, False, True))
+                    discount = P["long"] * max(syl - 2, 0)
+                    res.append((j, text, math.log(freq + 1) - b.TILE_PENALTY + bonus + pair - max(cost - discount, 1.0), False, True))
         return res
 
     def solve2(self, query):
@@ -217,7 +219,7 @@ class DP(Engine):
         orig, s0, corr, s1 = self.solve2(query)
         if corr is None or corr == orig:
             return orig, None, False
-        if orig is not None and s1 <= s0:
+        if orig is not None and s1 <= s0 - P["second"]:
             return orig, None, False
         return orig, corr, orig is None or s1 - s0 > P["first"]
 
@@ -226,7 +228,10 @@ def main():
     for spec in sys.argv[1:]:
         k, v = spec.split("=")
         P[k] = float(v)
-    builder = b.collect()
+    import pickle
+    from pathlib import Path as _P
+    cache = _P(__file__).with_name("builder.pkl")
+    builder = pickle.loads(cache.read_bytes()) if cache.exists() else b.collect()
     e = DP(builder)
     full = lambda s: "".join(lazy_pinyin(s))
     ini = lambda s: "".join(p[0] for p in lazy_pinyin(s, style=Style.NORMAL))
@@ -253,6 +258,8 @@ def main():
             bad_any += 1
             if first: bad_first.append(f"{q}: {orig} -> {corr}")
     print(P, st)
+    for q in ["nihaohaoma", "nizaiganshenmo", "wohaixiangqu", "xiexienihaoma"]:
+        print("   例", q, e.correct(q))
     print(f"打对的/简拼 {len(clean_cases)} 条里被纠：{bad_any}，放第一：{len(bad_first)}", bad_first[:15])
     for line in shown: print("   没纠对：", line)
 

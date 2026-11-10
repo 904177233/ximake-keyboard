@@ -38,17 +38,16 @@ public struct SharedBlob: Sendable {
     }
 
     public func data(forKey key: String) -> Data? {
-        if useVault, SharedVault.shared.isAvailable {
-            return SharedVault.shared.data(forKey: key)
-        }
-        return store.data(forKey: key)
+        // 和设置一样：每条走得通的路上各拿一份，用最新的（见 SharedSync.swift）
+        guard store.backing != .memory else { return store.data(forKey: key) }
+        return store.syncedData(forKey: key)
     }
 
     public func set(_ data: Data?, forKey key: String) {
-        if useVault, SharedVault.shared.isAvailable {
-            SharedVault.shared.set(data, forKey: key)
-        } else {
+        guard store.backing != .memory else {
             store.setData(data, forKey: key)
+            return
         }
+        store.setSyncedData(data, forKey: key)
     }
 }

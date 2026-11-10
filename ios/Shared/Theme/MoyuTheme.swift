@@ -301,14 +301,16 @@ public struct KeyboardPrefs: Codable, Equatable, Sendable {
     public var englishSuggestions: Bool = true
     /// 每天从仓库拉一次新词表。
     public var autoUpdateHotWords: Bool = true
-    /// 键盘背景透明，透出系统键盘的底（和下面地球键那一排连成一片）。关掉用主题的底色。
-    public var systemBackground: Bool = true
+    /// 键盘背景透明，透出系统键盘的底（和下面地球键那一排连成一片）。默认关：用主题自己的底色。
+    /// 3.0.7、3.0.8 默认开，键盘成了系统那种冷灰，用户说不好看，3.0.9 改回默认关。
+    public var systemBackground: Bool = false
 
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
         case theme, mascot, layout, height, haptics, keySound, fuzzyPinyin, customSurfaceHeight
-        case englishSuggestions, autoUpdateHotWords, systemBackground
+        case englishSuggestions, autoUpdateHotWords
+        case systemBackground = "systemBackground309"
     }
 
     /// 容错解码：缺字段或值不认识都用默认值。
@@ -325,7 +327,7 @@ public struct KeyboardPrefs: Codable, Equatable, Sendable {
         customSurfaceHeight = try? container.decodeIfPresent(Double.self, forKey: .customSurfaceHeight)
         englishSuggestions = (try? container.decodeIfPresent(Bool.self, forKey: .englishSuggestions)) ?? true
         autoUpdateHotWords = (try? container.decodeIfPresent(Bool.self, forKey: .autoUpdateHotWords)) ?? true
-        systemBackground = (try? container.decodeIfPresent(Bool.self, forKey: .systemBackground)) ?? true
+        systemBackground = (try? container.decodeIfPresent(Bool.self, forKey: .systemBackground)) ?? false
     }
 
     /// 读取。

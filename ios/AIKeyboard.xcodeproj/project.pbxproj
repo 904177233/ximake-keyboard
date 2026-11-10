@@ -70,6 +70,7 @@
 		8F7F4FEA9E90C969C4146599 /* PasteboardBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 839C52F4E47A4E032930C478 /* PasteboardBridge.swift */; };
 		6ACC6B6163640AF81A79C86A /* SharedBlob.swift in Sources */ = {isa = PBXBuildFile; fileRef = A265B7C932E1D2050614D688 /* SharedBlob.swift */; };
 		FF26266B8EDFC2E2EE34D46F /* SharedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 903ED970CC68D8E8C8A01350 /* SharedStore.swift */; };
+		B551F38CBD4F4349B410E528 /* SharedSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED93A60C1CD2C33D56BF6BA4 /* SharedSync.swift */; };
 		BBB9BFEB6FCEE6733CA20980 /* SharedVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8E83541305D87C4BF301F8 /* SharedVault.swift */; };
 		2303027B037D55C407FA540D /* MoyuTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 349ED2582CE3A72240AE3E19 /* MoyuTheme.swift */; };
 		E726538021D8A35EEA67F5B3 /* KMVoiceInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BD466DEEFA3C32C61A3CF41 /* KMVoiceInput.swift */; };
@@ -146,6 +147,7 @@
 		0BCB577B163FFEE5CB45A8CF /* PasteboardBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 839C52F4E47A4E032930C478 /* PasteboardBridge.swift */; };
 		5CF7F7580B7AB41D41D5E897 /* SharedBlob.swift in Sources */ = {isa = PBXBuildFile; fileRef = A265B7C932E1D2050614D688 /* SharedBlob.swift */; };
 		5D8D8CF5A75BBB5F67CE775C /* SharedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 903ED970CC68D8E8C8A01350 /* SharedStore.swift */; };
+		230861B8BA6601285D5BC3D6 /* SharedSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED93A60C1CD2C33D56BF6BA4 /* SharedSync.swift */; };
 		40AE84C659C09706AA4511A9 /* SharedVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8E83541305D87C4BF301F8 /* SharedVault.swift */; };
 		9F15F8CDB5CBD8D72EE430DA /* MoyuTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 349ED2582CE3A72240AE3E19 /* MoyuTheme.swift */; };
 		AC6570F2705CDEE3AEE3C0CB /* KMVoiceInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BD466DEEFA3C32C61A3CF41 /* KMVoiceInput.swift */; };
@@ -275,6 +277,7 @@
 		839C52F4E47A4E032930C478 /* PasteboardBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/Storage/PasteboardBridge.swift; sourceTree = SOURCE_ROOT; };
 		A265B7C932E1D2050614D688 /* SharedBlob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/Storage/SharedBlob.swift; sourceTree = SOURCE_ROOT; };
 		903ED970CC68D8E8C8A01350 /* SharedStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/Storage/SharedStore.swift; sourceTree = SOURCE_ROOT; };
+		ED93A60C1CD2C33D56BF6BA4 /* SharedSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/Storage/SharedSync.swift; sourceTree = SOURCE_ROOT; };
 		5E8E83541305D87C4BF301F8 /* SharedVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/Storage/SharedVault.swift; sourceTree = SOURCE_ROOT; };
 		349ED2582CE3A72240AE3E19 /* MoyuTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/Theme/MoyuTheme.swift; sourceTree = SOURCE_ROOT; };
 		1BD466DEEFA3C32C61A3CF41 /* KMVoiceInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/Voice/KMVoiceInput.swift; sourceTree = SOURCE_ROOT; };
@@ -526,6 +529,7 @@
 				839C52F4E47A4E032930C478 /* PasteboardBridge.swift */,
 				A265B7C932E1D2050614D688 /* SharedBlob.swift */,
 				903ED970CC68D8E8C8A01350 /* SharedStore.swift */,
+				ED93A60C1CD2C33D56BF6BA4 /* SharedSync.swift */,
 				5E8E83541305D87C4BF301F8 /* SharedVault.swift */,
 			);
 			name = Storage;
@@ -738,6 +742,7 @@
 				8F7F4FEA9E90C969C4146599 /* PasteboardBridge.swift in Sources */,
 				6ACC6B6163640AF81A79C86A /* SharedBlob.swift in Sources */,
 				FF26266B8EDFC2E2EE34D46F /* SharedStore.swift in Sources */,
+				B551F38CBD4F4349B410E528 /* SharedSync.swift in Sources */,
 				BBB9BFEB6FCEE6733CA20980 /* SharedVault.swift in Sources */,
 				2303027B037D55C407FA540D /* MoyuTheme.swift in Sources */,
 				E726538021D8A35EEA67F5B3 /* KMVoiceInput.swift in Sources */,
@@ -821,6 +826,7 @@
 				0BCB577B163FFEE5CB45A8CF /* PasteboardBridge.swift in Sources */,
 				5CF7F7580B7AB41D41D5E897 /* SharedBlob.swift in Sources */,
 				5D8D8CF5A75BBB5F67CE775C /* SharedStore.swift in Sources */,
+				230861B8BA6601285D5BC3D6 /* SharedSync.swift in Sources */,
 				40AE84C659C09706AA4511A9 /* SharedVault.swift in Sources */,
 				9F15F8CDB5CBD8D72EE430DA /* MoyuTheme.swift in Sources */,
 				AC6570F2705CDEE3AEE3C0CB /* KMVoiceInput.swift in Sources */,
