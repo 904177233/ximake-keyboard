@@ -116,6 +116,8 @@ final class KeyboardSession: ObservableObject {
     private var englishWord = ""
     /// 候选栏现在放的是英文补全。
     private var showingEnglishCompletions = false
+    /// 刚点了英文补全，后面自动加了一个空格。接着打标点时要把它去掉。
+    private var autoSpaceInserted = false
     private var documentIdentifier: UUID?
     private var isActive = false
     private var toastTask: Task<Void, Never>?
@@ -146,7 +148,11 @@ final class KeyboardSession: ObservableObject {
         let prefs = KeyboardPrefs.load()
         self.prefs = prefs
         self.snapshot = ConfigStore().load()
-        self.palette = MoyuPalette(theme: prefs.theme, dark: false)
+        self.palette = MoyuPalette(theme: prefs.theme, dark: false, translucent: prefs.systemBackground)
+    }
+
+    private func refreshPalette() {
+        palette = MoyuPalette(theme: prefs.theme, dark: isDark, translucent: prefs.systemBackground)
     }
 
     // MARK: - 生命周期
@@ -163,7 +169,7 @@ final class KeyboardSession: ObservableObject {
         kit.learning.isEnabled = snapshot.enableLearning
         kit.reloadPhrases()
         _ = FuzzyPinyinSettings.shared.setEnabled(prefs.fuzzyPinyin)
-        palette = MoyuPalette(theme: prefs.theme, dark: isDark)
+        refreshPalette()
         syncWithDocument(force: true)
         kit.learning.reloadIfChanged()
         setUpVoiceSignals()
@@ -239,7 +245,7 @@ final class KeyboardSession: ObservableObject {
     func setAppearance(dark: Bool) {
         guard dark != isDark else { return }
         isDark = dark
-        palette = MoyuPalette(theme: prefs.theme, dark: dark)
+        refreshPalette()
         render()
     }
 
@@ -415,6 +421,9 @@ final class KeyboardSession: ObservableObject {
         default:
             endEnglishWord()
         }
+        // 自动加的空格只对紧接着的那一下标点有用
+        let hadAutoSpace = autoSpaceInserted
+        autoSpaceInserted = false
         switch action {
         case let .letter(character):
             handleLetter(character)
@@ -423,10 +432,9 @@ final class KeyboardSession: ObservableObject {
             recompute()
             leaveIdleState()
         case let .text(text):
-            if isComposing { commitTopCandidate() }
-            insert(text)
+            handlePunctuation(text, afterAutoSpace: hadAutoSpace)
         case let .punctuation(text):
-            handlePunctuation(text)
+            handlePunctuation(text, afterAutoSpace: hadAutoSpace)
         case .separator:
             if !raw.isEmpty {
                 breaks.insert(raw.count)
@@ -458,6 +466,10 @@ final class KeyboardSession: ObservableObject {
             commitTopCandidate()
             symbolTab = .emoji
             setPage(.symbols)
+        case .showPunctuation:
+            commitTopCandidate()
+            symbolTab = isChinese ? .chinese : .english
+            setPage(.symbols)
         case .clearComposition:
             resetComposition()
             showingTools = true
@@ -481,7 +493,11 @@ final class KeyboardSession: ObservableObject {
         if shift == .once {
             shift = .off
         }
-        if isChinese {
+        if isChinese, output.isUppercase, raw.isEmpty, selected.isEmpty, !usesNineKey {
+            // 中文模式下按了 Shift：直接上屏大写字母，不当拼音（打 A 股、T 恤、OK 这类）
+            insert(String(output))
+            clearPredictions()
+        } else if isChinese {
             raw.append(output)
             recompute()
             leaveIdleState()
@@ -532,20 +548,34 @@ final class KeyboardSession: ObservableObject {
         insert(word + " ")
         englishWord = ""
         clearEnglishCompletions()
+        autoSpaceInserted = true
     }
 
-    private func handlePunctuation(_ text: String) {
+    /// 打标点或符号：组字中先上屏首选；再按前面的内容做小调整（小数点、时间、引号配对）。
+    private func handlePunctuation(_ text: String, afterAutoSpace: Bool) {
         if isComposing { commitTopCandidate() }
-        // 数字后面的句号大多是小数点
-        if text == "。", let last = lastCharacterBeforeCursor, last.isNumber {
-            insert(".")
-        } else {
-            insert(text)
+        // 点了补全自动加的空格，后面接标点时去掉：hello . -> hello.
+        if afterAutoSpace, !isChinese, !writesToDraft, SmartPunctuation.closesUpSpace(text),
+           host?.documentProxy.documentContextBeforeInput?.hasSuffix(" ") == true {
+            host?.documentProxy.deleteBackward()
         }
+        insert(SmartPunctuation.adjusted(text, before: textBeforeCursor))
+        clearPredictions()
     }
 
-    private var lastCharacterBeforeCursor: Character? {
-        writesToDraft ? draft.last : host?.documentProxy.documentContextBeforeInput?.last
+    /// 光标前的文字。
+    private var textBeforeCursor: String {
+        writesToDraft ? draft : (host?.documentProxy.documentContextBeforeInput ?? "")
+    }
+
+    /// 打了别的字以后，上一轮的联想就过时了。
+    private func clearPredictions() {
+        guard !predictions.isEmpty || !aiSuggestions.isEmpty else { return }
+        predictions = []
+        aiSuggestions = []
+        showingEnglishCompletions = false
+        showingTools = true
+        suggest.cancel()
     }
 
     private func handleBackspace() {
@@ -610,6 +640,7 @@ final class KeyboardSession: ObservableObject {
             return
         }
         insert(" ")
+        clearPredictions()
     }
 
     private func handleEnter() {
@@ -635,16 +666,20 @@ final class KeyboardSession: ObservableObject {
     func insert(_ text: String) {
         guard !text.isEmpty else { return }
         if writesToDraft {
-            draft += text
+            // 长按回车给的是 \r\n（为了不触发发送），草稿里只要普通换行
+            draft += text == "\r\n" ? "\n" : text
         } else {
             host?.documentProxy.insertText(text)
             updateAutoCapitalization()
         }
     }
 
+    /// 现在滑空格能不能移光标：组字中、在对话或设置项里打字时不能。
+    var canMoveCursor: Bool { !isComposing && !writesToDraft }
+
     /// 空格滑动移光标。
     func moveCursor(by offset: Int) {
-        guard !isComposing, !writesToDraft, offset != 0 else { return }
+        guard canMoveCursor, offset != 0 else { return }
         host?.documentProxy.adjustTextPosition(byCharacterOffset: offset)
     }
 
@@ -1306,7 +1341,7 @@ final class KeyboardSession: ObservableObject {
     func updatePrefs(_ change: (inout KeyboardPrefs) -> Void) {
         change(&prefs)
         prefs.save()
-        palette = MoyuPalette(theme: prefs.theme, dark: isDark)
+        refreshPalette()
         render()
     }
 

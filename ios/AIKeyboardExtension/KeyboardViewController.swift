@@ -497,15 +497,22 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
                 session.handle(.language)
                 for letter in "hel" { session.handle(.letter(letter)) }
             }),
-            ("回中文", { session.handle(.language) })
+            ("回中文", { session.handle(.language) }),
+            ("九宫格", { session.toggleLayout() }),
+            ("九宫格打字", { for digit in "64426" { session.handle(.t9(digit)) } }),
+            ("回 26 键", { session.handle(.clearComposition); session.toggleLayout() }),
+            ("数字页", { session.handle(.showNumbers) }),
+            ("符号页", { session.handle(.showLetters); session.handle(.showSymbols) })
         ]
         Task { @MainActor [weak self] in
             var index = 0
             while let self {
                 let step = steps[index % steps.count]
+                // 每一步前半段不显示小字，截到的图是干净的；后半段显示这一步的名字和高度
+                self.simLabel.isHidden = true
                 step.1()
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
-                // 小字放在最下面，不挡候选栏
+                self.simLabel.isHidden = false
                 self.simLabel.text = "S\(index % steps.count) \(step.0) | \(self.heightDiagnostic)"
                 self.simLabel.frame = CGRect(x: 0, y: self.view.bounds.height - 11, width: self.view.bounds.width, height: 11)
                 self.view.bringSubviewToFront(self.simLabel)
@@ -524,6 +531,10 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
 
     func keySurface(_ surface: KeySurfaceView, moveCursorBy offset: Int) {
         session.moveCursor(by: offset)
+    }
+
+    func keySurfaceCanMoveCursor(_ surface: KeySurfaceView) -> Bool {
+        session.canMoveCursor
     }
 
     func keySurfaceDidSwipeClear(_ surface: KeySurfaceView) {
@@ -602,7 +613,8 @@ final class VoiceHoldOverlay: UIView {
 
     func apply(state: KeyboardSession.VoiceHold, text: String, palette: MoyuPalette) {
         let cancelling = state == .cancelling
-        panel.backgroundColor = cancelling ? palette.function : palette.key
+        // 面板要盖住下面的键，用不透明的气泡色（键本身可能是半透明的）
+        panel.backgroundColor = cancelling ? palette.popup.mixed(with: .gray, amount: 0.28) : palette.popup
         bar.backgroundColor = (cancelling ? palette.secondary : palette.accent).cgColor
         label.textColor = palette.text
         hint.textColor = palette.secondary

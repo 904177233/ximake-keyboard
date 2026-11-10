@@ -67,6 +67,8 @@ final class TopBarView: UIView {
     var onSuggestion: ((Int) -> Void)?
 
     private let toolsScroll = UIScrollView()
+    private let toolsFade = EdgeFadeView()
+    private let stripFade = EdgeFadeView()
     private var toolButtons: [ToolID: UIButton] = [:]
     private var visibleTools: [ToolID] = []
     private let knob = UIButton(type: .custom)
@@ -84,7 +86,8 @@ final class TopBarView: UIView {
         toolsScroll.showsHorizontalScrollIndicator = false
         toolsScroll.alwaysBounceHorizontal = false
         toolsScroll.hideEdgeBlur()
-        addSubview(toolsScroll)
+        toolsFade.addSubview(toolsScroll)
+        addSubview(toolsFade)
 
         knob.setImage(Self.symbol("drop.fill", size: 17), for: .normal)
         knob.accessibilityLabel = "AI 对话"
@@ -114,7 +117,8 @@ final class TopBarView: UIView {
                 self.onSuggestion?(index)
             }
         }
-        addSubview(strip)
+        stripFade.addSubview(strip)
+        addSubview(stripFade)
 
         hintLabel.font = .systemFont(ofSize: 12)
         addSubview(hintLabel)
@@ -228,13 +232,13 @@ final class TopBarView: UIView {
             }
         }
 
-        toolsScroll.isHidden = !showsTools
+        toolsFade.isHidden = !showsTools
         knob.isHidden = !showsKnob
         expandButton.isHidden = !showsExpand
         expandDivider.isHidden = !showsExpand
         gridButton.isHidden = !showsGrid
         preedit.isHidden = !showsPreedit
-        strip.isHidden = !showsStrip
+        stripFade.isHidden = !showsStrip
         hintLabel.isHidden = !showsHint
         setNeedsLayout()
     }
@@ -250,7 +254,8 @@ final class TopBarView: UIView {
         // 工具图标
         let circle = min(36, height - 10)
         let gap: CGFloat = 6
-        toolsScroll.frame = CGRect(x: 0, y: 0, width: knob.frame.minX - 3, height: height)
+        toolsFade.frame = CGRect(x: 0, y: 0, width: knob.frame.minX - 3, height: height)
+        toolsScroll.frame = toolsFade.bounds
         var x: CGFloat = 6
         for tool in visibleTools {
             guard let button = toolButtons[tool] else { continue }
@@ -278,17 +283,47 @@ final class TopBarView: UIView {
         let height = bounds.height
         switch content {
         case .composing:
-            strip.frame = CGRect(x: 0, y: 16, width: width - 40, height: height - 16)
+            stripFade.frame = CGRect(x: 0, y: 16, width: width - 40, height: height - 16)
         case .suggestions:
             let circle = min(36, height - 10)
             let left = 6 + circle + 2
             let knobSide = min(38, height - 8)
-            strip.frame = CGRect(x: left, y: 0, width: width - knobSide - 7 - left - 2, height: height)
+            stripFade.frame = CGRect(x: left, y: 0, width: width - knobSide - 7 - left - 2, height: height)
         case .options:
-            strip.frame = CGRect(x: 4, y: 0, width: width - 8, height: height)
+            stripFade.frame = CGRect(x: 4, y: 0, width: width - 8, height: height)
         default:
             break
         }
+        strip.frame = stripFade.bounds
+    }
+}
+
+/// 右边缘渐隐的容器。里面的滚动条滑到边上时慢慢淡出，不是被一刀切掉。
+final class EdgeFadeView: UIView {
+
+    private let fade = CAGradientLayer()
+    private let fadeWidth: CGFloat = 20
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        fade.startPoint = CGPoint(x: 0, y: 0.5)
+        fade.endPoint = CGPoint(x: 1, y: 0.5)
+        fade.colors = [UIColor.black.cgColor, UIColor.black.cgColor, UIColor.clear.cgColor]
+        layer.mask = fade
+    }
+
+    required init?(coder: NSCoder) {
+        return nil
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        fade.frame = bounds
+        let start = bounds.width > fadeWidth ? 1 - fadeWidth / bounds.width : 0
+        fade.locations = [0, NSNumber(value: Double(start)), 1]
+        CATransaction.commit()
     }
 }
 

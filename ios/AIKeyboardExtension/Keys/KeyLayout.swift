@@ -28,6 +28,8 @@ enum KeyAction: Equatable {
     case showNumbers
     case showLetters
     case showSymbols
+    /// 打开符号面板的标点页。
+    case showPunctuation
     /// 清空组字。
     case clearComposition
     /// 26 键 / 九宫格切换。
@@ -302,7 +304,8 @@ enum KeyLayoutBuilder {
                                frame: CGRect(x: rightEdge, y: y, width: punctuationWidth, height: height)))
         }
 
-        keys.append(KeyDef(action: .space, title: "墨语", style: .space, fontSize: 13,
+        // 空格上写着现在是哪种输入，英文模式一眼能看出来
+        keys.append(KeyDef(action: .space, title: state.isChinese ? "墨语" : "English", style: .space, fontSize: 13,
                            frame: CGRect(x: x, y: y, width: rightEdge - gap - x, height: height)))
 
         keys.append(KeyDef(action: .language,
@@ -340,9 +343,18 @@ enum KeyLayoutBuilder {
                                    y: rowY(rowIndex, metrics),
                                    width: keyWidth,
                                    height: height)
-                keys.append(KeyDef(action: cell.0,
-                                   title: cell.2,
+                // 1 键：打字时是分词，没在打字时进标点页（以前是打一个 '，中文里用不上）
+                var action = cell.0
+                var title = cell.2
+                if cell.0 == .separator, !state.isComposing {
+                    action = .showPunctuation
+                    title = "符号"
+                }
+                // 上滑或长按打数字
+                keys.append(KeyDef(action: action,
+                                   title: title,
                                    caption: cell.1,
+                                   alternate: .text(cell.1),
                                    style: cell.0 == .separator ? .function : .letter,
                                    fontSize: 15,
                                    frame: frame))

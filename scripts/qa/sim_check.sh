@@ -73,7 +73,11 @@ done
 xcrun simctl launch "$UDID" "$APP_ID" | tee "$OUT/launch.txt"
 sleep 15
 
-for index in $(seq -w 1 30); do
+for index in $(seq -w 1 44); do
+  # 后一半切到深色，两种外观都看得到
+  if [ "$index" = "23" ]; then
+    xcrun simctl ui "$UDID" appearance dark 2>&1 | tee -a "$OUT/screenshot.txt" || true
+  fi
   if ! xcrun simctl io "$UDID" screenshot --type=png "$OUT/shot-$index.png" 2>&1 | tee -a "$OUT/screenshot.txt"; then
     echo "第 $index 张 simctl 失败"
   fi

@@ -148,6 +148,16 @@ check("一起 后面有去", afterTogether.contains("去"), "\(afterTogether)")
 check("我妈不被打成我吗", qwerty("womarangwohuijiachifan").candidates.first?.text == "我妈让我回家吃饭",
       "\(texts(qwerty("womarangwohuijiachifan")))")
 
+print("标点")
+check("数字后面的句号是小数点", SmartPunctuation.adjusted("。", before: "3") == ".")
+check("汉字后面的句号不变", SmartPunctuation.adjusted("。", before: "好") == "。")
+check("数字后面的冒号是半角（12:30）", SmartPunctuation.adjusted("：", before: "12") == ":")
+check("第一个引号是前引号", SmartPunctuation.adjusted("“", before: "他说") == "“")
+check("前面有没配上的引号就给后引号", SmartPunctuation.adjusted("“", before: "他说“你好") == "”")
+check("配上以后又是前引号", SmartPunctuation.adjusted("“", before: "他说“你好”然后") == "“")
+check("换了段不管上一段没配上的", SmartPunctuation.adjusted("“", before: "他说“你好\n") == "“")
+check("英文补全后的空格遇到句号要去掉", SmartPunctuation.closesUpSpace(".") && !SmartPunctuation.closesUpSpace("("))
+
 print("逐词选词")
 let long = qwerty("woxihuanni")
 let wo = long.candidates.first { $0.text == "我" }

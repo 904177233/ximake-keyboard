@@ -31,6 +31,7 @@
 		8E70D64FAEF71136C2A23418 /* PhraseSuggestion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1FF3A4955FF727E7D4B841 /* PhraseSuggestion.swift */; };
 		DE5A7C6ADB27BC3A17E70DEC /* PinyinEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D4E36CE045EC674511C8771 /* PinyinEngine.swift */; };
 		F938C0EBEE6B845B351BD862 /* PinyinSyllables.swift in Sources */ = {isa = PBXBuildFile; fileRef = B387002A9EFC3CDC3B455245 /* PinyinSyllables.swift */; };
+		67AA41F8BD4FAD23E03BF286 /* SmartPunctuation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 367657744DA9220409C3DD02 /* SmartPunctuation.swift */; };
 		505CB2834AD238D295EFCD48 /* TypoCorrector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 613F08730CADD4C3A8F0FE4D /* TypoCorrector.swift */; };
 		C133C37DC1012E321082A627 /* UserLearningStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A8B7792A581F6F126023B15 /* UserLearningStore.swift */; };
 		63ECC566EA2036579AE1DE0B /* AIFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0E6A23BCE24D1DAE8E1C15B /* AIFeature.swift */; };
@@ -106,6 +107,7 @@
 		8AC449D978406F97ED9F6585 /* PhraseSuggestion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1FF3A4955FF727E7D4B841 /* PhraseSuggestion.swift */; };
 		B1212008B6DF4E85EB63C0FE /* PinyinEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D4E36CE045EC674511C8771 /* PinyinEngine.swift */; };
 		766B51B0AA613CE6470829DE /* PinyinSyllables.swift in Sources */ = {isa = PBXBuildFile; fileRef = B387002A9EFC3CDC3B455245 /* PinyinSyllables.swift */; };
+		0FA928A647E1D2254E0D0720 /* SmartPunctuation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 367657744DA9220409C3DD02 /* SmartPunctuation.swift */; };
 		D53DD271A4572D43A278E26A /* TypoCorrector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 613F08730CADD4C3A8F0FE4D /* TypoCorrector.swift */; };
 		78B84003A4E40021B743B3C7 /* UserLearningStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A8B7792A581F6F126023B15 /* UserLearningStore.swift */; };
 		8C90D0E2A71501E5C62DB3FD /* AIFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0E6A23BCE24D1DAE8E1C15B /* AIFeature.swift */; };
@@ -234,6 +236,7 @@
 		2F1FF3A4955FF727E7D4B841 /* PhraseSuggestion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/PhraseSuggestion.swift; sourceTree = SOURCE_ROOT; };
 		3D4E36CE045EC674511C8771 /* PinyinEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/PinyinEngine.swift; sourceTree = SOURCE_ROOT; };
 		B387002A9EFC3CDC3B455245 /* PinyinSyllables.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/PinyinSyllables.swift; sourceTree = SOURCE_ROOT; };
+		367657744DA9220409C3DD02 /* SmartPunctuation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/SmartPunctuation.swift; sourceTree = SOURCE_ROOT; };
 		613F08730CADD4C3A8F0FE4D /* TypoCorrector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/TypoCorrector.swift; sourceTree = SOURCE_ROOT; };
 		0A8B7792A581F6F126023B15 /* UserLearningStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/UserLearningStore.swift; sourceTree = SOURCE_ROOT; };
 		E0E6A23BCE24D1DAE8E1C15B /* AIFeature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/Models/AIFeature.swift; sourceTree = SOURCE_ROOT; };
@@ -456,6 +459,7 @@
 				2F1FF3A4955FF727E7D4B841 /* PhraseSuggestion.swift */,
 				3D4E36CE045EC674511C8771 /* PinyinEngine.swift */,
 				B387002A9EFC3CDC3B455245 /* PinyinSyllables.swift */,
+				367657744DA9220409C3DD02 /* SmartPunctuation.swift */,
 				613F08730CADD4C3A8F0FE4D /* TypoCorrector.swift */,
 				0A8B7792A581F6F126023B15 /* UserLearningStore.swift */,
 			);
@@ -695,6 +699,7 @@
 				8E70D64FAEF71136C2A23418 /* PhraseSuggestion.swift in Sources */,
 				DE5A7C6ADB27BC3A17E70DEC /* PinyinEngine.swift in Sources */,
 				F938C0EBEE6B845B351BD862 /* PinyinSyllables.swift in Sources */,
+				67AA41F8BD4FAD23E03BF286 /* SmartPunctuation.swift in Sources */,
 				505CB2834AD238D295EFCD48 /* TypoCorrector.swift in Sources */,
 				C133C37DC1012E321082A627 /* UserLearningStore.swift in Sources */,
 				63ECC566EA2036579AE1DE0B /* AIFeature.swift in Sources */,
@@ -777,6 +782,7 @@
 				8AC449D978406F97ED9F6585 /* PhraseSuggestion.swift in Sources */,
 				B1212008B6DF4E85EB63C0FE /* PinyinEngine.swift in Sources */,
 				766B51B0AA613CE6470829DE /* PinyinSyllables.swift in Sources */,
+				0FA928A647E1D2254E0D0720 /* SmartPunctuation.swift in Sources */,
 				D53DD271A4572D43A278E26A /* TypoCorrector.swift in Sources */,
 				78B84003A4E40021B743B3C7 /* UserLearningStore.swift in Sources */,
 				8C90D0E2A71501E5C62DB3FD /* AIFeature.swift in Sources */,

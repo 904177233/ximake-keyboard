@@ -20,6 +20,8 @@ protocol KeySurfaceDelegate: AnyObject {
     func keySurface(_ surface: KeySurfaceView, didTrigger action: KeyAction)
     /// 空格键滑动移动光标。
     func keySurface(_ surface: KeySurfaceView, moveCursorBy offset: Int)
+    /// 现在滑空格能不能移光标（组字中不能）。
+    func keySurfaceCanMoveCursor(_ surface: KeySurfaceView) -> Bool
     /// 退格键左滑清空组字。
     func keySurfaceDidSwipeClear(_ surface: KeySurfaceView)
     /// 按键触感与按键音。
@@ -146,6 +148,7 @@ final class KeySurfaceView: UIView, UIInputViewAudioFeedback {
         case .space: return "空格"
         case .language: return "中英切换"
         case .showSymbols: return "表情和符号"
+        case .showPunctuation: return "符号"
         case .nextKeyboard: return "下一个键盘"
         default: return key.title
         }
@@ -180,7 +183,8 @@ final class KeySurfaceView: UIView, UIInputViewAudioFeedback {
         case .accent:
             fill = key.isDisabled ? palette.function : palette.accent
         }
-        if key.style != .accent {
+        // 半透明的键不画下沿：下沿是垫在键下面的一整块，会透上来把键染暗
+        if key.style != .accent, fill.cgColor.alpha >= 1 {
             palette.edge.setFill()
             UIBezierPath(roundedRect: key.frame.offsetBy(dx: 0, dy: 0.75), cornerRadius: cornerRadius).fill()
         }
@@ -370,8 +374,9 @@ final class KeySurfaceView: UIView, UIInputViewAudioFeedback {
         case .shift:
             delegate?.keySurface(self, didTrigger: .shift)
             press.didFire = true
-        case .enter:
-            // 长按回车：只换行，不发送。微信这类 App 收到 "\n" 就发送，"\r\n" 不等于它，就只是换行
+        case .enter where key.style == .accent && !key.isDisabled:
+            // 回车是「发送」这类时，长按只换行不发送。微信这类 App 收到 "\n" 就发送，"\r\n" 不等于它，就只是换行。
+            // 回车本来就是换行时不做这个，免得往普通文字里塞进一个 \r。
             press.holdTask = Task { @MainActor [weak self] in
                 try? await Task.sleep(nanoseconds: 450_000_000)
                 guard !Task.isCancelled, let self, !press.didFire else { return }
@@ -423,7 +428,7 @@ final class KeySurfaceView: UIView, UIInputViewAudioFeedback {
                         press.holdCancel = cancel
                         delegate?.keySurface(self, spaceHoldWillCancel: cancel)
                     }
-                } else if press.cursorMode || abs(dx) > 10 {
+                } else if press.cursorMode || (abs(dx) > 10 && delegate?.keySurfaceCanMoveCursor(self) == true) {
                     if !press.cursorMode {
                         press.cursorMode = true
                         press.holdTask?.cancel()
@@ -536,7 +541,7 @@ final class KeySurfaceView: UIView, UIInputViewAudioFeedback {
 
     private func showPopup(for key: KeyDef, alternate: Bool) {
         guard let container = popup.superview else { return }
-        let text = alternate ? (key.hint ?? key.title) : key.title
+        let text = alternate ? (key.hint ?? key.caption ?? key.title) : key.title
         let frame = convert(key.frame, to: container)
         popup.show(text: text, above: frame, within: container.bounds)
     }
@@ -565,7 +570,7 @@ final class KeyPopupView: UILabel {
     }
 
     func apply(palette: MoyuPalette) {
-        layer.backgroundColor = palette.key.cgColor
+        layer.backgroundColor = palette.popup.cgColor
         textColor = palette.text
     }
 

@@ -70,12 +70,56 @@ public struct MoyuPalette {
     public let page: UIColor
     /// App 里输入框、按钮的底色。
     public let surface: UIColor
+    /// 按键气泡的底色。键是半透明的时候气泡也要不透明，不然看不清。
+    public let popup: UIColor
 
     /// 计算颜色。
     /// - Parameters:
     ///   - theme: 主题。
     ///   - dark: 是否深色。
-    public init(theme: MoyuThemeID, dark: Bool) {
+    ///   - translucent: 键盘背景透明、透出系统键盘的底。这时功能键用中性的半透明色，
+    ///     不管系统的底是什么颜色都协调（主题自己的暖灰、蓝灰放在系统的冷灰底上会发脏）。
+    public init(theme: MoyuThemeID, dark: Bool, translucent: Bool = false) {
+        let solid = MoyuPalette(solidTheme: theme, dark: dark)
+        canvas = solid.canvas
+        text = solid.text
+        accent = solid.accent
+        onAccent = solid.onAccent
+        accentText = solid.accentText
+        line = solid.line
+        page = solid.page
+        surface = solid.surface
+        guard translucent else {
+            key = solid.key
+            keyPressed = solid.keyPressed
+            function = solid.function
+            functionPressed = solid.functionPressed
+            secondary = solid.secondary
+            edge = solid.edge
+            popup = solid.popup
+            return
+        }
+        if dark {
+            key = UIColor.white.withAlphaComponent(0.20)
+            keyPressed = UIColor.white.withAlphaComponent(0.36)
+            function = UIColor.white.withAlphaComponent(0.09)
+            functionPressed = UIColor.white.withAlphaComponent(0.22)
+            secondary = UIColor(hex: 0xB4B5BC)
+            edge = UIColor.black.withAlphaComponent(0.30)
+            popup = UIColor(hex: 0x5C5D63)
+        } else {
+            key = .white
+            keyPressed = solid.keyPressed
+            function = UIColor(red: 0.16, green: 0.17, blue: 0.22, alpha: 0.11)
+            functionPressed = UIColor.white.withAlphaComponent(0.92)
+            secondary = UIColor(hex: 0x6C6E76)
+            edge = UIColor(red: 0.08, green: 0.09, blue: 0.12, alpha: 0.17)
+            popup = .white
+        }
+    }
+
+    /// 不透明的那一套：键盘自己铺底色时用。
+    private init(solidTheme theme: MoyuThemeID, dark: Bool) {
         let base = UIColor(hex: theme.accentHex)
         let isInk = theme == .ink
         if theme == .coral {
@@ -95,6 +139,7 @@ public struct MoyuPalette {
                 edge = UIColor.black.withAlphaComponent(0.50)
                 page = UIColor(hex: 0x262624)
                 surface = UIColor(hex: 0x30302E)
+                popup = UIColor(hex: 0x5A5852)
             } else {
                 accentText = UIColor(hex: 0xB85A38)
                 canvas = UIColor(hex: 0xECE9E2)
@@ -108,6 +153,7 @@ public struct MoyuPalette {
                 edge = UIColor(hex: 0x1F1E1D).withAlphaComponent(0.16)
                 page = UIColor(hex: 0xFAF9F5)
                 surface = UIColor(hex: 0xF0EEE6)
+                popup = UIColor(hex: 0xFDFCF9)
             }
             return
         }
@@ -126,6 +172,7 @@ public struct MoyuPalette {
             secondary = UIColor(hex: 0xA2A4AC)
             line = UIColor.white.withAlphaComponent(0.11)
             edge = UIColor.black.withAlphaComponent(0.55)
+            popup = UIColor(hex: 0x55565C).mixed(with: base, amount: isInk ? 0 : 0.10)
         } else {
             accent = base
             onAccent = .white
@@ -139,6 +186,7 @@ public struct MoyuPalette {
             secondary = UIColor(hex: 0x6E7078).mixed(with: base, amount: isInk ? 0 : 0.14)
             line = UIColor(red: 20 / 255, green: 22 / 255, blue: 30 / 255, alpha: 0.13)
             edge = UIColor(red: 20 / 255, green: 22 / 255, blue: 30 / 255, alpha: 0.18)
+            popup = .white
         }
     }
 }
