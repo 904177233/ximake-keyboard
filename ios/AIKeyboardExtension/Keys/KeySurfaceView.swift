@@ -223,7 +223,7 @@ final class KeySurfaceView: UIView, UIInputViewAudioFeedback {
         }
 
         // 空格够宽才画小形象，数字页那个窄空格上字和图会挤在一起
-        if key.style == .space, key.frame.width > 130 {
+        if key.style == .space, key.frame.width > 100 {
             drawMascot(in: key.frame)
         }
     }
@@ -450,7 +450,10 @@ final class KeySurfaceView: UIView, UIInputViewAudioFeedback {
                 }
             default:
                 if key.alternate != nil {
-                    if dy < -16, !press.isAlternate {
+                    // 上滑要够明显、而且主要是往上：快打时手指往上蹭一点，或者斜着滑去上一排的键，
+                    // 都不该变成数字和符号
+                    let threshold = max(20, key.frame.height * 0.45)
+                    if dy < -threshold, abs(dy) > abs(dx) * 1.2, !press.isAlternate {
                         press.isAlternate = true
                         showPopup(for: key, alternate: true)
                     } else if dy > -8, press.isAlternate, !press.didLongPress {
