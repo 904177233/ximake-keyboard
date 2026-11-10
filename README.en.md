@@ -17,9 +17,9 @@ No backend. Your API keys stay in the iPhone Keychain, and requests go straight 
 
 </div>
 
-![Moyu running in the iOS 27 simulator: Chinese input, English completion, AI chat, hold-space voice input](docs/images/showcase.png)
+![Moyu running in the iOS 27 simulator: Chinese input, AI chat, English completion, dark mode](docs/images/showcase.png)
 
-<sub>These screenshots were captured by CI after it opened the Moyu keyboard in the iOS 27 simulator. Left to right: typing Chinese (nihaoya), English completion (hel), AI chat inside the keyboard, hold-space-to-talk. The chat and voice text are demo content filled in by the test script.</sub>
+<sub>These screenshots were captured by CI after it opened the Moyu keyboard in the iOS 27 simulator. Left to right: typing Chinese (nihaoya), AI chat inside the keyboard, English completion (hel), dark mode. The chat text is demo content filled in by the test script.</sub>
 
 ---
 
