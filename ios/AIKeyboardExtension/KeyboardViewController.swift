@@ -94,6 +94,13 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
     override func viewDidLoad() {
         super.viewDidLoad()
         view.clipsToBounds = true
+        // 键盘开着的时候系统切了深浅色，也要马上跟上
+        if #available(iOS 17.0, *) {
+            registerForTraitChanges([UITraitUserInterfaceStyle.self, UITraitVerticalSizeClass.self]) {
+                (controller: KeyboardViewController, _: UITraitCollection) in
+                controller.syncTraits()
+            }
+        }
 
         view.addSubview(topBar)
         view.addSubview(surface)
@@ -208,16 +215,10 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
     }
 
     private func syncTraits() {
-        let appearance = textDocumentProxy.keyboardAppearance ?? .default
-        let dark: Bool
-        switch appearance {
-        case .dark:
-            dark = true
-        case .light:
-            dark = false
-        default:
-            dark = traitCollection.userInterfaceStyle == .dark
-        }
+        // 输入框明说要深色键盘就用深色；其余看系统现在的外观。
+        // 输入框报的「浅色」不能信：它是开始输入那一刻的值，中途系统切到深色它不会变
+        //（模拟器实测：系统的底已经变黑了，这里还是浅色，白键配黑底）。
+        let dark = textDocumentProxy.keyboardAppearance == .dark || traitCollection.userInterfaceStyle == .dark
         session.setAppearance(dark: dark)
         session.setLandscape(traitCollection.verticalSizeClass == .compact)
     }
@@ -513,7 +514,9 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
                 step.1()
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
                 self.simLabel.isHidden = false
-                self.simLabel.text = "S\(index % steps.count) \(step.0) | \(self.heightDiagnostic)"
+                // 外观：输入框报的 / 系统的 / 键盘现在用的（0 默认 1 深 2 浅；系统的 1 浅 2 深）
+                let looks = "外观 \(self.textDocumentProxy.keyboardAppearance?.rawValue ?? -1)/\(self.traitCollection.userInterfaceStyle.rawValue)/\(session.isDark ? "深" : "浅")"
+                self.simLabel.text = "S\(index % steps.count) \(step.0) | \(self.heightDiagnostic) | \(looks)"
                 self.simLabel.frame = CGRect(x: 0, y: self.view.bounds.height - 11, width: self.view.bounds.width, height: 11)
                 self.view.bringSubviewToFront(self.simLabel)
                 try? await Task.sleep(nanoseconds: 3_000_000_000)

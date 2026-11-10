@@ -222,7 +222,8 @@ final class KeySurfaceView: UIView, UIInputViewAudioFeedback {
                                     withAttributes: attributes)
         }
 
-        if key.style == .space, key.frame.width > 80 {
+        // 空格够宽才画小形象，数字页那个窄空格上字和图会挤在一起
+        if key.style == .space, key.frame.width > 130 {
             drawMascot(in: key.frame)
         }
     }
