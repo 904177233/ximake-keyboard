@@ -600,8 +600,7 @@ public final class PinyinEngine {
                               fullPinyin: fullPinyin, dictionary: dictionary)
                 : t9Tiles(query: query, start: start, previous: nil, previousSyllable: nil, dictionary: dictionary)
             for tile in tiles {
-                let endingBonus = tile.end == count && start > 0 && Self.endingParticles[tile.key] == tile.text
-                    ? Self.endingParticleBonus : 0
+                let endingBonus = endingParticleBonus(tile: tile, count: count, previousTile: back[start]?.tile)
                 let value = best[start] + tile.score
                     + contextBonus(previous: previous, previousSyllable: previousSyllable,
                                    tile: tile, dictionary: dictionary)
@@ -653,8 +652,7 @@ public final class PinyinEngine {
                 let previous = state.lastText ?? (start == 0 ? query.leftContext : nil)
                 let previousSyllable = state.lastSyllable
                 for tile in tiles {
-                    let endingBonus = tile.end == count && start > 0
-                        && Self.endingParticles[tile.key] == tile.text ? Self.endingParticleBonus : 0
+                    let endingBonus = endingParticleBonus(tile: tile, count: count, previousTile: state.tile)
                     let text = state.text + tile.text
                     let score = state.score + tile.score
                         + contextBonus(previous: previous, previousSyllable: previousSyllable,
@@ -710,6 +708,14 @@ public final class PinyinEngine {
     ///
     /// 两层：第 0 层没纠过，第 1 层纠过一次。纠过以后不再收简拼和没打完的词，
     /// 纠完还有对不上的就不算纠好。返回纠过一次的最好结果。
+    /// 句末语气词加分。前一块必须是打全了的拼音：简拼拆出来的碎块（woxiangchifna 的 f、n）
+    /// 后面接「啊」不算语气词，否则乱拆的句子会压过纠错结果。三种解码共用，分数才可比。
+    private func endingParticleBonus(tile: Tile, count: Int, previousTile: Tile?) -> Double {
+        guard tile.end == count, let previousTile, !previousTile.isLoose,
+              Self.endingParticles[tile.key] == tile.text else { return 0 }
+        return Self.endingParticleBonus
+    }
+
     private func solveCorrected(query: IMEQuery, dictionary: MoyuDictionary) -> (path: [Tile], score: Double)? {
         let count = query.input.count
         guard count > 0 else { return nil }
@@ -736,6 +742,7 @@ public final class PinyinEngine {
                     let value = best[layer][start] + tile.score
                         + contextBonus(previous: previous, previousSyllable: previousSyllable,
                                        tile: tile, dictionary: dictionary)
+                        + endingParticleBonus(tile: tile, count: count, previousTile: step?.tile)
                     if value > best[target][tile.end] {
                         best[target][tile.end] = value
                         back[target][tile.end] = (start, layer, tile)

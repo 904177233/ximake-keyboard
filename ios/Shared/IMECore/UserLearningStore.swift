@@ -185,7 +185,9 @@ public final class UserLearningStore {
         lock.lock()
         defer { lock.unlock() }
         guard let texts = userWords[key] else { return [] }
+        // 衰减到 0 的（含只被自动接受过一次的）不再当成「选过的词」
         return texts.map { (text: $0.key, count: decayedCount($0.value, updatedAt: wordDates[key]?[$0.key])) }
+            .filter { $0.count > 0 || pinnedWords.contains(key + "|" + $0.text) }
             .sorted { lhs, rhs in
                 let leftPinned = pinnedWords.contains(key + "|" + lhs.text)
                 let rightPinned = pinnedWords.contains(key + "|" + rhs.text)
@@ -202,6 +204,7 @@ public final class UserLearningStore {
             .map { (text: $0.text, key: $0.key,
                     count: decayedCount(userWords[$0.key]?[$0.text] ?? 0, updatedAt: wordDates[$0.key]?[$0.text]),
                     pinned: pinnedWords.contains($0.key + "|" + $0.text)) }
+            .filter { $0.count > 0 || $0.pinned }
             .sorted { lhs, rhs in
                 lhs.pinned != rhs.pinned ? lhs.pinned : lhs.count > rhs.count
             }
