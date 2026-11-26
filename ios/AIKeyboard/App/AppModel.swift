@@ -15,12 +15,14 @@ final class AppModel: ObservableObject {
     @Published private(set) var prefs: KeyboardPrefs
     @Published private(set) var phrases: [PhraseItem] = []
     @Published var toast: String?
+    @Published var showingKeyExportConfirmation = false
 
     private let configStore = ConfigStore()
     private var phraseLibrary = PhraseLibrary(store: .shared)
     private var toastTask: Task<Void, Never>?
 
     init() {
+        VoiceBridge.cleanupLegacyNotifyData()
         snapshot = ConfigStore().load()
         prefs = KeyboardPrefs.load()
         phrases = phraseLibrary.items

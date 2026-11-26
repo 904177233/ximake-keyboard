@@ -9,7 +9,7 @@ import Foundation
 
 /// 一张生成完成的图片。
 public struct GeneratedImage: Sendable {
-    /// 图片二进制数据。键盘扩展限制 4 MB 以内。
+    /// 图片二进制数据。键盘扩展限制 12 MB 以内。
     public var data: Data
     /// 远端图片地址（若服务端返回 URL）。注意：万相返回的 URL 有效期约 24 小时。
     public var remoteURL: URL?

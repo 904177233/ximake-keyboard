@@ -12,8 +12,12 @@ import Foundation
 /// 生成图片后从远端 URL 下载数据的公共实现（三个生图客户端共用）。
 enum ImageDownloader {
 
-    /// 单张图片体积上限：4 MB（键盘扩展内存有限）。
+    /// 单张图片体积上限：12 MB（键盘扩展内存有限）。
     static let maxBytes = 12 * 1024 * 1024
+
+    static var sizeError: AIError {
+        .server(code: 413, message: "图片体积超过 \(maxBytes / 1024 / 1024) MB 上限，请换更小的尺寸")
+    }
 
     /// 下载图片并做体积校验。
     ///
@@ -23,22 +27,26 @@ enum ImageDownloader {
         request.httpMethod = "GET"
         request.timeoutInterval = 60
         request.setValue("image/*,*/*", forHTTPHeaderField: "Accept")
-        let data: Data
         do {
-            (data, _) = try await session.data(for: request)
+            let (bytes, response) = try await session.bytes(for: request)
+            defer { bytes.task.cancel() }
+            guard let http = response as? HTTPURLResponse else {
+                throw AIError.decoding("图片下载没有返回 HTTP 响应")
+            }
+            guard (200..<300).contains(http.statusCode) else {
+                throw AIError.server(code: http.statusCode, message: "下载图片失败")
+            }
+            guard response.expectedContentLength <= Int64(maxBytes) else { throw sizeError }
+            var data = Data()
+            for try await byte in bytes {
+                guard data.count < maxBytes else { throw sizeError }
+                data.append(byte)
+            }
+            guard !data.isEmpty else { throw AIError.decoding("生图返回的图片内容为空") }
+            return data
         } catch {
             throw AIError.wrap(error)
         }
-        if data.count > maxBytes {
-            throw AIError.server(
-                code: 413,
-                message: "图片体积 \(data.count / 1024 / 1024) MB 超过 4 MB 上限，请换更小的尺寸"
-            )
-        }
-        guard !data.isEmpty else {
-            throw AIError.decoding("生图返回的图片内容为空")
-        }
-        return data
     }
 
     /// 根据 URL 后缀猜测 MIME 类型。
@@ -66,7 +74,7 @@ enum ImageDownloader {
 /// - 响应：`{"data":[{"b64_json":"..."} | {"url":"..."}]}`
 ///
 /// 兼容性处理：
-/// - 只返回 `url` 的服务端：下载后返回 Data（≤ 4 MB），并保留 `remoteURL`；
+/// - 只返回 `url` 的服务端：下载后返回 Data（≤ 12 MB），并保留 `remoteURL`；
 /// - `gpt-image-1` 不接受 `response_format`：先带该字段请求，若 400 且 message 提到
 ///   "unknown"/"unrecognized"/"response_format" 则去掉该字段重试一次；
 /// - 仅对幂等的生图请求做 ≤2 次指数退避重试（网络错误 / 5xx / 429）。
@@ -227,7 +235,7 @@ public final class OpenAICompatibleImageClient: ImageGenerating, @unchecked Send
                let bytes = Data(base64Encoded: base64, options: [.ignoreUnknownCharacters]),
                !bytes.isEmpty {
                 if bytes.count > ImageDownloader.maxBytes {
-                    throw AIError.server(code: 413, message: "图片体积超过 4 MB 上限，请换更小的尺寸")
+                    throw ImageDownloader.sizeError
                 }
                 let mime = (item["mime_type"] as? String) ?? "image/png"
                 results.append(GeneratedImage(data: bytes, remoteURL: nil, mimeType: mime))

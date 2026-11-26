@@ -54,21 +54,39 @@ public enum VoiceBridge {
     }
 
     private static let stateKey = "moyu.voice.state"
+    private static let readerKey = "moyu.voice.keyboardReader"
     private static let commandKey = "moyu.voice.command"
     private static let pasteboardMarker = "com.moyu.voice.result"
     private static let plainTextType = "public.utf8-plain-text"
+    /// 后台清一次旧版留在通知里的内容。中途退出会在下次启动时接着清。
+    public static func cleanupLegacyNotifyData() {
+        _ = legacyNotifyCleanup
+    }
 
-    /// 实时文字能不能传过去。打不通共享存储时还有系统通知的状态值，所以总是能。
-    public static var canShareLive: Bool { true }
+    private static let legacyNotifyCleanup: Void = {
+        DispatchQueue.global(qos: .utility).async {
+            let key = "moyu.legacyNotifyCleaned.v1"
+            guard !UserDefaults.standard.bool(forKey: key) else { return }
+            for name in [stateKey, commandKey, SharedSync.notifyName(SharedStoreKey.configSnapshot),
+                         SharedSync.notifyName("moyu.ai.prefs.v1")] {
+                NotifyChannel.clear(name: name)
+            }
+            UserDefaults.standard.set(true, forKey: key)
+        }
+    }()
 
-    /// 共享存储能用就写共享存储；另外总在系统通知的状态值里放一份，打不通时靠它。
+    /// App 和键盘打通共享存储后才能传实时文字。
+    public static var canShareLive: Bool {
+        SharedStore.shared.isAppGroupAvailable || SharedVault.shared.isAvailable
+    }
+
+    /// 转写文字只写入 App 与键盘的共享存储。
     private static func write(_ data: Data?, forKey key: String) {
         if SharedStore.shared.isAppGroupAvailable {
             SharedStore.shared.setData(data, forKey: key)
         } else if SharedVault.shared.isAvailable {
             SharedVault.shared.set(data, forKey: key)
         }
-        NotifyChannel.write(data, name: key)
     }
 
     private static func read(forKey key: String) -> Data? {
@@ -78,7 +96,20 @@ public enum VoiceBridge {
         if SharedVault.shared.isAvailable, let data = SharedVault.shared.data(forKey: key) {
             return data
         }
-        return NotifyChannel.read(name: key)
+        return nil
+    }
+
+    /// 键盘在自己选用的共享通道留下时间，App 可以确认两端是否用了同一条路。
+    public static func registerKeyboardReader() {
+        write(try? JSONEncoder().encode(Date()), forKey: readerKey)
+    }
+
+    private static var hasRecentReader: Bool {
+        let data = SharedStore.shared.isAppGroupAvailable
+            ? SharedStore.shared.data(forKey: readerKey)
+            : SharedVault.shared.data(forKey: readerKey)
+        guard let data, let date = try? JSONDecoder().decode(Date.self, from: data) else { return false }
+        return (0..<300).contains(Date().timeIntervalSince(date))
     }
 
     // MARK: - App 写
@@ -87,12 +118,13 @@ public enum VoiceBridge {
         write(try? JSONEncoder().encode(state), forKey: stateKey)
     }
 
-    /// 说完了：共享存储和剪贴板都放一份。键盘取走任意一份后清掉两边。
+    /// 键盘最近用过同一条共享通道时，结果只放在那里。
     public static func publishFinished(_ text: String) {
         publish(VoiceBridgeState(status: .finished, text: text))
+        guard !hasRecentReader else { return }
         UIPasteboard.general.setItems(
             [[plainTextType: text, pasteboardMarker: "1"]],
-            options: [.expirationDate: Date().addingTimeInterval(300)]
+            options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(300)]
         )
     }
 
@@ -103,9 +135,12 @@ public enum VoiceBridge {
         return Command(rawValue: raw)
     }
 
-    public static func clear() {
-        write(nil, forKey: stateKey)
+    public static func clear(keepingResult: Bool = false) {
+        if !keepingResult || readState()?.status != .finished {
+            write(nil, forKey: stateKey)
+        }
         write(nil, forKey: commandKey)
+        if !keepingResult { clearPasteboardFallback() }
     }
 
     // MARK: - 键盘读
@@ -130,15 +165,16 @@ public enum VoiceBridge {
         }
         let pasteboard = UIPasteboard.general
         if pasteboard.contains(pasteboardTypes: [pasteboardMarker]) {
-            let text = pasteboard.string
-            if result == nil {
-                result = text
-            }
-            // 去掉标记，文字留在剪贴板，下次不会重复放
-            if let text {
-                pasteboard.string = text
-            }
+            if result == nil { result = pasteboard.string }
+            pasteboard.items = []
         }
         return result
+    }
+
+    private static func clearPasteboardFallback() {
+        let pasteboard = UIPasteboard.general
+        if pasteboard.contains(pasteboardTypes: [pasteboardMarker]) {
+            pasteboard.items = []
+        }
     }
 }

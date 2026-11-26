@@ -76,8 +76,11 @@ final class VoiceSession: ObservableObject {
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN"))
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
+    private var hasInputTap = false
+    private var utteranceID = UUID()
     private var timer: Timer?
     private var finishTimeout: Task<Void, Never>?
+    private var permissionRequestID = UUID()
     private var signalsReady = false
 
     private init() {}
@@ -110,9 +113,11 @@ final class VoiceSession: ObservableObject {
         case .off, .failed:
             break
         }
+        let requestID = UUID()
+        permissionRequestID = requestID
         state = .starting
         Self.requestPermissions { [weak self] granted in
-            guard let self else { return }
+            guard let self, self.permissionRequestID == requestID, self.state == .starting else { return }
             guard granted else {
                 self.fail("还没允许麦克风或语音识别。到 设置 › 墨语 里打开。")
                 return
@@ -148,13 +153,12 @@ final class VoiceSession: ObservableObject {
             fail("找不到麦克风。打电话或别的 App 占着麦克风时也会这样。")
             return
         }
-        input.removeTap(onBus: 0)
         input.installTap(onBus: 0, bufferSize: 1024, format: format, block: Self.makeTap(feed))
+        hasInputTap = true
         do {
             engine.prepare()
             try engine.start()
         } catch {
-            input.removeTap(onBus: 0)
             fail("麦克风打不开：\(error.localizedDescription)")
             return
         }
@@ -171,9 +175,23 @@ final class VoiceSession: ObservableObject {
 
     /// 关掉会话，释放麦克风。
     func close() {
+        close(afterIdle: false)
+    }
+
+    private func close(afterIdle: Bool) {
+        permissionRequestID = UUID()
+        stopCapture()
+        state = .off
+        text = ""
+        VoiceBridge.clear(keepingResult: afterIdle)
+    }
+
+    /// 停止录音、识别和计时。
+    private func stopCapture() {
         timer?.invalidate()
         timer = nil
         finishTimeout?.cancel()
+        finishTimeout = nil
         task?.cancel()
         task = nil
         request = nil
@@ -181,14 +199,16 @@ final class VoiceSession: ObservableObject {
         if engine.isRunning {
             engine.stop()
         }
-        engine.inputNode.removeTap(onBus: 0)
+        if hasInputTap {
+            engine.inputNode.removeTap(onBus: 0)
+            hasInputTap = false
+        }
         try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
-        state = .off
-        text = ""
-        VoiceBridge.clear()
     }
 
     private func fail(_ reason: String) {
+        permissionRequestID = UUID()
+        stopCapture()
         state = .failed(reason)
         VoiceBridge.publish(VoiceBridgeState(status: .failed, text: reason))
         VoiceSignals.post(.done)
@@ -210,18 +230,20 @@ final class VoiceSession: ObservableObject {
         text = ""
         task?.cancel()
         request = next
-        task = recognizer.recognitionTask(with: next, resultHandler: Self.makeResultHandler())
+        utteranceID = UUID()
+        task = recognizer.recognitionTask(with: next, resultHandler: Self.makeResultHandler(id: utteranceID))
         feed.set(next)
         state = .listening
         publish()
     }
 
-    nonisolated private static func makeResultHandler() -> (SFSpeechRecognitionResult?, Error?) -> Void {
+    nonisolated private static func makeResultHandler(id: UUID) -> (SFSpeechRecognitionResult?, Error?) -> Void {
         { result, error in
             let words = result?.bestTranscription.formattedString
             let isFinal = result?.isFinal ?? false
             let failed = error != nil
             Task { @MainActor in
+                guard VoiceSession.shared.utteranceID == id else { return }
                 VoiceSession.shared.handle(words: words, isFinal: isFinal, failed: failed)
             }
         }
@@ -331,7 +353,7 @@ final class VoiceSession: ObservableObject {
         publish()
         let keepAlive = Double(AIPrefs.load().voiceKeepAliveMinutes) * 60
         if state == .ready, Date().timeIntervalSince(idleSince) > keepAlive {
-            close()
+            close(afterIdle: true)
         }
     }
 
@@ -343,8 +365,8 @@ final class VoiceSession: ObservableObject {
         case .transcribing:
             VoiceBridge.publish(VoiceBridgeState(status: .transcribing, text: text))
         case .ready:
-            if let current = VoiceBridge.readState(), current.status == .finished || current.status == .failed, current.isRecent,
-               Date().timeIntervalSince(current.updatedAt) < 8 {
+            if let current = VoiceBridge.readState(), current.isRecent,
+               current.status == .finished || (current.status == .failed && Date().timeIntervalSince(current.updatedAt) < 8) {
                 return
             }
             VoiceBridge.publish(VoiceBridgeState(status: .ready, text: ""))

@@ -232,7 +232,7 @@ data: {"candidates":[{"content":{"parts":[{"text":"好的"}],"role":"model"},"fi
 ```
 
 - 尺寸白名单：`1024x1024` / `864x1152` / `1152x864` / `1280x720` / `720x1280`（其它值自动回退 `1024x1024`）；
-- 拿到 `url` 后**立即下载**为 `Data`（≤ 4 MB，超出抛 `AIError.server(code: 413, …)`），同时把 `url` 留在 `GeneratedImage.remoteURL`；
+- 拿到 `url` 后**立即下载**为 `Data`（≤ 12 MB，超出抛 `AIError.server(code: 413, …)`），同时把 `url` 留在 `GeneratedImage.remoteURL`；
 - URL 有效期约 24 小时。
 
 ### 3.5 通义万相（DashScope 异步任务）
@@ -269,7 +269,7 @@ data: {"candidates":[{"content":{"parts":[{"text":"好的"}],"role":"model"},"fi
 {"model": "gpt-image-1", "prompt": "...", "n": 1, "size": "1024x1024", "quality": "standard", "response_format": "b64_json"}
 ```
 
-- 响应兼容两种形态：`data[].b64_json`（直接解码）或 `data[].url`（下载，同 4 MB 限制）；
+- 响应兼容两种形态：`data[].b64_json`（直接解码）或 `data[].url`（下载，同 12 MB 限制）；
 - `gpt-image-1` 不接受 `response_format`：`modelRejectsResponseFormat(_:)` 命中 `gpt-image` 前缀时**直接不发送**该字段；
   其它服务商若返回 400 且消息含 `unknown` / `unrecognized` / `response_format` / `extra fields` / `unsupported`，
   自动**去字段重试一次**；
@@ -321,10 +321,7 @@ chunk 2:  "ent\":\"好\"}}]}\n\n"
 | 未知字段（`retry:` / `id:` 之外的） | 忽略 |
 | 冒号后只允许去一个空格 | `data:  x` → `" x"`（保留用户内容里的空格） |
 
-实现细节：`OpenAICompatibleClient` 用 `URLSession.bytes(for:)` + `for try await line in bytes.lines`
-逐行拿到文本，再拼回 `"\n"` 喂给 `SSEParser`；由于 `bytes.lines` 已按 `\n` 切好，
-这里主要受益于统一的 `[DONE]` / 多行 data / 注释处理逻辑。若将来换成裸 `Data` 分片，
-`SSEParser` 的跨 chunk 能力可以直接复用。
+三个对话客户端把收到的字节交给 `SSEParser`。解析器保留空行作为事件边界，也支持被网络分片拆开的中文和 CRLF。
 
 ---
 

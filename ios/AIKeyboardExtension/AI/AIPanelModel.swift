@@ -93,6 +93,10 @@ final class AIPanelModel: ObservableObject {
     private var avoidTexts: [String] = []
 
     /// 替换原文要删掉多少。
+    private var sourceDocument: UUID?
+    private var originalBefore: String?
+    private var originalAfter: String?
+    private var originalSelection: String?
     private var sourceBeforeCount = 0
     private var sourceAfterUTF16 = 0
     private var sourceAfterCount = 0
@@ -157,9 +161,14 @@ final class AIPanelModel: ObservableObject {
 
     /// 读输入框：有选中用选中，没选中用全部。
     private func captureSource() {
+        sourceDocument = nil
         guard let proxy = session.host?.documentProxy else { return }
+        sourceDocument = proxy.documentIdentifier
+        originalBefore = proxy.documentContextBeforeInput
+        originalAfter = proxy.documentContextAfterInput
+        originalSelection = proxy.selectedText
         sourceIsClipboard = false
-        if let selected = proxy.selectedText, !selected.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if let selected = originalSelection, !selected.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             source = selected
             sourceIsSelection = true
             sourceBeforeCount = 0
@@ -167,8 +176,8 @@ final class AIPanelModel: ObservableObject {
             sourceAfterUTF16 = 0
             return
         }
-        let before = proxy.documentContextBeforeInput ?? ""
-        let after = proxy.documentContextAfterInput ?? ""
+        let before = originalBefore ?? ""
+        let after = originalAfter ?? ""
         source = (before + after).trimmingCharacters(in: .whitespacesAndNewlines)
         sourceIsSelection = false
         sourceBeforeCount = before.count
@@ -375,7 +384,7 @@ final class AIPanelModel: ObservableObject {
                 if Task.isCancelled { return }
                 let images = try await client.generate(ImageRequest(prompt: finalPrompt, size: size, quality: "standard", count: 1))
                 guard let self, !Task.isCancelled else { return }
-                guard let first = images.first, !first.isEmpty, let picture = Self.thumbnail(from: first.data) else {
+                guard let first = images.first, !first.isEmpty, let picture = ImageHistory.thumbnail(data: first.data, side: 400) else {
                     self.progressTask?.cancel()
                     self.fail(AIError.unknown("没有拿到图片"))
                     return
@@ -483,7 +492,7 @@ final class AIPanelModel: ObservableObject {
             return
         }
         imageData = data
-        image = Self.thumbnail(from: data)
+        image = ImageHistory.thumbnail(data: data, side: 400)
         selectedImageID = item.id
         source = item.prompt
         phase = .done
@@ -498,16 +507,6 @@ final class AIPanelModel: ObservableObject {
         ImageHistory.saveToPhotos(imageData) { [weak self] message in
             self?.session.showToast(message)
         }
-    }
-
-    /// 键盘内存紧，只留缩略图显示。
-    private static func thumbnail(from data: Data) -> UIImage? {
-        guard let image = UIImage(data: data) else { return nil }
-        let side: CGFloat = 400
-        let scale = min(side / max(image.size.width, 1), side / max(image.size.height, 1), 1)
-        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-        let renderer = UIGraphicsImageRenderer(size: size)
-        return renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: size)) }
     }
 
     /// 停止当前请求。
@@ -525,10 +524,20 @@ final class AIPanelModel: ObservableObject {
 
     // MARK: - 用结果
 
+    private func canReplace(in proxy: UITextDocumentProxy) -> Bool {
+        guard !sourceIsClipboard else { return true }
+        guard proxy.documentIdentifier == sourceDocument, proxy.selectedText == originalSelection,
+              proxy.documentContextBeforeInput == originalBefore, proxy.documentContextAfterInput == originalAfter else {
+            session.showToast("输入框已变化，请重新读取原文")
+            return false
+        }
+        return true
+    }
+
     /// 用结果替换原文。
     func replace() {
         let text = output
-        guard !text.isEmpty, let proxy = session.host?.documentProxy else { return }
+        guard !text.isEmpty, let proxy = session.host?.documentProxy, canReplace(in: proxy) else { return }
         if sourceIsSelection {
             // 有选中时 insertText 会直接盖掉选区
             proxy.insertText(text)
@@ -555,7 +564,7 @@ final class AIPanelModel: ObservableObject {
 
     /// 选一条回复。
     func chooseReply(_ text: String) {
-        guard let proxy = session.host?.documentProxy else { return }
+        guard let proxy = session.host?.documentProxy, canReplace(in: proxy) else { return }
         // 输入框里是对方的话时不留原文；读的是剪贴板就直接写
         if !sourceIsClipboard, !sourceIsSelection {
             if sourceAfterUTF16 > 0 {

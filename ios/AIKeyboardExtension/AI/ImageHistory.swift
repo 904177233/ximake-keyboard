@@ -79,6 +79,15 @@ final class ImageHistory {
     /// 只解码小图。
     func thumbnail(for id: String, side: CGFloat) -> UIImage? {
         guard let target = url(for: id), let source = CGImageSourceCreateWithURL(target as CFURL, nil) else { return nil }
+        return Self.thumbnail(source: source, side: side)
+    }
+
+    static func thumbnail(data: Data, side: CGFloat) -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        return thumbnail(source: source, side: side)
+    }
+
+    private static func thumbnail(source: CGImageSource, side: CGFloat) -> UIImage? {
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,

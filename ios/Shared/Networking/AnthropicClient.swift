@@ -170,15 +170,13 @@ public final class AnthropicClient: LLMClient, @unchecked Sendable {
 
         var parser = SSEParser()
         var didFinish = false
-        for try await line in bytes.lines {
+        for try await byte in bytes {
+            guard let event = parser.feed(byte: byte) else { continue }
             try Task.checkCancellation()
-            let events = parser.feed(Data((line + "\n").utf8))
-            for event in events {
-                if try handleStreamEvent(event, continuation: continuation) {
-                    didFinish = true
-                    continuation.finish()
-                    return
-                }
+            if try handleStreamEvent(event, continuation: continuation) {
+                didFinish = true
+                continuation.finish()
+                return
             }
         }
         for event in parser.flush() {

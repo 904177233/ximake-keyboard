@@ -6,6 +6,9 @@
 //
 
 import Foundation
+#if canImport(notify)
+import notify
+#endif
 
 guard CommandLine.arguments.count >= 3,
       let dictionary = MoyuDictionary(url: URL(fileURLWithPath: CommandLine.arguments[1])) else {
@@ -163,6 +166,9 @@ check("换了段不管上一段没配上的", SmartPunctuation.adjusted("“", b
 check("英文补全后的空格遇到句号要去掉", SmartPunctuation.closesUpSpace(".") && !SmartPunctuation.closesUpSpace("("))
 
 print("App 和键盘同步")
+let outOfRangePrefs = Data("{\"contextTurns\":\(Int.max),\"voiceKeepAliveMinutes\":0}".utf8)
+let clampedPrefs = try? JSONDecoder().decode(AIPrefs.self, from: outOfRangePrefs)
+check("旧偏好的轮数和语音时长落在设置范围内", clampedPrefs?.contextTurns == 20 && clampedPrefs?.voiceKeepAliveMinutes == 1)
 let envelope = SharedSync.wrap(Data("abc".utf8), revision: 42)
 let opened = SharedSync.unwrap(envelope)
 check("带时间的数据能拆回来", opened.revision == 42 && opened.payload == Data("abc".utf8))
@@ -171,9 +177,42 @@ let prefsJSON = Data("{\"theme\":\"coral\",\"layout\":\"qwerty\"}".utf8)
 SharedSync.writeNotify(prefsJSON, key: SharedStoreKey.keyboardPrefs, revision: 7)
 let notified = SharedSync.readNotify(key: SharedStoreKey.keyboardPrefs)
 check("键盘偏好走系统通知能读回来", notified?.payload == prefsJSON && notified?.revision == 7, "\(String(describing: notified))")
-let withHeaders = Data("{\"providers\":[{\"extraHeaders\":{\"Authorization\":\"x\"}}]}".utf8)
-check("配置里有请求头时不走系统通知", !SharedSync.safeForNotify(withHeaders, key: SharedStoreKey.configSnapshot))
-check("短语不走系统通知", !SharedSync.safeForNotify(Data("x".utf8), key: SharedStoreKey.phrases))
+let notifyTailName = "com.moyu.imecheck.tail"
+NotifyChannel.write(Data(repeating: 0x41, count: 17), name: notifyTailName)
+NotifyChannel.write(Data("ok".utf8), name: notifyTailName)
+check("通知改短后不会读到旧尾块", NotifyChannel.read(name: notifyTailName) == Data("ok".utf8))
+#if canImport(notify)
+var tailToken: Int32 = 0
+if notify_register_check(notifyTailName + ".2", &tailToken) == 0 {
+    var tail = UInt64.max
+    let status = notify_get_state(tailToken, &tail)
+    check("通知改短后擦除旧尾块", status == 0 && tail == 0)
+    _ = notify_cancel(tailToken)
+}
+#endif
+NotifyChannel.write(nil, name: notifyTailName)
+for key in [SharedStoreKey.configSnapshot, "moyu.ai.prefs.v1", SharedStoreKey.phrases] {
+    let name = SharedSync.notifyName(key)
+    NotifyChannel.write(nil, name: name)
+    SharedSync.writeNotify(prefsJSON, key: key, revision: 8)
+    check("私有设置不会发布到通知 " + key, NotifyChannel.read(name: name) == nil)
+    if let packed = SharedSync.compress(prefsJSON) {
+        NotifyChannel.write(SharedSync.wrap(packed, revision: 7), name: name)
+        check("忽略旧通知里的私有设置 " + key, SharedSync.readNotify(key: key) == nil)
+        NotifyChannel.write(nil, name: name)
+    }
+}
+
+#if canImport(notify)
+let invalidLengthName = "com.moyu.imecheck.invalid-length"
+var invalidLengthToken: Int32 = 0
+if notify_register_check(invalidLengthName + ".len", &invalidLengthToken) == 0 {
+    _ = notify_set_state(invalidLengthToken, UInt64.max)
+    check("通知中的超大长度不会导致整数溢出", NotifyChannel.read(name: invalidLengthName) == nil)
+    NotifyChannel.write(nil, name: invalidLengthName)
+    _ = notify_cancel(invalidLengthToken)
+}
+#endif
 
 print("逐词选词")
 let long = qwerty("woxihuanni")
@@ -225,6 +264,21 @@ learning.recordTyped([(text: "我吃过了", typed: "wcgl")])
 check("简拼选过一次后排第一", qwerty("wcgl").candidates.first?.text == "我吃过了", "\(texts(qwerty("wcgl")))")
 learning.removeEntry(text: "试用", key: "shiyong")
 check("删掉以后不再排第一", qwerty("shiyong").candidates.first?.text != "试用", "\(texts(qwerty("shiyong")))")
+
+let persistenceStore = SharedStore(forceMemory: true)
+let persistenceLearning = UserLearningStore(store: persistenceStore)
+persistenceLearning.record(segments: [(text: "持久化词", key: "chijiuhuaci")])
+persistenceLearning.flush()
+let restoredLearning = UserLearningStore(store: persistenceStore)
+check("等待写盘后个人词库能恢复",
+      restoredLearning.userWords(forKey: "chijiuhuaci").contains { $0.text == "持久化词" })
+for _ in 0..<6 {
+    persistenceLearning.record(segments: [(text: "旧词", key: "jiuci")])
+}
+persistenceLearning.reset()
+persistenceLearning.flush()
+let clearedLearning = UserLearningStore(store: persistenceStore)
+check("清空后个人词库不会复活", clearedLearning.allEntries().isEmpty && clearedLearning.count(of: "旧词") == 0)
 
 print("性能")
 let started = Date()

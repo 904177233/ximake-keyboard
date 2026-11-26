@@ -154,12 +154,14 @@ public struct AIPrefs: Codable, Equatable, Sendable {
         reasoning = (try? container.decodeIfPresent(Reasoning.self, forKey: .reasoning)) ?? fallback.reasoning
         length = (try? container.decodeIfPresent(Length.self, forKey: .length)) ?? fallback.length
         persona = (try? container.decodeIfPresent(String.self, forKey: .persona)) ?? fallback.persona
-        contextTurns = (try? container.decodeIfPresent(Int.self, forKey: .contextTurns)) ?? fallback.contextTurns
+        let turns = (try? container.decodeIfPresent(Int.self, forKey: .contextTurns)) ?? fallback.contextTurns
+        contextTurns = min(max(turns, 0), 20)
         keepHistory = (try? container.decodeIfPresent(Bool.self, forKey: .keepHistory)) ?? fallback.keepHistory
         imageShape = (try? container.decodeIfPresent(ImageShape.self, forKey: .imageShape)) ?? fallback.imageShape
         imageStyle = (try? container.decodeIfPresent(ImageStyle.self, forKey: .imageStyle)) ?? fallback.imageStyle
         polishImagePrompt = (try? container.decodeIfPresent(Bool.self, forKey: .polishImagePrompt)) ?? fallback.polishImagePrompt
-        voiceKeepAliveMinutes = (try? container.decodeIfPresent(Int.self, forKey: .voiceKeepAliveMinutes)) ?? fallback.voiceKeepAliveMinutes
+        let minutes = (try? container.decodeIfPresent(Int.self, forKey: .voiceKeepAliveMinutes)) ?? fallback.voiceKeepAliveMinutes
+        voiceKeepAliveMinutes = min(max(minutes, 1), 30)
         webSearch = (try? container.decodeIfPresent(WebSearchMode.self, forKey: .webSearch)) ?? fallback.webSearch
         imageModelAuto = (try? container.decodeIfPresent(Bool.self, forKey: .imageModelAuto)) ?? fallback.imageModelAuto
     }

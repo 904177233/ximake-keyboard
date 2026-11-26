@@ -59,11 +59,10 @@ public enum PasteboardBridge {
     /// - Throws: `PasteboardBridgeError.encodingFailed` / `.emptyPayload`。
     public static func export(_ snapshot: ConfigSnapshot, includeAPIKeys: Bool = false) throws {
         let envelope = try makeEnvelope(snapshot, includeAPIKeys: includeAPIKeys)
-        let pasteboard = UIPasteboard(name: pasteboardName, create: true)
-        pasteboard?.string = envelope
-        // 同时写系统剪贴板：用户在键盘里可能直接长按粘贴（nibble 场景更稳）。
-        // 说明：这里只是写 string，不读取系统剪贴板，不涉及隐私权限弹窗。
-        UIPasteboard.general.string = envelope
+        let items: [[String: Any]] = [["public.utf8-plain-text": envelope]]
+        let options: [UIPasteboard.OptionsKey: Any] = [.localOnly: true, .expirationDate: Date().addingTimeInterval(300)]
+        UIPasteboard(name: pasteboardName, create: true)?.setItems(items, options: options)
+        UIPasteboard.general.setItems(items, options: options)
     }
 
     /// 生成导出文本（不落地，便于单测 / 校验和验证）。
@@ -189,15 +188,22 @@ public enum PasteboardBridge {
         return raw.hasPrefix(magic)
     }
 
-    /// 清空命名剪贴板（导出成功后可按需调用，避免残留）。
+    /// 清掉这次导入的内容，保留用户后来复制的东西。
+    static func clearImported(_ raw: String) {
+        let named = UIPasteboard(name: pasteboardName, create: false)
+        if named?.string == raw { named?.items = [] }
+        let general = UIPasteboard.general
+        if general.string == raw { general.items = [] }
+    }
+
     public static func clear() {
-        UIPasteboard(name: pasteboardName, create: false)?.string = nil
+        UIPasteboard(name: pasteboardName, create: false)?.items = []
     }
 
     // MARK: - 内部实现
 
     /// 读取命名剪贴板；不可用时回退到系统剪贴板（用户在键盘里长按粘贴的场景）。
-    private static func pasteboardString() -> String? {
+    static func pasteboardString() -> String? {
         if let value = UIPasteboard(name: pasteboardName, create: false)?.string, !value.isEmpty {
             return value
         }

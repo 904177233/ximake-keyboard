@@ -293,42 +293,36 @@ public final class OpenAICompatibleClient: LLMClient, @unchecked Sendable {
         // 结束时按非流式响应再解析一次。否则用户只会看到「服务商没有返回内容」。
         var rawBuffer = Data()
 
-        // 带标签的循环：收到 `[DONE]` 时跳到循环外，让「正文为空」的判定统一在末尾执行。
+        // 收到结束标记后，统一在循环外判断正文是否为空。
         // 早期版本在这里直接 finish 并 return，于是「推理模型只吐了思维链」被当成正常结束，
         // 上层只能显示一句「服务商没有返回内容」。
-        streamLoop: for try await line in bytes.lines {
+        for try await byte in bytes {
+            if rawBuffer.count < 1024 * 1024 { rawBuffer.append(byte) }
+            guard let event = parser.feed(byte: byte) else { continue }
             try Task.checkCancellation()
-            rawBuffer.append(Data((line + "\n").utf8))
-            if rawBuffer.count > 1024 * 1024 {
-                rawBuffer.removeAll(keepingCapacity: true)
+            if event.isDone {
+                break
             }
-            let events = parser.feed(Data((line + "\n").utf8))
-            for event in events {
-                if event.isDone {
-                    break streamLoop
-                }
-                guard let payload = parseStreamPayload(event.data) else { continue }
-                if payload.finishReason != nil {
-                    accumulatedFinishReason = payload.finishReason
-                }
-                // 思维链单独走 `ChatDelta.reasoning`：不拼进正文（否则打字机会把「思考过程」
-                // 当答案显示），也不再像以前那样直接丢弃（丢弃的结果就是正文一片空白）。
-                if !payload.reasoning.isEmpty {
-                    sawReasoning = true
-                    continuation.yield(ChatDelta(text: "", isFinal: false, reasoning: payload.reasoning))
-                }
-                if !payload.text.isEmpty {
-                    didEmitText = true
-                    continuation.yield(ChatDelta(text: payload.text, isFinal: false))
-                }
-                // 某些服务端把 usage 放在最后一片（stream_options.include_usage）。
-                if payload.hasUsage, let usage = payload.usage {
-                    continuation.yield(ChatDelta(text: "", isFinal: false))
-                    _ = usage // 用量仅用于 complete() 聚合，流式侧不额外暴露
-                }
+            guard let payload = parseStreamPayload(event.data) else { continue }
+            if payload.finishReason != nil {
+                accumulatedFinishReason = payload.finishReason
+            }
+            // 思维链单独走 `ChatDelta.reasoning`：不拼进正文（否则打字机会把「思考过程」
+            // 当答案显示），也不再像以前那样直接丢弃（丢弃的结果就是正文一片空白）。
+            if !payload.reasoning.isEmpty {
+                sawReasoning = true
+                continuation.yield(ChatDelta(text: "", isFinal: false, reasoning: payload.reasoning))
+            }
+            if !payload.text.isEmpty {
+                didEmitText = true
+                continuation.yield(ChatDelta(text: payload.text, isFinal: false))
+            }
+            // 某些服务端把 usage 放在最后一片（stream_options.include_usage）。
+            if payload.hasUsage, let usage = payload.usage {
+                continuation.yield(ChatDelta(text: "", isFinal: false))
+                _ = usage // 用量仅用于 complete() 聚合，流式侧不额外暴露
             }
         }
-        // 兜底：没有 [DONE] 但流已结束。
         for event in parser.flush() {
             if event.isDone { break }
             guard let payload = parseStreamPayload(event.data) else { continue }

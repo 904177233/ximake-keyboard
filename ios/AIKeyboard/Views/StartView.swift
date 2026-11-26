@@ -57,11 +57,11 @@ struct StartView: View {
                 LineRow(title: "App 和键盘的配置",
                         detail: model.isSharedWithKeyboard
                             ? "在这里填一次，键盘里就能用。\(SyncStatus.summary(for: .app))"
-                            : "\(SyncStatus.summary(for: .app))。设置会自动同步；API Key 可以直接在键盘里填，也可以把这边的配置发过去") {
+                            : "\(SyncStatus.summary(for: .app))。AI 服务可以直接在键盘里填，也可以把这边的配置发过去") {
                     if model.isSharedWithKeyboard {
                         StateText(text: "已打通", isGood: true)
                     } else {
-                        Button("发给键盘") { model.sendConfigToKeyboard() }
+                        Button("发给键盘") { model.showingKeyExportConfirmation = true }
                             .font(.system(size: 14, weight: .semibold))
                     }
                 }

@@ -12,6 +12,7 @@ import Foundation
 struct Reply {
     var status: Int
     var body: String
+    var headers: [String: String] = ["Content-Type": "application/json"]
 }
 
 final class FakeServer: URLProtocol {
@@ -39,7 +40,7 @@ final class FakeServer: URLProtocol {
         FakeServer.bodies.append((path, json))
         let reply = FakeServer.route(path, json["model"] as? String ?? "", json)
         let response = HTTPURLResponse(url: request.url!, statusCode: reply.status, httpVersion: "HTTP/1.1",
-                                       headerFields: ["Content-Type": "application/json"])!
+                                       headerFields: reply.headers)!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: Data(reply.body.utf8))
         client?.urlProtocolDidFinishLoading(self)
@@ -213,6 +214,66 @@ let openAIBody = await bodyFor(base: "https://api.openai.com/v1", level: .deep)
 check("OpenAI 用 reasoning_effort", openAIBody["reasoning_effort"] as? String == "high", "\(openAIBody)")
 let plainBody = await bodyFor(base: "https://api.deepseek.com/v1", level: nil)
 check("没选推理时不加参数", plainBody["thinking"] == nil && plainBody["reasoning_effort"] == nil, "\(plainBody)")
+
+print("图片下载和流式解析")
+let downloadSession = HTTPTransport.makeSession(timeout: 5)
+let callsBeforeSearch = FakeServer.bodies.count
+let noResults = await WebSearch.search("测试", limit: -1, session: downloadSession)
+check("不需要搜索结果时不发请求", noResults.isEmpty && FakeServer.bodies.count == callsBeforeSearch)
+let imageURL = URL(string: "https://example.invalid/image")!
+if let invalidRetry = HTTPURLResponse(url: imageURL, statusCode: 429, httpVersion: nil, headerFields: ["Retry-After": "NaN"]) {
+    check("忽略无效的重试间隔", HTTPTransport.retryAfterInterval(from: invalidRetry) == nil)
+}
+FakeServer.route = { _, _, _ in Reply(status: 404, body: "missing") }
+do {
+    _ = try await ImageDownloader.download(url: imageURL, session: downloadSession)
+    check("图片下载保留 HTTP 错误", false)
+} catch AIError.server(let code, _) {
+    check("图片下载保留 HTTP 错误", code == 404)
+} catch {
+    check("图片下载保留 HTTP 错误", false, "\(error)")
+}
+FakeServer.route = { _, _, _ in Reply(status: 200, body: "image bytes") }
+do {
+    let downloaded = try await ImageDownloader.download(url: imageURL, session: downloadSession)
+    check("无长度头的图片完整读回", downloaded == Data("image bytes".utf8))
+} catch {
+    check("无长度头的图片完整读回", false, "\(error)")
+}
+FakeServer.route = { _, _, _ in
+    Reply(status: 200, body: "x", headers: ["Content-Length": String(ImageDownloader.maxBytes + 1)])
+}
+do {
+    _ = try await ImageDownloader.download(url: imageURL, session: downloadSession)
+    check("提前拒绝声明超限的图片", false)
+} catch AIError.server(let code, _) {
+    check("提前拒绝声明超限的图片", code == 413)
+} catch {
+    check("提前拒绝声明超限的图片", false, "\(error)")
+}
+let streamBody = "\u{FEFF}data: {\"choices\":[{\"delta\":{\"content\":\"甲\"}}]}\r\n\r\n"
+    + "data: {\"choices\":[{\"delta\":{\"content\":\"乙\"}}]}\r\n\r\ndata: [DONE]\r\n\r\n"
+FakeServer.route = { _, _, _ in Reply(status: 200, body: streamBody, headers: ["Content-Type": "text/event-stream"]) }
+do {
+    var fragments: [String] = []
+    let client = AIClientFactory.makeLLM(config: deepseek, apiKey: "k")
+    for try await delta in client.stream(ChatRequest(messages: [.user("流式测试")])) where !delta.text.isEmpty {
+        fragments.append(delta.text)
+    }
+    check("兼容客户端按顺序交付两个流式片段", fragments == ["甲", "乙"])
+} catch {
+    check("兼容客户端按顺序交付两个流式片段", false, "\(error)")
+}
+var sse = SSEParser()
+var events: [SSEEvent] = []
+for byte in "\u{FEFF}data: 甲\r\n\r\ndata: 乙\u{FEFF}".utf8 {
+    events += sse.feed(Data([byte]))
+}
+events += sse.flush()
+check("逐字节收 SSE 时只忽略流开头的 BOM", events.map(\.data) == ["甲", "乙\u{FEFF}"])
+sse.reset()
+_ = sse.feed(Data("\u{FEFF}data: 新".utf8))
+check("重用解析器并在半行结束", sse.flush().first?.data == "新")
 
 print("配置")
 var oldImage = PresetProviders.preset(id: "preset-seedream")!.makeProvider()
