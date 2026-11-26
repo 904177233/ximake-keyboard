@@ -37,6 +37,8 @@ public final class UserLearningStore {
         var counts: [String: Int]
         var phrases: [Phrase]
         var next: [String: [String: Int]]
+        var countDates: [String: TimeInterval]?
+        var nextDates: [String: [String: TimeInterval]]?
     }
 
     private struct UserDictionary: Codable, Sendable {
@@ -45,6 +47,8 @@ public final class UserLearningStore {
         var phrases: [Phrase]
         /// App 每改一次加一，键盘看到变了就重新读。
         var revision: Int
+        var wordDates: [String: [String: TimeInterval]]?
+        var pinnedWords: Set<String>?
     }
 
     private static let storageKey = "moyu.ime.learning.v3"
@@ -60,9 +64,13 @@ public final class UserLearningStore {
     private let persistenceQueue = DispatchQueue(label: "com.moyu.user-learning.persistence")
     private let lock = NSLock()
     private var counts: [String: Int]
+    private var countDates: [String: TimeInterval]
     private var phrases: [Phrase]
     private var next: [String: [String: Int]]
+    private var nextDates: [String: [String: TimeInterval]]
     private var userWords: [String: [String: Int]]
+    private var wordDates: [String: [String: TimeInterval]]
+    private var pinnedWords: Set<String>
     private var userWordsByDigits: [String: [(key: String, text: String)]] = [:]
     private var revision: Int
     private var phrasesByKey: [String: [String]] = [:]
@@ -87,22 +95,30 @@ public final class UserLearningStore {
     public init(store: SharedStore) {
         self.store = store
         self.blob = SharedBlob(store: store)
-        var loaded = Persisted(counts: [:], phrases: [], next: [:])
+        var loaded = Persisted(counts: [:], phrases: [], next: [:], countDates: [:], nextDates: [:])
         if let data = store.data(forKey: Self.storageKey),
            let decoded = try? JSONDecoder().decode(Persisted.self, from: data) {
             loaded = decoded
         }
-        counts = loaded.counts
-        next = loaded.next
+        let now = Date().timeIntervalSince1970
+        // 旧版没有日期，计数按「一次 = 1」存；新版按四分之一次存，升级时换算
+        counts = loaded.countDates == nil ? loaded.counts.mapValues { $0 * Self.pickUnit } : loaded.counts
+        countDates = loaded.countDates ?? Dictionary(uniqueKeysWithValues: loaded.counts.keys.map { ($0, now) })
+        next = loaded.nextDates == nil ? Self.scaled(loaded.next) : loaded.next
+        nextDates = loaded.nextDates ?? Self.dates(for: loaded.next, now: now)
         if let dictionary = Self.readDictionary(blob) {
-            userWords = dictionary.words
+            userWords = dictionary.wordDates == nil ? Self.scaled(dictionary.words) : dictionary.words
             phrases = dictionary.phrases
             revision = dictionary.revision
+            wordDates = dictionary.wordDates ?? Self.dates(for: dictionary.words, now: now)
+            pinnedWords = dictionary.pinnedWords ?? []
         } else {
             // 旧版的短语存在使用统计里，搬过来
             userWords = [:]
             phrases = loaded.phrases
             revision = 0
+            wordDates = [:]
+            pinnedWords = []
         }
         rebuildIndexes()
     }
@@ -110,6 +126,33 @@ public final class UserLearningStore {
     private static func readDictionary(_ blob: SharedBlob) -> UserDictionary? {
         guard let data = blob.data(forKey: dictionaryKey) else { return nil }
         return try? JSONDecoder().decode(UserDictionary.self, from: data)
+    }
+
+    private static func dates(for words: [String: [String: Int]], now: TimeInterval) -> [String: [String: TimeInterval]] {
+        Dictionary(uniqueKeysWithValues: words.map { key, texts in
+            (key, Dictionary(uniqueKeysWithValues: texts.keys.map { ($0, now) }))
+        })
+    }
+
+    /// 存的计数以四分之一次为单位：点选 +4，空格或标点自动接受 +1。
+    private static let pickUnit = 4
+
+    private static func scaled(_ words: [String: [String: Int]]) -> [String: [String: Int]] {
+        words.mapValues { $0.mapValues { $0 * pickUnit } }
+    }
+
+    /// 换回「选过几次」并按 30 天半衰期衰减，四舍五入（只选过一次的词约 30 天后才归零）。
+    private func decayedCount(_ count: Int, updatedAt: TimeInterval?) -> Int {
+        guard count > 0 else { return 0 }
+        let picks = Double(count) / Double(Self.pickUnit)
+        guard let updatedAt else { return Int(picks.rounded()) }
+        let age = max(0, Date().timeIntervalSince1970 - updatedAt)
+        let halfLife: TimeInterval = 30 * 24 * 60 * 60
+        return Int((picks * pow(0.5, age / halfLife)).rounded())
+    }
+
+    private static func increment(for strength: Double) -> Int {
+        max(1, Int((min(max(strength, 0.1), 3.0) * Double(pickUnit)).rounded()))
     }
 
     private func rebuildIndexes() {
@@ -134,7 +177,7 @@ public final class UserLearningStore {
     public func count(of text: String) -> Int {
         lock.lock()
         defer { lock.unlock() }
-        return counts[text] ?? 0
+        return decayedCount(counts[text] ?? 0, updatedAt: countDates[text])
     }
 
     /// 这个拼音下选过的词，选得多的在前。
@@ -142,7 +185,13 @@ public final class UserLearningStore {
         lock.lock()
         defer { lock.unlock() }
         guard let texts = userWords[key] else { return [] }
-        return texts.sorted { $0.value > $1.value }.map { ($0.key, $0.value) }
+        return texts.map { (text: $0.key, count: decayedCount($0.value, updatedAt: wordDates[key]?[$0.key])) }
+            .sorted { lhs, rhs in
+                let leftPinned = pinnedWords.contains(key + "|" + lhs.text)
+                let rightPinned = pinnedWords.contains(key + "|" + rhs.text)
+                return leftPinned != rightPinned ? leftPinned : lhs.count > rhs.count
+            }
+            .map { ($0.text, $0.count) }
     }
 
     /// 九宫格：数字串对得上的选过的词。
@@ -150,8 +199,20 @@ public final class UserLearningStore {
         lock.lock()
         defer { lock.unlock() }
         return (userWordsByDigits[digits] ?? [])
-            .map { ($0.text, $0.key, userWords[$0.key]?[$0.text] ?? 0) }
-            .sorted { $0.2 > $1.2 }
+            .map { (text: $0.text, key: $0.key,
+                    count: decayedCount(userWords[$0.key]?[$0.text] ?? 0, updatedAt: wordDates[$0.key]?[$0.text]),
+                    pinned: pinnedWords.contains($0.key + "|" + $0.text)) }
+            .sorted { lhs, rhs in
+                lhs.pinned != rhs.pinned ? lhs.pinned : lhs.count > rhs.count
+            }
+            .map { ($0.text, $0.key, $0.count) }
+    }
+
+    /// 手动添加的词始终优先于统计学习结果。
+    public func isPinnedUserWord(text: String, key: String) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return pinnedWords.contains(key + "|" + text)
     }
 
     /// 拼音正好是 key 的用户短语。
@@ -185,7 +246,13 @@ public final class UserLearningStore {
         lock.lock()
         defer { lock.unlock() }
         guard let followers = next[text] else { return [] }
-        return followers.sorted { $0.value > $1.value }.prefix(limit).map { $0.key }
+        return followers.map { (text: $0.key, count: decayedCount($0.value, updatedAt: nextDates[text]?[$0.key])) }
+            .filter { $0.count > 0 }
+            .sorted { lhs, rhs in
+                lhs.count != rhs.count ? lhs.count > rhs.count : lhs.text < rhs.text
+            }
+            .prefix(limit)
+            .map { $0.text }
     }
 
     /// 个人词库里有多少条（词 + 短语）。
@@ -202,7 +269,8 @@ public final class UserLearningStore {
         var result: [Entry] = []
         for (key, texts) in userWords {
             for (text, count) in texts {
-                result.append(Entry(text: text, key: key, count: count))
+                result.append(Entry(text: text, key: key,
+                                   count: decayedCount(count, updatedAt: wordDates[key]?[text])))
             }
         }
         let known = Set(result.map(\.id))
@@ -218,18 +286,22 @@ public final class UserLearningStore {
     ///
     /// 每一段都记进个人词库（这个拼音下选了这个词）；多段组成的句子再记成一条用户短语。
     /// - Parameter segments: 组成这次上屏的各段（词 + 拼音）。
-    public func record(segments: [(text: String, key: String)]) {
+    public func record(segments: [(text: String, key: String)], strength: Double = 1.0) {
         guard !segments.isEmpty else { return }
         lock.lock()
         guard learningEnabled else {
             lock.unlock()
             return
         }
+        let increment = Self.increment(for: strength)
+        let now = Date().timeIntervalSince1970
         for segment in segments {
-            counts[segment.text, default: 0] += 1
+            counts[segment.text, default: 0] += increment
+            countDates[segment.text] = now
             if !segment.key.isEmpty, segment.text.count <= 12 {
                 let isNew = userWords[segment.key]?[segment.text] == nil
-                userWords[segment.key, default: [:]][segment.text, default: 0] += 1
+                userWords[segment.key, default: [:]][segment.text, default: 0] += increment
+                wordDates[segment.key, default: [:]][segment.text] = now
                 if isNew {
                     userWordsByDigits[MoyuDictionary.t9Digits(segment.key), default: []].append((segment.key, segment.text))
                 }
@@ -248,7 +320,10 @@ public final class UserLearningStore {
                 }
             }
             for index in 0..<(segments.count - 1) {
-                next[segments[index].text, default: [:]][segments[index + 1].text, default: 0] += 1
+                let previous = segments[index].text
+                let current = segments[index + 1].text
+                next[previous, default: [:]][current, default: 0] += increment
+                nextDates[previous, default: [:]][current] = now
             }
         }
         trimLocked()
@@ -261,16 +336,19 @@ public final class UserLearningStore {
     }
 
     /// 记住「打的是这几个字母，要的是这个词」。简拼（wcgl -> 我吃过了）下次直接排第一。
-    public func recordTyped(_ items: [(text: String, typed: String)]) {
+    public func recordTyped(_ items: [(text: String, typed: String)], strength: Double = 1.0) {
         guard !items.isEmpty else { return }
         lock.lock()
         guard learningEnabled else {
             lock.unlock()
             return
         }
+        let increment = Self.increment(for: strength)
+        let now = Date().timeIntervalSince1970
         for item in items where !item.typed.isEmpty && item.text.count <= 16 {
             let isNew = userWords[item.typed]?[item.text] == nil
-            userWords[item.typed, default: [:]][item.text, default: 0] += 1
+            userWords[item.typed, default: [:]][item.text, default: 0] += increment
+            wordDates[item.typed, default: [:]][item.text] = now
             if isNew {
                 userWordsByDigits[MoyuDictionary.t9Digits(item.typed), default: []].append((item.typed, item.text))
             }
@@ -280,14 +358,16 @@ public final class UserLearningStore {
     }
 
     /// 记录相邻两次上屏的先后关系（上一次上屏的词 -> 这一次）。
-    public func recordFollow(previous: String, current: String) {
+    public func recordFollow(previous: String, current: String, strength: Double = 1.0) {
         guard !previous.isEmpty, !current.isEmpty, previous.count <= 8, current.count <= 8 else { return }
         lock.lock()
         guard learningEnabled else {
             lock.unlock()
             return
         }
-        next[previous, default: [:]][current, default: 0] += 1
+        let increment = Self.increment(for: strength)
+        next[previous, default: [:]][current, default: 0] += increment
+        nextDates[previous, default: [:]][current] = Date().timeIntervalSince1970
         trimLocked()
         pendingWrites += 1
         lock.unlock()
@@ -296,26 +376,29 @@ public final class UserLearningStore {
     private func trimLocked() {
         if counts.count > Self.maximumWords {
             // 丢掉只用过一次的词
-            let keep = counts.filter { $0.value > 1 }
+            let keep = counts.filter { $0.value > Self.pickUnit }
             if keep.count > Self.maximumWords / 2 {
                 counts = keep
             } else {
                 counts = Dictionary(uniqueKeysWithValues: counts.prefix(Self.maximumWords / 2).map { ($0.key, $0.value) })
             }
+            countDates = countDates.filter { counts[$0.key] != nil }
         }
         let entryCount = userWords.values.reduce(0) { $0 + $1.count }
         if entryCount > Self.maximumUserEntries {
             // 先丢只选过一次的
             var trimmed: [String: [String: Int]] = [:]
             for (key, texts) in userWords {
-                let kept = texts.filter { $0.value > 1 }
+                let kept = texts.filter { $0.value > Self.pickUnit }
                 if !kept.isEmpty { trimmed[key] = kept }
             }
             userWords = trimmed
+            wordDates = wordDates.filter { trimmed[$0.key] != nil }
             rebuildIndexes()
         }
         if next.count > Self.maximumBigramHeads {
             next = Dictionary(uniqueKeysWithValues: next.prefix(Self.maximumBigramHeads / 2).map { ($0.key, $0.value) })
+            nextDates = nextDates.filter { next[$0.key] != nil }
         }
     }
 
@@ -325,8 +408,9 @@ public final class UserLearningStore {
         guard pendingWrites > 0 else { return }
         pendingWrites = 0
         revision += 1
-        let usage = Persisted(counts: counts, phrases: [], next: next)
-        let dictionary = UserDictionary(words: userWords, phrases: phrases, revision: revision)
+        let usage = Persisted(counts: counts, phrases: [], next: next, countDates: countDates, nextDates: nextDates)
+        let dictionary = UserDictionary(words: userWords, phrases: phrases, revision: revision,
+                                        wordDates: wordDates, pinnedWords: pinnedWords)
         persistenceQueue.async { [store, blob] in
             if let data = try? JSONEncoder().encode(usage) {
                 store.setData(data, forKey: Self.storageKey)
@@ -351,9 +435,11 @@ public final class UserLearningStore {
         defer { lock.unlock() }
         guard let dictionary = persistenceQueue.sync(execute: { Self.readDictionary(blob) }),
               dictionary.revision != revision else { return }
-        userWords = dictionary.words
+        userWords = dictionary.wordDates == nil ? Self.scaled(dictionary.words) : dictionary.words
         phrases = dictionary.phrases
         revision = dictionary.revision
+        wordDates = dictionary.wordDates ?? Self.dates(for: dictionary.words, now: Date().timeIntervalSince1970)
+        pinnedWords = dictionary.pinnedWords ?? []
         rebuildIndexes()
     }
 
@@ -364,7 +450,9 @@ public final class UserLearningStore {
         guard !cleanKey.isEmpty, !cleanText.isEmpty else { return }
         lock.lock()
         // 手动加的当成选过几次，保证能排第一
-        userWords[cleanKey, default: [:]][cleanText] = max(userWords[cleanKey]?[cleanText] ?? 0, 3)
+        userWords[cleanKey, default: [:]][cleanText] = max(userWords[cleanKey]?[cleanText] ?? 0, 3 * Self.pickUnit)
+        wordDates[cleanKey, default: [:]][cleanText] = Date().timeIntervalSince1970
+        pinnedWords.insert(cleanKey + "|" + cleanText)
         revision += 1
         rebuildIndexes()
         writeDictionaryLocked()
@@ -375,6 +463,8 @@ public final class UserLearningStore {
     public func removeEntry(text: String, key: String) {
         lock.lock()
         userWords[key]?[text] = nil
+        wordDates[key]?[text] = nil
+        pinnedWords.remove(key + "|" + text)
         if userWords[key]?.isEmpty == true {
             userWords[key] = nil
         }
@@ -386,7 +476,8 @@ public final class UserLearningStore {
     }
 
     private func writeDictionaryLocked() {
-        let dictionary = UserDictionary(words: userWords, phrases: phrases, revision: revision)
+        let dictionary = UserDictionary(words: userWords, phrases: phrases, revision: revision,
+                                        wordDates: wordDates, pinnedWords: pinnedWords)
         persistenceQueue.sync {
             if let data = try? JSONEncoder().encode(dictionary) {
                 blob.set(data, forKey: Self.dictionaryKey)
@@ -398,9 +489,13 @@ public final class UserLearningStore {
     public func reset() {
         lock.lock()
         counts = [:]
+        countDates = [:]
         phrases = []
         next = [:]
+        nextDates = [:]
         userWords = [:]
+        wordDates = [:]
+        pinnedWords = []
         revision += 1
         rebuildIndexes()
         pendingWrites = 0

@@ -34,6 +34,9 @@ public final class PinyinEngine {
     static let initialsPenalty = 3.0
     /// 简拼每一段试几个词（tools/dict/build_binary.py 的 INITIAL_TOP_K 要一起改）。
     static let initialTopK = 3
+    static let initialKeyLimit = 60
+    static let initialEntryLimit = 3
+    static let exactEntryLimit = 40
     /// 简拼每多一个字母加的分：一下对上四个字母的词比拆成两段可信得多。
     static let initialsLengthBonus = 3.0
     /// 前一个词的最后一个字和这个词的第一个字连起来是个常用词（吃 + 过了 -> 吃过），加分。
@@ -55,6 +58,8 @@ public final class PinyinEngine {
     static let longPhraseDiscount = 1.0
     /// 纠错只看这么长以内的词块。
     static let maxEditTileLength = 12
+    /// 长句允许一次局部错键，超过这个长度仍走原文候选。
+    static let maxTypoInputLength = 80
     /// 少打一个字母时，只试补这几个（韵母、zh/ch/sh 的 h、ng 的 g）。
     static let insertableLetters: [UInt8] = Array("aeiouhgn".utf8)
     /// 嗯、呣这类只有声母的音节，放在句子中间基本是错的。
@@ -64,8 +69,10 @@ public final class PinyinEngine {
     static let maxTileLength = 24
     /// 候选总数上限。
     static let maxCandidates = 120
+    /// 句末语气词以小幅加分参与路径竞争。
+    static let endingParticleBonus = 8.0
 
-    /// 整句最后一个音是这些时，换成语气词。
+    /// 可参加句末词频竞争的语气词。
     ///
     /// 我们没有上下文模型，句尾的 ma 按词频会选「嘛」、ba 会选「把」。
     /// 这条规则只动整句候选的最后一个字，普通候选不受影响。
@@ -79,6 +86,8 @@ public final class PinyinEngine {
     private let learning: UserLearningStore
     private let suggestions: PhraseSuggestionIndex
     private let nextWords: NextWordIndex
+    /// 最近输入串的局部前缀状态，供逐键长串纠错复用。
+    private var typoPrefixStateCache: [String: [Range<Int>]] = [:]
     /// 发版以后从仓库拉到的新词，补在词库后面。
     public var hotWords: HotWordStore?
 
@@ -139,11 +148,18 @@ public final class PinyinEngine {
         var isEdited = false
     }
 
+    /// 在相同输入位置保留有限个不同的前词状态。
+    private struct DecodeState {
+        let path: [Tile]
+        let score: Double
+    }
+
     /// 取一个键下最适合用来拼句子的词：词频最高的正常词，学过的词优先。
-    private func bestWord(key index: Int, dictionary: MoyuDictionary, previous: String? = nil) -> MoyuDictionary.Entry? {
+    private func bestWord(key index: Int, dictionary: MoyuDictionary, previous: String? = nil,
+                          entryLimit: Int = 8) -> MoyuDictionary.Entry? {
         var best: MoyuDictionary.Entry?
         var bestScore = -Double.infinity
-        for entry in dictionary.entries(key: index, limit: 8) where entry.isWord {
+        for entry in dictionary.entries(key: index, limit: entryLimit) where entry.isWord {
             let count = learning.count(of: entry.text)
             var score = log(Double(entry.frequency) * (1.0 + Double(count) * 4.0) + 1)
             if let previous, nextWords.isCommonPair(previous, entry.text) {
@@ -213,23 +229,28 @@ public final class PinyinEngine {
             var matchedExact = false
             var cursor = range.lowerBound
             while cursor < range.upperBound, dictionary.keyLength(key: cursor) == sub.count {
-                if let entry = bestWord(key: cursor, dictionary: dictionary, previous: previous) {
+                guard acceptsBreaks(Set(query.breaks.map { $0 - start }), key: cursor, consumed: sub.count, dictionary: dictionary) else {
+                    cursor += 1
+                    continue
+                }
+                let syllables = dictionary.syllables(key: cursor)
+                for entry in dictionary.entries(key: cursor, limit: Self.exactEntryLimit) where entry.isWord {
                     matchedExact = true
-                    let syllables = dictionary.syllables(key: cursor)
                     var score = scoreWord(frequency: entry.frequency,
                                           syllableCount: oneSyllable ? 1 : dictionary.syllableCount(key: cursor),
                                           text: entry.text,
                                           previous: previous)
-                    // 嗯、呣开头的词（包括 nhao -> 嗯好）放在句子中间基本是错的
                     if let first = syllables.first, Self.unlikelySyllables.contains(first) {
                         score -= Self.unlikelyPenalty
                     }
                     tiles.append(Tile(end: position, text: entry.text, key: subString, score: score,
                                       syllables: syllables, lastSyllable: syllables.last))
                 }
+
                 cursor += 1
             }
 
+            if hasBreak(query, after: start, before: position) { continue }
             if let hotWords {
                 for word in hotWords.words(forKey: subString).prefix(2) {
                     matchedExact = true
@@ -250,7 +271,7 @@ public final class PinyinEngine {
 
             // 个人词库：这个拼音下选过的词。两个音节以上才进整句；单字只调候选顺序，免得句子里到处是它
             if let syllables = PinyinSyllables.segment(subString), syllables.count >= 2 {
-                for word in learning.userWords(forKey: subString).prefix(2) {
+                for word in learning.userWords(forKey: subString).prefix(2) where word.count >= 3 {
                     matchedExact = true
                     tiles.append(Tile(end: position, text: word.text, key: subString,
                                       score: Self.userWordScore(syllables: syllables.count, chosen: word.count),
@@ -264,16 +285,17 @@ public final class PinyinEngine {
                 let penalty = (sub.count == 1 ? Self.singleInitialPenalty : Self.initialsPenalty)
                     + (fullPinyin ? Self.fullPinyinInitialsPenalty : 0)
                     + Self.initialsVowelPenalty * Double(vowels)
-                for index in dictionary.initialKeys(sub, limit: Self.initialTopK) {
-                    guard let entry = bestWord(key: index, dictionary: dictionary) else { continue }
+                for index in dictionary.initialKeys(sub, limit: Self.initialKeyLimit) {
                     let syllables = dictionary.syllables(key: index)
-                    let score = scoreWord(frequency: entry.frequency, syllableCount: 1, text: entry.text, previous: previous)
-                        - penalty
-                        + Self.initialsLengthBonus * Double(sub.count - 1)
-                        + junctionBonus(previous: previous, previousSyllable: previousSyllable,
-                                        text: entry.text, firstSyllable: syllables.first, dictionary: dictionary)
-                    tiles.append(Tile(end: position, text: entry.text, key: dictionary.keyString(key: index),
-                                      score: score, syllables: nil, lastSyllable: syllables.last, isLoose: true))
+                    for entry in dictionary.entries(key: index, limit: Self.initialEntryLimit) where entry.isWord {
+                        let score = scoreWord(frequency: entry.frequency, syllableCount: 1, text: entry.text, previous: previous)
+                            - penalty
+                            + Self.initialsLengthBonus * Double(sub.count - 1)
+                            + junctionBonus(previous: previous, previousSyllable: previousSyllable,
+                                            text: entry.text, firstSyllable: syllables.first, dictionary: dictionary)
+                        tiles.append(Tile(end: position, text: entry.text, key: dictionary.keyString(key: index),
+                                          score: score, syllables: nil, lastSyllable: syllables.last, isLoose: true))
+                    }
                 }
                 for word in hotWords?.words(forInitials: subString).prefix(Self.initialTopK) ?? [] {
                     let score = scoreWord(frequency: word.frequency, syllableCount: 1, text: word.text, previous: previous)
@@ -284,7 +306,7 @@ public final class PinyinEngine {
                 }
             }
             tailHasExact = matchedExact
-            if query.breaks.contains(position) { return tiles }
+
         }
 
         // 还没打完的词（只在末尾）：nih -> 你好。
@@ -313,13 +335,26 @@ public final class PinyinEngine {
         let input = query.input
         let count = input.count
         let limit = min(count, start + Self.maxEditTileLength)
-        // prefixes[k]：以 input[start..<start+k] 开头的键
-        var prefixes: [Range<Int>] = [0..<dictionary.keyCount]
-        while start + prefixes.count - 1 < limit {
-            let depth = prefixes.count - 1
-            let next = dictionary.narrow(prefixes[depth], depth: depth, byte: input[start + depth])
-            prefixes.append(next)
-            if next.isEmpty { break }
+        // prefixes[k]：以 input[start..<start+k] 开头的键。相邻按键的长前缀
+        // 大多不变，按局部输入片段缓存，避免每个字母从词库根重新窄化。
+        let cacheEnd = min(count, start + Self.maxEditTileLength)
+        let cacheKey = String(decoding: input[start..<cacheEnd], as: UTF8.self)
+        let prefixes: [Range<Int>]
+        if let cached = typoPrefixStateCache[cacheKey] {
+            prefixes = cached
+        } else {
+            var built: [Range<Int>] = [0..<dictionary.keyCount]
+            while start + built.count - 1 < limit {
+                let depth = built.count - 1
+                let next = dictionary.narrow(built[depth], depth: depth, byte: input[start + depth])
+                built.append(next)
+                if next.isEmpty { break }
+            }
+            prefixes = built
+            if typoPrefixStateCache.count >= 256 {
+                typoPrefixStateCache.removeAll(keepingCapacity: true)
+            }
+            typoPrefixStateCache[cacheKey] = built
         }
         func lookup(_ variant: [UInt8], from position: Int) -> Int? {
             guard position < prefixes.count, !prefixes[position].isEmpty else { return nil }
@@ -445,7 +480,8 @@ public final class PinyinEngine {
         var tailHasExact = false
         while position <= min(count, start + Self.maxTileLength) {
             let digits = Array(input[start..<position])
-            for keyIndex in dictionary.t9Keys(digits, limit: 48) {
+                for keyIndex in dictionary.t9Keys(digits, limit: 48) {
+                guard acceptsBreaks(Set(query.breaks.map { $0 - start }), key: keyIndex, consumed: digits.count, dictionary: dictionary) else { continue }
                 let key = dictionary.keyString(key: keyIndex)
                 guard matchesLocks(keyBytes: Array(key.utf8), at: start, locks: query.locks) else { continue }
                 let syllables = dictionary.syllables(key: keyIndex)
@@ -460,8 +496,8 @@ public final class PinyinEngine {
                 if position == count {
                     tailHasExact = true
                 }
-                break
             }
+            if hasBreak(query, after: start, before: position) { position += 1; continue }
             let digitString = String(decoding: digits, as: UTF8.self)
             for phrase in learning.phrases(forT9: digitString) {
                 let score = log(60000.0) - Self.tilePenalty + 1.2 * log2(Double(learning.count(of: phrase.text)) + 1)
@@ -470,7 +506,7 @@ public final class PinyinEngine {
                                       syllables: nil, lastSyllable: nil))
                 }
             }
-            for word in learning.userWords(forT9: digitString).prefix(3) {
+            for word in learning.userWords(forT9: digitString).prefix(3) where word.count >= 3 {
                 guard let syllables = PinyinSyllables.segment(word.key), syllables.count >= 2,
                       matchesLocks(keyBytes: Array(word.key.utf8), at: start, locks: query.locks) else { continue }
                 tiles.append(Tile(end: position, text: word.text, key: word.key,
@@ -490,7 +526,7 @@ public final class PinyinEngine {
                                       score: score, syllables: nil, lastSyllable: syllables.last, isLoose: true))
                 }
             }
-            if query.breaks.contains(position) { return tiles }
+
             position += 1
         }
 
@@ -537,14 +573,16 @@ public final class PinyinEngine {
         var back = [(from: Int, tile: Tile)?](repeating: nil, count: count + 1)
         best[0] = 0
         for start in 0..<count where best[start] > -.infinity {
-            let previous = back[start]?.tile.text
+            let previous = start == 0 ? query.leftContext : back[start]?.tile.text
             let previousSyllable = back[start]?.tile.lastSyllable
             let tiles = query.mode == .qwerty
                 ? qwertyTiles(query: query, start: start, previous: previous, previousSyllable: previousSyllable,
                               fullPinyin: fullPinyin, dictionary: dictionary)
                 : t9Tiles(query: query, start: start, previous: previous, previousSyllable: previousSyllable, dictionary: dictionary)
             for tile in tiles {
-                let value = best[start] + tile.score
+                let endingBonus = tile.end == count && start > 0 && Self.endingParticles[tile.key] == tile.text
+                    ? Self.endingParticleBonus : 0
+                let value = best[start] + tile.score + endingBonus
                 if value > best[tile.end] {
                     best[tile.end] = value
                     back[tile.end] = (start, tile)
@@ -561,6 +599,59 @@ public final class PinyinEngine {
         return (Array(path.reversed()), best[count])
     }
 
+    private func solveAlternatives(query: IMEQuery, dictionary: MoyuDictionary,
+                                   limit: Int) -> [(path: [Tile], score: Double)] {
+        let count = query.input.count
+        guard count > 0 else { return [] }
+        let fullPinyin = isFullPinyin(query)
+        var states = [[DecodeState]](repeating: [], count: count + 1)
+        states[0] = [DecodeState(path: [], score: 0)]
+
+        for start in 0..<count {
+            guard !states[start].isEmpty else { continue }
+            for state in states[start] {
+                let previous = state.path.last?.text ?? (state.path.isEmpty ? query.leftContext : nil)
+                let previousSyllable = state.path.last?.lastSyllable
+                let tiles = query.mode == .qwerty
+                    ? qwertyTiles(query: query, start: start, previous: previous,
+                                  previousSyllable: previousSyllable, fullPinyin: fullPinyin,
+                                  dictionary: dictionary)
+                    : t9Tiles(query: query, start: start, previous: previous,
+                              previousSyllable: previousSyllable, dictionary: dictionary)
+                for tile in tiles {
+                    let endingBonus = tile.end == count && start > 0
+                        && Self.endingParticles[tile.key] == tile.text ? Self.endingParticleBonus : 0
+                    let next = DecodeState(path: state.path + [tile], score: state.score + tile.score + endingBonus)
+                    var bucket = states[tile.end]
+                    let text = sentenceText(next.path)
+                    if let existing = bucket.firstIndex(where: { sentenceText($0.path) == text }) {
+                        if bucket[existing].score >= next.score { continue }
+                        bucket.remove(at: existing)
+                    }
+                    bucket.append(next)
+                    bucket.sort { lhs, rhs in
+                        lhs.score == rhs.score ? sentenceText(lhs.path) < sentenceText(rhs.path) : lhs.score > rhs.score
+                    }
+                    if bucket.count > 16 {
+                        bucket.removeLast(bucket.count - 16)
+                    }
+                    states[tile.end] = bucket
+                }
+            }
+        }
+
+        var results: [(path: [Tile], score: Double)] = []
+        var seen: Set<String> = []
+        for state in states[count] {
+            let text = sentenceText(state.path)
+            if seen.insert(text).inserted {
+                results.append((state.path, state.score))
+                if results.count >= limit { break }
+            }
+        }
+        return results
+    }
+
     /// 允许整句里有一块词打错一处，求最优切法。
     ///
     /// 两层：第 0 层没纠过，第 1 层纠过一次。纠过以后不再收简拼和没打完的词，
@@ -575,7 +666,7 @@ public final class PinyinEngine {
         for start in 0..<count {
             for layer in 0..<2 where best[layer][start] > -.infinity {
                 let step = back[layer][start]
-                let previous = step?.tile.text
+                let previous = start == 0 ? query.leftContext : step?.tile.text
                 var tiles = qwertyTiles(query: query, start: start, previous: previous,
                                         previousSyllable: step?.tile.lastSyllable,
                                         fullPinyin: fullPinyin, dictionary: dictionary)
@@ -626,6 +717,12 @@ public final class PinyinEngine {
         var builder = CandidateBuilder(limit: Self.maxCandidates)
         let count = query.input.count
         let solved = solveScored(query: query, dictionary: dictionary)
+        var alternatives = solveAlternatives(query: query, dictionary: dictionary, limit: 4)
+        if let solved {
+            let primaryText = sentenceText(solved.path)
+            alternatives.removeAll { sentenceText($0.path) == primaryText }
+            alternatives.insert(solved, at: 0)
+        }
         let path = solved?.path
 
         // 打头的是整句（或一整个词）
@@ -637,7 +734,15 @@ public final class PinyinEngine {
             builder.add(IMECandidate(text: sentenceText(path),
                                      key: path.map(\.key).joined(),
                                      consumed: count,
-                                     kind: path.count > 1 ? .sentence : .word))
+                                     kind: path.count > 1 ? .sentence : .word,
+                                     segments: sentenceSegments(path)))
+        }
+        for alternative in alternatives.dropFirst() {
+            let alternativePath = alternative.path
+            builder.add(IMECandidate(text: sentenceText(alternativePath),
+                                     key: alternativePath.map(\.key).joined(), consumed: count,
+                                     kind: alternativePath.count > 1 ? .sentence : .word,
+                                     segments: sentenceSegments(alternativePath)))
         }
 
         if query.mode == .qwerty {
@@ -646,21 +751,29 @@ public final class PinyinEngine {
             addT9Lists(query: query, dictionary: dictionary, into: &builder)
         }
 
+        // 余串的左上下文是用户刚确认的词。已有真实词对时，先让对应候选进入首位，
+        // 例如「把」之后的「钥匙」不能被「要是」的单词频挤掉。
+        if let leftContext = query.leftContext,
+           let preferred = builder.candidates.first(where: { $0.consumed == count && nextWords.isCommonPair(leftContext, $0.text) }) {
+            builder.promote(preferred, to: 0)
+        }
+
         // 个人词库：这串拼音选过的词放第一个
         let typed = String(decoding: query.input, as: UTF8.self)
         if query.mode == .qwerty {
-            if let favorite = learning.userWords(forKey: typed).first {
+            if let favorite = learning.userWords(forKey: typed).first,
+               learning.isPinnedUserWord(text: favorite.text, key: typed) {
                 builder.promote(IMECandidate(text: favorite.text, key: typed, consumed: count), to: 0)
             }
         } else if let favorite = learning.userWords(forT9: typed).first(where: {
             matchesLocks(keyBytes: Array($0.key.utf8), at: 0, locks: query.locks)
-        }) {
+        }), learning.isPinnedUserWord(text: favorite.text, key: favorite.key) {
             builder.promote(IMECandidate(text: favorite.text, key: favorite.key, consumed: count), to: 0)
         }
 
         if query.mode == .qwerty {
             let inputString = String(decoding: query.input, as: UTF8.self)
-            if fuzzy.isActive {
+            if fuzzy.isActive, query.breaks.isEmpty, count <= 40 {
                 addFuzzy(input: inputString, query: query, rules: fuzzy.activeRules,
                          dictionary: dictionary, into: &builder)
             }
@@ -692,11 +805,15 @@ public final class PinyinEngine {
     }
 
     private func sentenceText(_ path: [Tile]) -> String {
-        var pieces = path.map(\.text)
-        if pieces.count >= 2, let last = path.last?.key, let particle = Self.endingParticles[last] {
-            pieces[pieces.count - 1] = particle
+        path.map(\.text).joined()
+    }
+
+    private func sentenceSegments(_ path: [Tile]) -> [IMEWordSegment] {
+        var start = 0
+        return path.map { tile in
+            defer { start = tile.end }
+            return IMEWordSegment(text: tile.text, key: tile.key, consumed: tile.end - start)
         }
-        return pieces.joined()
     }
 
     /// 26 键的候选列表。
@@ -718,10 +835,14 @@ public final class PinyinEngine {
         for word in hotWords?.words(forKey: inputString).prefix(4) ?? [] {
             builder.add(IMECandidate(text: word.text, key: word.key, consumed: count))
         }
-        addEntries(of: dictionary.exactRange(input), consumed: count, limit: 40, dictionary: dictionary, into: &builder)
+        addEntries(of: dictionary.exactRange(input), consumed: count, limit: 128, dictionary: dictionary,
+                   previous: query.leftContext, breaks: query.breaks, into: &builder)
+        for word in learning.userWords(forKey: inputString).prefix(20) {
+            builder.add(IMECandidate(text: word.text, key: inputString, consumed: count))
+        }
 
         // 还没打完的词
-        if count >= 2 {
+        if count >= 2, query.breaks.isEmpty {
             let range = dictionary.prefixRange(input)
             let longer = topKeys(in: range, depth: count, limit: 10, dictionary: dictionary)
             for index in longer {
@@ -735,7 +856,7 @@ public final class PinyinEngine {
         }
 
         // 简拼：聊天词优先（wq 先给「我去」）
-        if count <= 8 {
+        if count <= 8, query.breaks.isEmpty {
             addInitials(input: input, dictionary: dictionary, into: &builder)
         }
 
@@ -745,30 +866,35 @@ public final class PinyinEngine {
             if !query.breaks.contains(where: { $0 > 0 && $0 < end }) {
                 let range = dictionary.exactRange(Array(input[0..<end]))
                 let limit = end <= 2 ? (end == count - 1 ? 8 : 30) : 5
-                addEntries(of: range, consumed: end, limit: limit, dictionary: dictionary, into: &builder)
+                addEntries(of: range, consumed: end, limit: limit, dictionary: dictionary,
+                           previous: query.leftContext, breaks: query.breaks, into: &builder)
             }
             end -= 1
         }
     }
 
     private func addEntries(of range: Range<Int>, consumed: Int, limit: Int,
-                            dictionary: MoyuDictionary, into builder: inout CandidateBuilder) {
-        var rows: [(entry: MoyuDictionary.Entry, key: String)] = []
-        for index in range {
+                            dictionary: MoyuDictionary, previous: String? = nil, breaks: Set<Int> = [], into builder: inout CandidateBuilder) {
+        var rows: [(entry: MoyuDictionary.Entry, key: String, score: Double)] = []
+        for index in range where acceptsBreaks(breaks, key: index, consumed: consumed, dictionary: dictionary) {
             let key = dictionary.keyString(key: index)
-            for entry in dictionary.entries(key: index, limit: limit) {
-                rows.append((entry, key))
+            for entry in dictionary.entries(key: index, limit: limit) where !entry.isPunctuation {
+                let score = log(Double(entry.frequency) * (1 + Double(learning.count(of: entry.text)) * 4) + 1)
+                    + (previous.map { nextWords.isCommonPair($0, entry.text) } == true ? Self.bigramBonus : 0)
+                rows.append((entry, key, score))
             }
         }
-        // 学过的词排前面
-        rows.sort { left, right in
-            let leftScore = Double(left.entry.frequency) * (1 + Double(learning.count(of: left.entry.text)) * 4)
-            let rightScore = Double(right.entry.frequency) * (1 + Double(learning.count(of: right.entry.text)) * 4)
-            return leftScore > rightScore
-        }
+        rows.sort { $0.score != $1.score ? $0.score > $1.score : $0.entry.text < $1.entry.text }
         for row in rows.prefix(limit) where !row.entry.isPunctuation {
             builder.add(IMECandidate(text: row.entry.text, key: row.key, consumed: consumed,
                                      kind: row.entry.isEmoji ? .emoji : .word))
+        }
+    }
+
+    private func acceptsBreaks(_ breaks: Set<Int>, key: Int, consumed: Int, dictionary: MoyuDictionary) -> Bool {
+        breaks.allSatisfy { position in
+            position <= 0 || position >= consumed ||
+                (position < 32 && dictionary.syllableMask(key: key) & (UInt32(1) << position) != 0)
         }
     }
 
@@ -786,8 +912,8 @@ public final class PinyinEngine {
 
     private func addInitials(input: [UInt8], dictionary: MoyuDictionary, into builder: inout CandidateBuilder) {
         var rows: [(text: String, key: String, score: Double)] = []
-        for index in dictionary.initialKeys(input, limit: 60) {
-            for entry in dictionary.entries(key: index, limit: 3) where entry.isWord {
+        for index in dictionary.initialKeys(input, limit: 256) {
+            for entry in dictionary.entries(key: index, limit: 8) where entry.isWord {
                 let learned = Double(learning.count(of: entry.text))
                 let score = log(Double(entry.frequency) + 1) * (1 + 0.35 * entry.chatWeight) + 3 * log2(learned + 1)
                 rows.append((entry.text, dictionary.keyString(key: index), score))
@@ -813,10 +939,14 @@ public final class PinyinEngine {
             }
         }
 
-        addT9Keys(digits: input, consumed: count, keyLimit: 12, entryLimit: 6, query: query,
+        addT9Keys(digits: input, consumed: count, keyLimit: 48, entryLimit: 6, query: query,
                   dictionary: dictionary, into: &builder)
+        for word in learning.userWords(forT9: digitString).prefix(20)
+            where matchesLocks(keyBytes: Array(word.key.utf8), at: 0, locks: query.locks) {
+            builder.add(IMECandidate(text: word.text, key: word.key, consumed: count))
+        }
 
-        if query.locks.isEmpty, count >= 2, count <= 6 {
+        if query.locks.isEmpty, query.breaks.isEmpty, count >= 2, count <= 6 {
             var rows: [(text: String, key: String, score: Double)] = []
             for index in dictionary.t9InitialKeys(input, limit: 30) {
                 if let entry = bestWord(key: index, dictionary: dictionary) {
@@ -842,17 +972,28 @@ public final class PinyinEngine {
 
     private func addT9Keys(digits: [UInt8], consumed: Int, keyLimit: Int, entryLimit: Int, query: IMEQuery,
                            dictionary: MoyuDictionary, into builder: inout CandidateBuilder) {
+        var rows: [(entry: MoyuDictionary.Entry, key: String, score: Double)] = []
         var used = 0
         for keyIndex in dictionary.t9Keys(digits, limit: 48) {
             let key = dictionary.keyString(key: keyIndex)
             guard matchesLocks(keyBytes: Array(key.utf8), at: 0, locks: query.locks) else { continue }
-            if Self.unlikelySyllables.contains(key) { continue }
+            if Self.unlikelySyllables.contains(key) || !acceptsBreaks(query.breaks, key: keyIndex, consumed: consumed, dictionary: dictionary) { continue }
             for entry in dictionary.entries(key: keyIndex, limit: entryLimit) where !entry.isPunctuation {
-                builder.add(IMECandidate(text: entry.text, key: key, consumed: consumed,
-                                         kind: entry.isEmoji ? .emoji : .word))
+                let learned = Double(learning.count(of: entry.text))
+                let score = log(Double(entry.frequency) + 1) + 3 * log2(learned + 1)
+                    + (query.leftContext.map { nextWords.isCommonPair($0, entry.text) } == true ? Self.bigramBonus : 0)
+                rows.append((entry, key, score))
             }
             used += 1
             if used >= keyLimit { break }
+        }
+        rows.sort {
+            if $0.score != $1.score { return $0.score > $1.score }
+            return $0.entry.text < $1.entry.text
+        }
+        for row in rows {
+            builder.add(IMECandidate(text: row.entry.text, key: row.key, consumed: consumed,
+                                     kind: row.entry.isEmoji ? .emoji : .word))
         }
     }
 
@@ -890,12 +1031,15 @@ public final class PinyinEngine {
                                     dictionary: MoyuDictionary) -> (candidate: IMECandidate, first: Bool)? {
         let count = query.input.count
         let vowels = Array("aeiouv".utf8)
-        guard query.breaks.isEmpty, query.locks.isEmpty, count >= 2, count <= 40,
+        guard query.breaks.isEmpty, query.locks.isEmpty, count >= 2, count <= Self.maxTypoInputLength,
               query.input.contains(where: { vowels.contains($0) }),
+              (count <= 40 || PinyinSyllables.segment(String(decoding: query.input, as: UTF8.self)) == nil),
               let corrected = solveCorrected(query: query, dictionary: dictionary) else { return nil }
+        // 长串的正确全拼不进入纠错分支，避免一次偶然的高频重分词把正确句改成首选。
+
         let text = sentenceText(corrected.path)
         let key = corrected.path.map(\.key).joined()
-        let candidate = IMECandidate(text: text, key: key, consumed: count, kind: .corrected)
+        let candidate = IMECandidate(text: text, key: key, consumed: count, kind: .corrected, segments: sentenceSegments(corrected.path))
         guard let original else {
             return (candidate, true)
         }
@@ -967,8 +1111,8 @@ public final class PinyinEngine {
 
     /// 记录一次上屏。
     /// - Parameter segments: 这次上屏由哪几段组成（词 + 拼音）。
-    public func learn(segments: [(text: String, key: String)]) {
-        learning.record(segments: segments)
+    public func learn(segments: [(text: String, key: String)], strength: Double = 1.0) {
+        learning.record(segments: segments, strength: strength)
     }
 
     /// 句末是这些字时，先给问号。
@@ -976,42 +1120,73 @@ public final class PinyinEngine {
     /// 句末是这些字时，先给感叹号。
     private static let exclaimEndings: Set<Character> = ["啊", "呀", "啦", "哇", "哦", "喔", "哈", "嘿", "耶"]
 
-    /// 上屏后的下一个词：句末标点 > 用户习惯 > 手工整理的常用搭配 > 内置短语 > 从短语库推的下一个词 > 后半截。
+    /// 上屏后的下一个词，按场景、用户习惯、人工词对和真实词对证据共同排序。
     ///
     /// - Parameters:
     ///   - text: 刚上屏的内容（可能是一整句）。
     ///   - lastWord: 这次上屏的最后一个词（整句时用它找下一个词）；不传就按 text 的结尾找。
     ///   - limit: 最多几个。
     public func predictions(after text: String, lastWord: String? = nil, limit: Int) -> [String] {
-        var result: [String] = []
-        func add(_ words: [String]) {
-            for word in words where result.count < limit && word != text && !result.contains(word) {
-                result.append(word)
+        guard limit > 0 else { return [] }
+        var ranked: [String: (score: Double, order: Int)] = [:]
+        var order = 0
+        func add(_ words: [String], score: Double) {
+            for word in words where !word.isEmpty && word != text {
+                if let current = ranked[word] {
+                    if score > current.score {
+                        ranked[word] = (score, current.order)
+                    }
+                } else {
+                    ranked[word] = (score, order)
+                    order += 1
+                }
             }
         }
-        let sentence = text.count >= 3
-        if sentence, let last = text.last {
-            if Self.questionEndings.contains(last) {
-                add(["？", "。"])
-            } else if Self.exclaimEndings.contains(last) {
-                add(["！", "。"])
+
+        let isWordContinuation = text.count <= 2
+        let isQuestion = text.last.map(Self.questionEndings.contains) == true
+        let isExclamation = text.last.map(Self.exclaimEndings.contains) == true
+        if !isWordContinuation {
+            if isQuestion {
+                add(["？"], score: 2.0)
+                add(["。"], score: 1.1)
+            } else if isExclamation {
+                add(["！"], score: 1.8)
+                add(["。"], score: 1.0)
             } else if text.count >= 4 {
-                add(["，", "。"])
+                add(["，"], score: 0.55)
+                add(["。"], score: 0.45)
             }
         }
-        add(learning.next(after: text, limit: limit))
-        if let lastWord, lastWord != text {
-            add(learning.next(after: lastWord, limit: limit))
+
+        let anchor = lastWord ?? text
+        let hasSeparateLastWord = lastWord != nil && lastWord != text
+        let primaryLearned = learning.next(after: anchor, limit: limit)
+        add(primaryLearned, score: 3.8)
+        if hasSeparateLastWord {
+            // 整句只作备用上下文，真实末词始终是主要词对锚点。
+            add(learning.next(after: text, limit: limit), score: 2.6)
         }
-        let anchor = lastWord.map { text.hasSuffix($0) ? text : $0 } ?? text
-        add(nextWords.authoredWords(after: anchor))
-        add(suggestions.suggestions(after: text, limit: limit).map { $0.text })
-        // 真实句子（Tatoeba）里这个词后面常跟的词
-        add(nextWords.followingWords(after: anchor))
-        // 后半截是「把词打完」（今 -> 天）。一整句后面接单个字的后半截没有意义（很忙 -> 碌），
-        // 只用两个字以上的结尾（想你 -> 了、太贵了 -> 吧）。
-        add(nextWords.compoundWords(after: text, minimumHeadLength: sentence ? 2 : 1))
-        return result
+        add(nextWords.authoredWords(after: anchor), score: 3.2)
+        let phraseAnchor = hasSeparateLastWord ? anchor : text
+        add(suggestions.suggestions(after: phraseAnchor, limit: limit).map(\.text), score: 2.2)
+        if hasSeparateLastWord {
+            add(suggestions.suggestions(after: text, limit: limit).map(\.text), score: 1.8)
+        }
+        for evidence in nextWords.followingEvidence(after: anchor) {
+            let frequency = min(1.5, log(Double(evidence.count + 1)) * 0.25)
+            let sourceWeight = evidence.source == "tatoeba" ? 0.85 : 0.55
+            add([evidence.text], score: sourceWeight + frequency)
+        }
+        add(nextWords.followingWords(after: anchor), score: 0.9)
+        add(nextWords.compoundWords(after: text, minimumHeadLength: isWordContinuation ? 1 : 2),
+            score: isWordContinuation ? 1.0 : 1.25)
+
+        return ranked.sorted { lhs, rhs in
+            lhs.value.score == rhs.value.score
+                ? lhs.value.order < rhs.value.order
+                : lhs.value.score > rhs.value.score
+        }.prefix(limit).map(\.key)
     }
 }
 

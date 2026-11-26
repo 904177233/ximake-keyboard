@@ -276,6 +276,14 @@ _ = sse.feed(Data("\u{FEFF}data: 新".utf8))
 check("重用解析器并在半行结束", sse.flush().first?.data == "新")
 
 print("配置")
+let remainderQuery = IMEQuery(mode: .qwerty, input: Array("yaoshi".utf8), leftContext: "把")
+check("IMEQuery 保留余串左上下文", remainderQuery.leftContext == "把")
+let segmentedCandidate = IMECandidate(
+    text: "把钥匙", key: "ba'yao'shi", consumed: 8, kind: .sentence,
+    segments: [IMEWordSegment(text: "把", key: "ba", consumed: 2),
+               IMEWordSegment(text: "钥匙", key: "yaoshi", consumed: 6)])
+check("整句候选保留真实词段顺序",
+      segmentedCandidate.segments.map(\.text) == ["把", "钥匙"])
 var oldImage = PresetProviders.preset(id: "preset-seedream")!.makeProvider()
 oldImage.imageModel = old
 PresetProviders.migrateRetiredModels(&oldImage)

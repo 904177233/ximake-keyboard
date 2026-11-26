@@ -17,10 +17,24 @@ import Foundation
 /// 下一词索引（只读，第一次用到时读入内存）。
 public final class NextWordIndex {
 
+    public struct FollowingEvidence: Sendable, Equatable {
+        public let text: String
+        public let count: Int
+        public let source: String
+
+        public init(text: String, count: Int, source: String) {
+            self.text = text
+            self.count = count
+            self.source = source
+        }
+    }
+
     private var authored: [String: [String]] = [:]
     private var authoredSets: [String: Set<String>] = [:]
     private var compound: [String: [String]] = [:]
     private var following: [String: [String]] = [:]
+    private var mapped: NSData?
+    private var evidenceSlices: [String: Range<Int>] = [:]
     private var strongSets: [String: Set<String>] = [:]
 
     /// 最长按几个字匹配上屏内容的结尾。
@@ -30,19 +44,25 @@ public final class NextWordIndex {
     /// - Parameter url: next.tsv 的路径；不传时从安装包里找，找不到就是空索引。
     public init(url: URL? = nil) {
         guard let fileURL = url ?? Self.bundledURL(),
-              let text = try? String(contentsOf: fileURL, encoding: .utf8) else {
-            return
-        }
-        for line in text.split(separator: "\n", omittingEmptySubsequences: true) {
+              let data = try? NSData(contentsOf: fileURL, options: .alwaysMapped) else { return }
+        mapped = data
+        let bytes = UnsafeRawBufferPointer(start: data.bytes, count: data.length)
+        var offset = 0
+        while offset < bytes.count {
+            let start = offset
+            while offset < bytes.count, bytes[offset] != 10 { offset += 1 }
+            let end = offset
+            offset += 1
+            let line = String(decoding: bytes[start..<end], as: UTF8.self)
             let fields = line.split(separator: "\t", omittingEmptySubsequences: false)
-            guard fields.count >= 3 else { continue }
+            guard fields.count >= 2 else { continue }
             let head = String(fields[0])
             if !fields[1].isEmpty {
                 let words = fields[1].split(separator: " ").map(String.init)
                 authored[head] = words
                 authoredSets[head] = Set(words)
             }
-            if !fields[2].isEmpty {
+            if fields.count >= 3, !fields[2].isEmpty {
                 compound[head] = fields[2].split(separator: " ").map(String.init)
             }
             if fields.count >= 4, !fields[3].isEmpty {
@@ -50,6 +70,9 @@ public final class NextWordIndex {
             }
             if fields.count >= 5, !fields[4].isEmpty {
                 strongSets[head] = Set(fields[4].split(separator: " ").map(String.init))
+            }
+            if fields.count == 6, !fields[5].isEmpty {
+                evidenceSlices[head] = (end - fields[5].utf8.count)..<end
             }
         }
     }
@@ -82,6 +105,21 @@ public final class NextWordIndex {
     /// 从短语库推出来的下一个词。
     public func followingWords(after text: String) -> [String] {
         lookup(text, in: following)
+    }
+
+    public func followingEvidence(after text: String) -> [FollowingEvidence] {
+        guard let mapped else { return [] }
+        let bytes = UnsafeRawBufferPointer(start: mapped.bytes, count: mapped.length)
+        for size in (1...max(1, min(text.count, Self.maximumHeadLength))).reversed() {
+            let head = String(text.suffix(size))
+            guard let words = following[head], let range = evidenceSlices[head] else { continue }
+            let tags = String(decoding: bytes[range], as: UTF8.self).split(separator: " ")
+            return zip(words, tags).compactMap { word, tag in
+                guard let count = Int(tag.dropFirst()) else { return nil }
+                return FollowingEvidence(text: word, count: count, source: tag.first == "t" ? "tatoeba" : "rime-ice")
+            }
+        }
+        return []
     }
 
     private func lookup(_ text: String, in table: [String: [String]], minimumLength: Int = 1) -> [String] {

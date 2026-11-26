@@ -77,7 +77,7 @@ class Engine(b.Eval):
                             penalty += b.FULL_PINYIN_INITIALS_PENALTY
                         if len(sub) >= 2:
                             penalty += b.INITIALS_VOWEL_PENALTY * sum(c in "aeo" for c in sub)
-                        for freq, text, key in self.init.get(sub, [])[:b.INITIAL_TOP_K]:
+                        for freq, text, key in self.init.get(sub, [])[:b.INITIAL_KEY_LIMIT]:
                             junction = b.JUNCTION_BONUS if prev and prev[-1] + text[0] in self.two_char else 0.0
                             pair = b.BIGRAM_BONUS if prev and text in self.pairs.get(prev, ()) else 0.0
                             score = (math.log(freq + 1) - b.TILE_PENALTY - penalty + junction + pair
@@ -89,7 +89,7 @@ class Engine(b.Eval):
                 first = (b.segment(sub) or [sub])[0]
                 extra = -20.0 if first in b.UNLIKELY_SINGLE else 0.0
                 one = sub in b.SYL_SET
-                for text, freq, syl, _ in rows[:8]:
+                for text, freq, syl, _ in rows[:b.EXACT_ENTRY_LIMIT]:
                     pair = b.BIGRAM_BONUS if prev and text in self.pairs.get(prev, ()) else 0.0
                     bonus = 0.0 if one else b.SYLLABLE_BONUS * (syl - 1)
                     score = math.log(freq + 1) - b.TILE_PENALTY + bonus + extra + pair
@@ -146,6 +146,10 @@ def edits(sub, at_end):
 
 
 class DP(Engine):
+    def __init__(self, builder, max_input=40):
+        super().__init__(builder)
+        self.max_input = max_input
+
     def tiles_at(self, query, i, prev, full_pinyin, allow_edit):
         n = len(query)
         res = []  # (j, text, score, loose, edited)
@@ -156,7 +160,7 @@ class DP(Engine):
                 one = sub in b.SYL_SET
                 first = (b.segment(sub) or [sub])[0]
                 extra = -20.0 if first in b.UNLIKELY_SINGLE else 0.0
-                for text, freq, syl, _ in rows[:8]:
+                for text, freq, syl, _ in rows[:b.EXACT_ENTRY_LIMIT]:
                     pair = b.BIGRAM_BONUS if prev and text in self.pairs.get(prev, ()) else 0.0
                     bonus = 0.0 if one else b.SYLLABLE_BONUS * (syl - 1)
                     res.append((j, text, math.log(freq + 1) - b.TILE_PENALTY + bonus + extra + pair, False, False))
@@ -166,7 +170,7 @@ class DP(Engine):
                     penalty += b.FULL_PINYIN_INITIALS_PENALTY
                 if len(sub) >= 2:
                     penalty += b.INITIALS_VOWEL_PENALTY * sum(c in "aeo" for c in sub)
-                for freq, text, key in self.init.get(sub, [])[:b.INITIAL_TOP_K]:
+                for freq, text, key in self.init.get(sub, [])[:b.INITIAL_KEY_LIMIT]:
                     junction = b.JUNCTION_BONUS if prev and prev[-1] + text[0] in self.two_char else 0.0
                     pair = b.BIGRAM_BONUS if prev and text in self.pairs.get(prev, ()) else 0.0
                     res.append((j, text, math.log(freq + 1) - b.TILE_PENALTY - penalty + junction + pair
@@ -216,6 +220,12 @@ class DP(Engine):
         return path(0), best[0][n], path(1), best[1][n]
 
     def correct(self, query):
+        if len(query) > self.max_input:
+            path = self.solve(query)
+            return ("".join(item[2] for item in path), None, False) if path else (None, None, False)
+        if len(query) > 40 and b.segment(query) is not None:
+            path = self.solve(query)
+            return ("".join(item[2] for item in path), None, False) if path else (None, None, False)
         orig, s0, corr, s1 = self.solve2(query)
         if corr is None or corr == orig:
             return orig, None, False
@@ -232,36 +242,70 @@ def main():
     from pathlib import Path as _P
     cache = _P(__file__).with_name("builder.pkl")
     builder = pickle.loads(cache.read_bytes()) if cache.exists() else b.collect()
-    e = DP(builder)
+    before = DP(builder, max_input=40)
+    after = DP(builder, max_input=80)
     full = lambda s: "".join(lazy_pinyin(s))
     ini = lambda s: "".join(p[0] for p in lazy_pinyin(s, style=Style.NORMAL))
     sentences = FRESH + b.UNSEEN + b.HOLDOUT + BOUNDARY
     rng = random.Random(7)
-    st = dict(n=0, first=0, second=0, orig_ok=0)
-    shown = []
-    for s in sentences:
-        clean = full(s)
-        q, kind = typo(clean, rng)
-        if q == clean:
-            continue
-        st["n"] += 1
-        orig, corr, first = e.correct(q)
-        if orig == s: st["orig_ok"] += 1
-        elif corr == s and first: st["first"] += 1
-        elif corr == s: st["second"] += 1
-        elif len(shown) < 30: shown.append(f"{q}({kind}) {orig} | {corr}")
-    bad_first, bad_any = [], 0
-    clean_cases = [(s, full(s)) for s in sentences] + [(s, ini(s)) for s in INITIALS]
-    for s, q in clean_cases:
-        orig, corr, first = e.correct(q)
-        if corr:
-            bad_any += 1
-            if first: bad_first.append(f"{q}: {orig} -> {corr}")
-    print(P, st)
+    long_rows = []
+    blind_path = _P(__file__).with_name("long_sentence_blind.tsv")
+    if blind_path.exists():
+        for line in blind_path.read_text(encoding="utf-8").splitlines():
+            if line and not line.startswith("#"):
+                mode, query, _left, expected, _full = line.split("\t")
+                if mode == "qwerty":
+                    long_rows.append((expected, query))
+
+    def run(engine, cases):
+        stats = dict(n=0, first=0, second=0, orig_ok=0)
+        buckets = {}
+        shown = []
+        for expected, clean in cases:
+            q, kind = typo(clean, rng)
+            if q == clean:
+                continue
+            stats["n"] += 1
+            bucket = "0-20" if len(clean) <= 20 else "21-40" if len(clean) <= 40 else "41-60" if len(clean) <= 60 else "61+"
+            slot = buckets.setdefault(bucket, dict(n=0, first=0, second=0, orig_ok=0))
+            slot["n"] += 1
+            orig, corr, first = engine.correct(q)
+            if orig == expected:
+                stats["orig_ok"] += 1; slot["orig_ok"] += 1
+            elif corr == expected and first:
+                stats["first"] += 1; slot["first"] += 1
+            elif corr == expected:
+                stats["second"] += 1; slot["second"] += 1
+            elif len(shown) < 12:
+                shown.append(f"{q}({kind}) {orig} | {corr}")
+        return stats, buckets, shown
+
+    all_cases = [(s, full(s)) for s in sentences] + long_rows
+    rng = random.Random(7)
+    before_stats, before_buckets, before_shown = run(before, all_cases)
+    rng = random.Random(7)
+    after_stats, after_buckets, after_shown = run(after, all_cases)
+    def false_correction(engine):
+        bad_first = []
+        bad_any = 0
+        clean_cases = [(s, full(s)) for s in sentences] + [(s, ini(s)) for s in INITIALS] + long_rows
+        for s, q in clean_cases:
+            orig, corr, first = engine.correct(q)
+            if corr:
+                bad_any += 1
+                if first: bad_first.append(f"{q}: {orig} -> {corr}")
+        return len(clean_cases), bad_any, bad_first
+
+    before_clean, before_bad, before_bad_first = false_correction(before)
+    after_clean, after_bad, after_bad_first = false_correction(after)
+    print(P)
+    print("before", before_stats, before_buckets)
+    print("after ", after_stats, after_buckets)
+    print("改前打对输入被纠", before_bad, "条，放第一", len(before_bad_first))
+    print("改后打对输入被纠", after_bad, "条，放第一", len(after_bad_first))
     for q in ["nihaohaoma", "nizaiganshenmo", "wohaixiangqu", "xiexienihaoma"]:
-        print("   例", q, e.correct(q))
-    print(f"打对的/简拼 {len(clean_cases)} 条里被纠：{bad_any}，放第一：{len(bad_first)}", bad_first[:15])
-    for line in shown: print("   没纠对：", line)
+        print("   例", q, after.correct(q))
+    for line in after_shown: print("   没纠对：", line)
 
 if __name__ == "__main__":
     main()

@@ -107,13 +107,9 @@ public final class PhraseSuggestionIndex {
         let characters = Array(text)
         guard !characters.isEmpty else { return [] }
 
-        let start = max(0, characters.count - maxTriggerLength)
-        var tail = ""
-        var index = characters.count
-        // 从长到短构造尾部子串（最多 maxTriggerLength 次）
-        while index > start {
-            tail = String(characters[index - 1]) + tail
-            index -= 1
+        let maximumLength = min(characters.count, maxTriggerLength)
+        for length in stride(from: maximumLength, through: 1, by: -1) {
+            let tail = String(characters.suffix(length))
             if let list = self.index[tail] {
                 return Array(list.prefix(limit))
             }

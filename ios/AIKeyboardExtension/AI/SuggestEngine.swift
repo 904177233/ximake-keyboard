@@ -15,7 +15,7 @@ final class SuggestEngine {
     private static let throttle: TimeInterval = 3
     private static let timeout: UInt64 = 2_500_000_000
     private static let cooldown: TimeInterval = 5
-    private static let minimumContext = 6
+    private static let minimumContext = 2
     private static let maximumChips = 3
     private static let maximumCharacters = 14
 
@@ -33,15 +33,13 @@ final class SuggestEngine {
     /// 上屏后调用。
     func schedule() {
         cancel()
-        guard session.snapshot.enableAISuggestion, session.aiBlocker == nil, Date() >= cooldownUntil,
-              let document = session.host?.documentProxy.documentIdentifier else { return }
+        guard let document = session.host?.documentProxy.documentIdentifier else { return }
         let context = currentContext
         guard context.count >= Self.minimumContext else { return }
         debounceTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: Self.debounce)
             guard !Task.isCancelled, let self else { return }
-            guard self.session.snapshot.enableAISuggestion, self.session.aiBlocker == nil,
-                  self.session.host?.documentProxy.documentIdentifier == document, self.currentContext == context else { return }
+            guard self.session.host?.documentProxy.documentIdentifier == document, self.currentContext == context else { return }
             self.request(context: context, document: document)
         }
     }
@@ -72,11 +70,14 @@ final class SuggestEngine {
         let token = UUID()
         requestID = token
 
-        let local = session.kit.contextual.suggestions(context: context, composing: "", limit: 2)
+        let local = session.kit.contextual.suggestions(context: context, composing: "", limit: 2,
+                                                       includeTemplates: false)
         let chips = Self.clean(local.map { $0.text })
         if !chips.isEmpty {
             session.setAISuggestions(chips)
         }
+
+        guard session.snapshot.enableAISuggestion, session.aiBlocker == nil, Date() >= cooldownUntil else { return }
 
         let now = Date()
         guard now.timeIntervalSince(lastRequestAt) >= Self.throttle else { return }

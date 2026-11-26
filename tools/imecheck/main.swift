@@ -120,6 +120,11 @@ check("bang 不被切成 ba + ng", qwerty("ninengbangwoyigemangma").candidates.f
       "\(texts(qwerty("ninengbangwoyigemangma")))")
 
 print("联想")
+if CommandLine.arguments.count >= 6 {
+    let phraseIndex = PhraseSuggestionIndex(url: URL(fileURLWithPath: CommandLine.arguments[5]))
+    let longest = phraseIndex.suggestions(after: "最近忙吗", limit: 1).first?.text
+    check("短语联想优先最长后缀", longest == "还行", "得到「\(longest ?? "nil")」")
+}
 let afterWo = engine.predictions(after: "我", limit: 14)
 check("我 后面有想、们", afterWo.contains("想") && afterWo.contains("们"), "\(afterWo)")
 let afterJin = engine.predictions(after: "今", limit: 14)
@@ -129,6 +134,10 @@ let afterQuestion = engine.predictions(after: "你吃过了吗", lastWord: "吗"
 check("问句后面先给问号", afterQuestion.first == "？", "\(afterQuestion)")
 let afterBusy = engine.predictions(after: "我今天很忙", lastWord: "忙", limit: 14)
 check("整句后面不按单字补全（很忙 -> 碌）", !afterBusy.contains("碌") && afterBusy.first == "，", "\(afterBusy)")
+let weatherEvidence = nextWords.followingEvidence(after: "天气预报")
+check("天气预报后面的说带真实次数和来源",
+      weatherEvidence.first?.text == "说" && weatherEvidence.first?.count == 9
+        && weatherEvidence.first?.source == "tatoeba", "\(weatherEvidence)")
 let afterHome = engine.predictions(after: "我到家", lastWord: "到家", limit: 14)
 check("到家 后面有了", afterHome.contains("了"), "\(afterHome)")
 
@@ -226,6 +235,16 @@ check("zg 有中国", texts(qwerty("zg")).contains("中国"), "\(texts(qwerty("z
 check("wq 有我去", texts(qwerty("wq"), 4).contains("我去"), "\(texts(qwerty("wq")))")
 check("nih 有你好", texts(qwerty("nih"), 3).contains("你好"), "\(texts(qwerty("nih")))")
 check("zhongg 有中国", texts(qwerty("zhongg"), 3).contains("中国"), "\(texts(qwerty("zhongg")))")
+let kn = qwerty("kn")
+check("kn 的首选是可能", kn.candidates.first?.text == "可能", "\(texts(kn, 8))")
+let dg = qwerty("dg")
+check("dg 的蛋糕进入前五", dg.candidates.firstIndex { $0.text == "蛋糕" }.map { $0 < 5 } == true, "\(texts(dg, 8))")
+let xiAn = engine.convert(IMEQuery(mode: .qwerty, input: Array("xian".utf8), breaks: [2]),
+                          rawText: "xian", fuzzy: .off, typoCorrection: false)
+check("xi'an 的首选是西安", xiAn.candidates.first?.text == "西安", "\(texts(xiAn, 8))")
+let fanGan = engine.convert(IMEQuery(mode: .qwerty, input: Array("fangan".utf8), breaks: [3]),
+                           rawText: "fangan", fuzzy: .off, typoCorrection: false)
+check("fan'gan 的首选是反感", fanGan.candidates.first?.text == "反感", "\(texts(fanGan, 8))")
 
 print("多音字")
 check("huan 有还", texts(qwerty("huan"), 40).contains("还"), "\(texts(qwerty("huan"), 40))")
@@ -238,7 +257,12 @@ check("9426 能打出小", texts(t9("9426"), 12).contains("小"), "\(texts(t9("9
 check("9426 左栏有 xiao", t9("9426").pinyinChoices.contains("xiao"), "\(t9("9426").pinyinChoices)")
 let lockedChoice = t9("9426", locks: [0: UInt8(ascii: "z"), 1: UInt8(ascii: "h"), 2: UInt8(ascii: "a"), 3: UInt8(ascii: "n")])
 check("选定 zhan 后候选跟着变", texts(lockedChoice, 12).contains("站") || texts(lockedChoice, 12).contains("战"), "\(texts(lockedChoice))")
-check("简拼 94 有喜欢", texts(t9("94"), 40).contains("喜欢") || t9("94").candidates.count > 0)
+let nineInitials = t9("94")
+let likedRank = nineInitials.candidates.firstIndex { $0.text == "喜欢" }
+check("简拼 94 的喜欢有真实名次", likedRank.map { $0 < 24 } == true, "名次 \(likedRank.map { $0 + 1 } ?? -1)，\(texts(nineInitials, 40))")
+let remainder = engine.convert(IMEQuery(mode: .qwerty, input: Array("yaoshi".utf8), leftContext: "把"),
+                              rawText: "yaoshi", fuzzy: .off, typoCorrection: false)
+check("把之后的余串首选钥匙", remainder.candidates.first?.text == "钥匙", "\(texts(remainder, 8))")
 
 print("原文")
 check("hello 最后有原文", qwerty("hello").candidates.last?.text == "hello", "\(texts(qwerty("hello")))")
@@ -262,6 +286,17 @@ learning.record(segments: [(text: "睡觉了", key: "shuijiaole")])
 check("选过的三字词整句也用它", qwerty("woyaoshuijiaole").candidates.first?.text.hasSuffix("睡觉了") == true, "\(texts(qwerty("woyaoshuijiaole")))")
 learning.recordTyped([(text: "我吃过了", typed: "wcgl")])
 check("简拼选过一次后排第一", qwerty("wcgl").candidates.first?.text == "我吃过了", "\(texts(qwerty("wcgl")))")
+learning.record(segments: [(text: "弱强度词", key: "ruoqiangdu")], strength: 0.2)
+let weakLearningCount = learning.userWords(forKey: "ruoqiangdu").first?.count ?? 0
+learning.record(segments: [(text: "弱强度词", key: "ruoqiangdu")], strength: 1.0)
+let strongLearningCount = learning.userWords(forKey: "ruoqiangdu").first?.count ?? 0
+check("显式选择强度高于自动接受", strongLearningCount > weakLearningCount,
+      "\(weakLearningCount) -> \(strongLearningCount)")
+learning.addEntry(text: "固定词", key: "gudingci")
+check("手动添加词保持强优先",
+      learning.isPinnedUserWord(text: "固定词", key: "gudingci")
+        && qwerty("gudingci").candidates.first?.text == "固定词",
+      "\(texts(qwerty("gudingci")))")
 learning.removeEntry(text: "试用", key: "shiyong")
 check("删掉以后不再排第一", qwerty("shiyong").candidates.first?.text != "试用", "\(texts(qwerty("shiyong")))")
 
@@ -288,6 +323,13 @@ for _ in 0..<50 {
 let perCall = Date().timeIntervalSince(started) / 50 * 1000
 print(String(format: "  长句每次转换 %.2f 毫秒", perCall))
 check("长句转换不超过 16 毫秒", perCall < 16)
+let longerStarted = Date()
+for _ in 0..<20 {
+    _ = qwerty("nixianbashoujiandizhifageiwowojintianxiabanqianjichuqu")
+}
+let longerPerCall = Date().timeIntervalSince(longerStarted) / 20 * 1000
+print(String(format: "  54 个字母的长句每次转换 %.2f 毫秒", longerPerCall))
+check("54 个字母的长句不超过 30 毫秒", longerPerCall < 30)
 let typoStarted = Date()
 for _ in 0..<20 {
     _ = typed("jintiantianqihenhaowomenyiqichuquwamba")

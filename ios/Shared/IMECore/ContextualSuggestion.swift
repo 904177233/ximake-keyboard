@@ -202,7 +202,7 @@ public final class LocalSuggestionIndex: @unchecked Sendable {
     /// - Parameters:
     ///   - context: 生成候选时使用的上下文（宿主 `documentContextBeforeInput`）。
     ///   - committed: 实际上屏的文本。
-    public func record(context: String, committed: String) {
+    public func record(context: String, committed: String, strength: Double = 1.0) {
         let reply = committed.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !reply.isEmpty, reply.count <= Self.maximumReplyCharacters else { return }
         let sentence = Self.lastSentence(context)
@@ -213,11 +213,12 @@ public final class LocalSuggestionIndex: @unchecked Sendable {
         let now = Date().timeIntervalSince1970
         lock.lock()
         var bucket = entries[key] ?? []
+        let increment = max(1, Int((min(max(strength, 0.1), 3.0) * 4).rounded()))
         if let existing = bucket.firstIndex(where: { $0.text == reply }) {
-            bucket[existing].count += 1
+            bucket[existing].count += increment
             bucket[existing].updatedAt = now
         } else {
-            bucket.append(Entry(text: reply, count: 1, updatedAt: now))
+            bucket.append(Entry(text: reply, count: increment, updatedAt: now))
         }
         bucket.sort { lhs, rhs in
             if lhs.count != rhs.count {
@@ -246,7 +247,8 @@ public final class LocalSuggestionIndex: @unchecked Sendable {
     ///   - composing: 当前正在组字的拼音串（可为空）。
     ///   - limit: 上层最多要几条。
     /// - Returns: 按置信度降序的候选数组。
-    public func suggestions(context: String, composing: String, limit: Int) -> [ContextualSuggestion] {
+    public func suggestions(context: String, composing: String, limit: Int,
+                            includeTemplates: Bool = true) -> [ContextualSuggestion] {
         guard limit > 0 else { return [] }
         let sentence = Self.lastSentence(context)
         guard sentence.count >= Self.minimumContextKeyLength else { return [] }
@@ -274,7 +276,8 @@ public final class LocalSuggestionIndex: @unchecked Sendable {
             }
             let text = item.entry.text
             guard text != sentence, seen.insert(text).inserted else { continue }
-            let base = 0.82 + min(0.12, Double(item.entry.count) * 0.04)
+            let count = decayedCount(item.entry.count, updatedAt: item.entry.updatedAt)
+            let base = 0.82 + min(0.12, Double(count) * 0.04)
             let confidence = min(0.99, base * item.weight * discount)
             results.append(ContextualSuggestion(text: text, source: .local, confidence: confidence))
         }
@@ -283,7 +286,7 @@ public final class LocalSuggestionIndex: @unchecked Sendable {
         //    注意：这里不能排除「触发词 == 整句」的情况，「在吗」「谢谢你」这类最常见的
         //    上下文本身就是触发词，排除掉会让 L1 几乎永远命中不了；重复上屏由下面的 text != sentence 挡住。
         //    触发词比对面稍宽：末句尾部的语气词（啊/呀/呢/吧…）会先被剥掉再比，见 `triggerMatches`。
-        if results.count < budget {
+        if includeTemplates, results.count < budget {
             for rule in seedRules {
                 guard Self.triggerMatches(sentence: sentence, trigger: rule.trigger) else { continue }
                 for raw in rule.texts {
@@ -446,11 +449,23 @@ public final class LocalSuggestionIndex: @unchecked Sendable {
     /// 按「最长键优先」查学到的映射。调用方必须已持有 `lock`。
     /// - Parameter sentence: 已归一化的末句。
     /// - Returns: 候选列表（附带该键长度对应的权重）。
+    private func decayedCount(_ count: Int, updatedAt: TimeInterval) -> Int {
+        let age = max(0, Date().timeIntervalSince1970 - updatedAt)
+        let halfLife: TimeInterval = 30 * 24 * 60 * 60
+        return Int((Double(count) * pow(0.5, age / halfLife)).rounded(.down))
+    }
+
     private func lookupLocked(for sentence: String) -> [(entry: Entry, weight: Double)] {
         var length = min(Self.contextKeyLength, sentence.count)
         while length >= Self.minimumContextKeyLength {
             let key = String(sentence.suffix(length))
             if let bucket = entries[key], !bucket.isEmpty {
+                let ordered = bucket.sorted {
+                    let left = decayedCount($0.count, updatedAt: $0.updatedAt)
+                    let right = decayedCount($1.count, updatedAt: $1.updatedAt)
+                    if left != right { return left > right }
+                    return $0.updatedAt > $1.updatedAt
+                }
                 let weight: Double
                 if length >= Self.contextKeyLength {
                     weight = 1.0
@@ -459,7 +474,7 @@ public final class LocalSuggestionIndex: @unchecked Sendable {
                 } else {
                     weight = 0.92
                 }
-                return bucket.map { (entry: $0, weight: weight) }
+                return ordered.map { (entry: $0, weight: weight) }
             }
             length -= 1
         }

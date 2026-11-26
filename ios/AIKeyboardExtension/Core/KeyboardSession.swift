@@ -70,6 +70,10 @@ final class KeyboardSession: ObservableObject {
         let text: String
         let key: String
         let raw: [Character]
+        let locks: [Int: UInt8]
+        let breaks: Set<Int>
+        let learningWeight: Double
+        let words: [IMEWordSegment]
     }
 
     // MARK: - 给界面看的状态
@@ -588,6 +592,7 @@ final class KeyboardSession: ObservableObject {
 
     /// 打了别的字以后，上一轮的联想就过时了。
     private func clearPredictions() {
+        lastWord = ""
         predictions = []
         aiSuggestions = []
         showingEnglishCompletions = false
@@ -602,6 +607,8 @@ final class KeyboardSession: ObservableObject {
             breaks.remove(raw.count)
             if raw.isEmpty, let last = selected.popLast() {
                 raw = last.raw
+                locks = last.locks
+                breaks = last.breaks
             }
             if raw.isEmpty {
                 resetComposition()
@@ -618,6 +625,7 @@ final class KeyboardSession: ObservableObject {
             return
         }
         host?.documentProxy.deleteBackward()
+        lastWord = ""
         predictions = []
         aiSuggestions = []
         showingTools = true
@@ -645,7 +653,7 @@ final class KeyboardSession: ObservableObject {
             if conversion.candidates.isEmpty {
                 commitLiteral()
             } else {
-                chooseCandidate(at: 0)
+                chooseCandidate(at: 0, automatic: true)
             }
             return
         }
@@ -737,7 +745,8 @@ final class KeyboardSession: ObservableObject {
                 bytes.append(byte)
             }
         }
-        return IMEQuery(mode: usesNineKey ? .t9 : .qwerty, input: bytes, breaks: breaks, locks: locks)
+        return IMEQuery(mode: usesNineKey ? .t9 : .qwerty, input: bytes, breaks: breaks, locks: locks,
+                        leftContext: selected.last?.words.last?.text)
     }
 
     private func recompute() {
@@ -766,7 +775,7 @@ final class KeyboardSession: ObservableObject {
     }
 
     /// 选一个候选。
-    func chooseCandidate(at index: Int) {
+    func chooseCandidate(at index: Int, automatic: Bool = false) {
         guard conversion.candidates.indices.contains(index) else { return }
         let candidate = conversion.candidates[index]
         if candidate.kind == .raw, candidate.key.isEmpty, candidate.text == String(raw) {
@@ -774,7 +783,7 @@ final class KeyboardSession: ObservableObject {
             render()
             return
         }
-        consume(candidate)
+        consume(candidate, learningWeight: automatic ? 0.2 : 1.0)
 
         if raw.isEmpty {
             finishComposition()
@@ -787,9 +796,13 @@ final class KeyboardSession: ObservableObject {
         render()
     }
 
-    private func consume(_ candidate: IMECandidate) {
+    private func consume(_ candidate: IMECandidate, learningWeight: Double) {
         let consumed = min(max(candidate.consumed, 1), raw.count)
-        selected.append(Segment(text: candidate.text, key: candidate.key, raw: Array(raw.prefix(consumed))))
+        let words = candidate.segments.isEmpty
+            ? [IMEWordSegment(text: candidate.text, key: candidate.key, consumed: consumed)] : candidate.segments
+        selected.append(Segment(text: candidate.text, key: candidate.key, raw: Array(raw.prefix(consumed)),
+                                locks: locks.filter { $0.key < consumed }, breaks: breaks.filter { $0 <= consumed },
+                                learningWeight: learningWeight, words: words))
         raw.removeFirst(consumed)
         // 选定字母和分词位置跟着前移
         var movedLocks: [Int: UInt8] = [:]
@@ -807,7 +820,9 @@ final class KeyboardSession: ObservableObject {
         resetComposition()
         insert(text)
         if page == .field, fieldEdit?.isSecret == true { return }
-        kit.engine.learn(segments: segments.filter { !$0.key.isEmpty }.map { (text: $0.text, key: $0.key) })
+        let learnedSegments = segments.flatMap { $0.words }.filter { !$0.key.isEmpty }
+        let learningStrength = segments.map(\.learningWeight).reduce(0, +) / Double(max(segments.count, 1))
+        kit.engine.learn(segments: learnedSegments.map { (text: $0.text, key: $0.key) }, strength: learningStrength)
         // 简拼时按打的字母也记一份，下次打同样的字母直接排第一
         var typed: [(text: String, typed: String)] = []
         for segment in segments {
@@ -821,16 +836,18 @@ final class KeyboardSession: ObservableObject {
            allLetters != segments.map(\.key).joined() {
             typed.append((text, allLetters))
         }
-        kit.learning.recordTyped(typed)
-        didCommit(text, firstWord: segments.first?.text, lastWord: segments.last?.text)
+        kit.learning.recordTyped(typed, strength: learningStrength)
+        didCommit(text, firstWord: learnedSegments.first?.text, lastWord: learnedSegments.last?.text,
+                  strength: learningStrength)
     }
 
     /// 上屏后：记先后关系，给联想。
-    private func didCommit(_ text: String, firstWord: String? = nil, lastWord word: String? = nil) {
+    private func didCommit(_ text: String, firstWord: String? = nil, lastWord word: String? = nil,
+                           strength: Double = 1.0) {
         // 整句上屏时按句子的最后一个词记，免得「后面跟什么」只记在整句上、下次永远对不上
         let isPunctuation = text.unicodeScalars.allSatisfy { CharacterSet.punctuationCharacters.contains($0) }
         if !isPunctuation {
-            kit.learning.recordFollow(previous: lastWord, current: firstWord ?? text)
+            kit.learning.recordFollow(previous: lastWord, current: firstWord ?? text, strength: strength)
         }
         lastCommit = text
         lastWord = isPunctuation ? "" : (word ?? text)
@@ -865,7 +882,7 @@ final class KeyboardSession: ObservableObject {
                 commitLiteral()
                 return
             }
-            consume(top)
+            consume(top, learningWeight: 0.2)
             if raw.isEmpty {
                 finishComposition()
                 return

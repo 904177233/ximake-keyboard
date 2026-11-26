@@ -7,6 +7,19 @@
 
 import Foundation
 
+/// 整句候选中的一个真实词段。
+public struct IMEWordSegment: Sendable, Equatable {
+    public var text: String
+    public var key: String
+    public var consumed: Int
+
+    public init(text: String, key: String, consumed: Int) {
+        self.text = text
+        self.key = key
+        self.consumed = consumed
+    }
+}
+
 /// 一条候选。
 public struct IMECandidate: Identifiable, Sendable, Equatable {
 
@@ -42,11 +55,16 @@ public struct IMECandidate: Identifiable, Sendable, Equatable {
     /// 类型。
     public var kind: Kind
 
-    public init(text: String, key: String, consumed: Int, kind: Kind = .word) {
+    /// 整句解码得到的词段。普通单词候选为空。
+    public var segments: [IMEWordSegment]
+
+    public init(text: String, key: String, consumed: Int, kind: Kind = .word,
+                segments: [IMEWordSegment] = []) {
         self.text = text
         self.key = key
         self.consumed = consumed
         self.kind = kind
+        self.segments = segments
     }
 }
 
@@ -72,11 +90,16 @@ public struct IMEQuery: Sendable, Equatable {
     /// 九宫格里用户选定的字母：下标 -> 字母。26 键不用。
     public var locks: [Int: UInt8]
 
-    public init(mode: Mode, input: [UInt8], breaks: Set<Int> = [], locks: [Int: UInt8] = [:]) {
+    /// 已经确认的左侧词，用于余串首块的打分。
+    public var leftContext: String?
+
+    public init(mode: Mode, input: [UInt8], breaks: Set<Int> = [], locks: [Int: UInt8] = [:],
+                leftContext: String? = nil) {
         self.mode = mode
         self.input = input
         self.breaks = breaks
         self.locks = locks
+        self.leftContext = leftContext
     }
 }
 

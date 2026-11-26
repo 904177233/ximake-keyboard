@@ -14,6 +14,8 @@ The lexicon files `ios/Shared/dict/moyu.dict` and `ios/Shared/dict/next.tsv` are
 | [Tatoeba](https://tatoeba.org) 中文句子 `cmn_sentences` | 数「这个词后面常跟什么」，用于联想和整句转换 / word-pair counts for next-word prediction and sentence conversion | CC BY 2.0 FR |
 | [wordfreq](https://github.com/rspeer/wordfreq) 英文词频 | 英文补全词表 `en_words.tsv` / English completion list | 数据 CC BY-SA 4.0，代码 Apache-2.0 / data CC BY-SA 4.0, code Apache-2.0 |
 
+二元模型实验从雾凇基础库的多字词切分并计数，使用墨语词典的整数词 ID。模型遵循 GPL-3.0，源文件摘要与分发状态记录在随包的 dict_meta.json 中。续词表的 t 标记保留 Tatoeba 观测次数，r 标记表示从雾凇短语推导。长句评测和本人续写例句由本项目编写，按仓库 GPL-3.0 发布。
+
 因为安装包里带了由 rime-ice 数据生成的词库，带词库分发的墨语整体按 GPL-3.0 处理；本仓库的代码也以 GPL-3.0 发布，见 [LICENSE](LICENSE)。
 
 Because the bundled lexicon is derived from rime-ice data (GPL-3.0), distributions of Moyu that include it are covered by GPL-3.0. The code in this repository is also released under GPL-3.0; see [LICENSE](LICENSE).

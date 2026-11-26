@@ -37,6 +37,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import re
@@ -101,7 +102,7 @@ FOLLOW_MIN_PHRASES = 3
 FOLLOW_WORD_MIN = 3000
 
 DICT_VERSION = "3.0.7"
-GENERATED_DATE = "2026-11-09"
+GENERATED_DATE = "2026-11-27"
 
 #: jieba 词频下限。词频再低的多是专名和噪声，收进来只会占地方。
 MIN_FREQ = 5
@@ -386,7 +387,7 @@ def phrase_followers(builder: "Builder") -> dict[str, list[str]]:
 
 
 def write_next_words(builder: Builder, path: Path) -> int:
-    """手工表 + 从词库推出来的后半截（今 -> 天、年、晚）+ 从短语库推的下一个词，写成 next.tsv。"""
+    """写手工联想、词内补全和带真实次数/来源的词对证据。"""
     authored = load_next_words()
     known = set()
     weights: dict[str, Counter[str]] = defaultdict(Counter)
@@ -415,7 +416,10 @@ def write_next_words(builder: Builder, path: Path) -> int:
         # 第五列：连着出现很多次的，整句转换时也加分
         strong = [w for w, c in counter.most_common() if c >= TATOEBA_STRONG and w not in SENTENCE_PARTICLES]
         if words or rest or follow or strong:
-            lines.append(f"{head}\t{' '.join(words)}\t{' '.join(rest)}\t{' '.join(follow)}\t{' '.join(strong)}")
+            # 第六列与第四列一一对应，t 是语料观测，r 是短语推导。
+            evidence = [f"t{counter[w]}" if counter[w] >= 2 else f"r{counter[w]}" for w in follow]
+            lines.append("\t".join([head, " ".join(words), " ".join(rest), " ".join(follow),
+                                    " ".join(strong), " ".join(evidence)]).rstrip("\t"))
     path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     return len(lines)
 
@@ -512,11 +516,11 @@ def write_english_words(path: Path) -> int:
     return len(rows)
 
 
-def load_rime_ice() -> dict[str, tuple[list[str], int]]:
-    """读 rime-ice 的 base.dict.yaml：词 -> (拼音, 权重)。同一个词有几个读音时留权重高的。"""
+def load_rime_ice_readings() -> dict[str, list[tuple[list[str], int]]]:
+    """读雾凇 base 的显式读音，保留同词的全部拼音边界。"""
     if not RIME_ICE.exists():
         return {}
-    result: dict[str, tuple[list[str], int]] = {}
+    result: dict[str, list[tuple[list[str], int]]] = defaultdict(list)
     started = False
     for line in RIME_ICE.read_text(encoding="utf-8").splitlines():
         if not started:
@@ -529,9 +533,13 @@ def load_rime_ice() -> dict[str, tuple[list[str], int]]:
         if len(syllables) != len(parts[0]) or not all(s in SYL_SET for s in syllables):
             continue
         weight = int(parts[2])
-        if parts[0] not in result or result[parts[0]][1] < weight:
-            result[parts[0]] = (syllables, weight)
-    return result
+        result[parts[0]].append((syllables, weight))
+    return dict(result)
+
+
+def load_rime_ice() -> dict[str, tuple[list[str], int]]:
+    """读雾凇 base 的词 -> (拼音, 权重)，用于要求单一读音的下游统计。"""
+    return {word: max(readings, key=lambda row: row[1]) for word, readings in load_rime_ice_readings().items()}
 
 
 def load_rime_chars() -> dict[str, dict[str, int]]:
@@ -570,6 +578,7 @@ def collect() -> Builder:
 
     # ① 旧词库：聊天词、网络词、表情、标点，词频人工调过，优先保留
     v1_texts: dict[str, int] = {}
+    rime = load_rime_ice()
     v1_chat: set[str] = set()
     for line in BASE_V1.read_text(encoding="utf-8").splitlines():
         if not line or line.startswith("#"):
@@ -593,6 +602,10 @@ def collect() -> Builder:
         if not CJK.match(word):
             flags |= FLAG_ASCII if word.isascii() else 0
         syllables = segment(key, len(word) if CJK.match(word) else None)
+        explicit = rime.get(word)
+        if explicit and "".join(explicit[0]) == key and syllables != explicit[0]:
+            builder.stats["rime_boundary_corrected"] += 1
+            syllables = explicit[0]
         builder.add(key, syllables, word, freq, flags)
         v1_texts[word] = freq
         if "chat" in tags:
@@ -679,7 +692,6 @@ def collect() -> Builder:
                 builder.stats["essay_v1"] += 1
 
     # ②⁗ rime-ice：带拼音和词频，聊天常用的组合多（吃过、我吃、过了、我吃过了）
-    rime = load_rime_ice()
     if rime:
         current: dict[str, int] = {}
         for words in builder.table.values():
@@ -689,6 +701,8 @@ def collect() -> Builder:
                         if weight >= 1000 and current.get(text, 0) >= 100)
         rime_scale = math.exp(ratios[len(ratios) // 2]) if ratios else 1.0
         builder.stats["rime_scale_x1000"] = int(rime_scale * 1000)
+        # 旧词库曾按汉字数猜音节边界。雾凇对同一词、同一连续拼音的显式读音
+        # 用来校正这类记录，同时保留 base 中确认的多读音边界和原有词频、标签。
         known_chars = {ch for text in current for ch in text}
         if RIME_BLEND > 0:
             for (key, mask), words in builder.table.items():
@@ -849,6 +863,9 @@ SINGLE_INITIAL_PENALTY = 10.0
 INITIALS_PENALTY = 3.0
 #: 简拼每一段试几个候选词（Swift 里同名常量要一起改）。
 INITIAL_TOP_K = 3
+INITIAL_KEY_LIMIT = 60
+INITIAL_ENTRY_LIMIT = 3
+EXACT_ENTRY_LIMIT = 40
 #: 前一个词的最后一个字和这个词的第一个字连起来是个词（吃 + 过了 -> 吃过），加分。
 JUNCTION_BONUS = 2.0
 #: 简拼每多一个字母加的分：一下对上四个字母的词比拆成两段可信得多。
@@ -914,8 +931,8 @@ class Eval:
             if mask:
                 clean = [(f, t) for t, (f, fl) in words.items() if not fl & (FLAG_EMOJI | FLAG_PUNCT | FLAG_ASCII)]
                 if clean:
-                    top = max(clean)
-                    self.init[initials_of(key, mask)].append((top[0], top[1], key))
+                    for frequency, text in sorted(clean, reverse=True)[:INITIAL_ENTRY_LIMIT]:
+                        self.init[initials_of(key, mask)].append((frequency, text, key))
         for key in self.by_key:
             self.by_key[key].sort(key=lambda row: -row[1])
         for initials in self.init:
@@ -943,7 +960,7 @@ class Eval:
                             penalty += FULL_PINYIN_INITIALS_PENALTY
                         if len(sub) >= 2:
                             penalty += INITIALS_VOWEL_PENALTY * sum(c in "aeo" for c in sub)
-                        for freq, text, key in self.init.get(sub, [])[:INITIAL_TOP_K]:
+                        for freq, text, key in self.init.get(sub, [])[:INITIAL_KEY_LIMIT]:
                             junction = JUNCTION_BONUS if previous and previous[-1] + text[0] in self.two_char else 0.0
                             pair = BIGRAM_BONUS if previous and text in self.pairs.get(previous, ()) else 0.0
                             value = (best[i] + math.log(freq + 1) - TILE_PENALTY - penalty + junction + pair
@@ -955,7 +972,7 @@ class Eval:
                 first = (segment(sub) or [sub])[0]
                 extra = -20.0 if first in UNLIKELY_SINGLE else 0.0
                 one_syllable = sub in SYL_SET
-                for text, freq, syllables, _ in rows[:8]:
+                for text, freq, syllables, _ in rows[:EXACT_ENTRY_LIMIT]:
                     pair = BIGRAM_BONUS if previous and text in self.pairs.get(previous, ()) else 0.0
                     bonus = 0.0 if one_syllable else SYLLABLE_BONUS * (syllables - 1)
                     value = best[i] + math.log(freq + 1) - TILE_PENALTY + bonus + extra + pair
@@ -1015,12 +1032,32 @@ def main() -> int:
     print("新词表", write_hot_words(OUT_DIR / "hot_words.tsv"))
     print("英文词表", write_english_words(OUT_DIR / "en_words.tsv"))
 
+    dictionary_path = OUT_DIR / "moyu.dict"
+    next_path = OUT_DIR / "next.tsv"
     (OUT_DIR / "dict_meta.json").write_text(json.dumps({
         "version": DICT_VERSION,
         "generated_at": GENERATED_DATE,
         "entries": info["entries"],
         "keys": info["keys"],
         "bytes": info["bytes"],
+        "rime_boundary_corrections": builder.stats.get("rime_boundary_corrected", 0),
+        "offline_models": [
+            {
+                "name": "quantized_bigram",
+                "status": "not_shipped",
+                "calibration": "tools/dict/calibrate_bigram.py",
+                "source": "rime-ice cn_dicts/base.dict.yaml",
+                "license": "GPL-3.0",
+                "source_sha256": hashlib.sha256(RIME_ICE.read_bytes()).hexdigest() if RIME_ICE.exists() else None,
+                "distribution_note": "未进入 GPL-3.0 安装包；盲集净收益不为正，仅启用多候选",
+            }
+        ],
+        "files": {
+            "moyu.dict": {"bytes": dictionary_path.stat().st_size,
+                          "sha256": hashlib.sha256(dictionary_path.read_bytes()).hexdigest()},
+            "next.tsv": {"bytes": next_path.stat().st_size,
+                         "sha256": hashlib.sha256(next_path.read_bytes()).hexdigest()},
+        },
         "sources": [
             {"name": "jieba dict.txt", "license": "MIT", "url": "https://github.com/fxsjy/jieba"},
             {"name": "pypinyin", "license": "MIT", "url": "https://github.com/mozillazg/python-pinyin"},
