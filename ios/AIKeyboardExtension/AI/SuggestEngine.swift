@@ -32,13 +32,17 @@ final class SuggestEngine {
 
     /// 上屏后调用。
     func schedule() {
-        guard session.snapshot.enableAISuggestion else { return }
-        guard session.aiBlocker == nil, Date() >= cooldownUntil else { return }
-        debounceTask?.cancel()
+        cancel()
+        guard session.snapshot.enableAISuggestion, session.aiBlocker == nil, Date() >= cooldownUntil,
+              let document = session.host?.documentProxy.documentIdentifier else { return }
+        let context = currentContext
+        guard context.count >= Self.minimumContext else { return }
         debounceTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: Self.debounce)
             guard !Task.isCancelled, let self else { return }
-            self.request()
+            guard self.session.snapshot.enableAISuggestion, self.session.aiBlocker == nil,
+                  self.session.host?.documentProxy.documentIdentifier == document, self.currentContext == context else { return }
+            self.request(context: context, document: document)
         }
     }
 
@@ -63,9 +67,8 @@ final class SuggestEngine {
         return LocalSuggestionIndex.lastSentence(before)
     }
 
-    private func request() {
-        let context = currentContext
-        guard context.count >= Self.minimumContext, !session.isComposing else { return }
+    private func request(context: String, document: UUID) {
+        guard !session.isComposing else { return }
         let token = UUID()
         requestID = token
 
@@ -100,7 +103,8 @@ final class SuggestEngine {
                     group.cancelAll()
                     return first
                 }
-                guard let self, !Task.isCancelled, token == self.requestID else { return }
+                guard let self, !Task.isCancelled, token == self.requestID,
+                      self.session.host?.documentProxy.documentIdentifier == document, self.currentContext == context else { return }
                 let parsed = Self.clean(PromptLibrary.parseSuggestionCandidates(output))
                 if parsed.isEmpty {
                     self.cooldownUntil = Date().addingTimeInterval(Self.cooldown)
@@ -108,7 +112,8 @@ final class SuggestEngine {
                     self.session.setAISuggestions(parsed)
                 }
             } catch {
-                guard let self else { return }
+                guard let self, !Task.isCancelled, token == self.requestID,
+                      self.session.host?.documentProxy.documentIdentifier == document, self.currentContext == context else { return }
                 self.cooldownUntil = Date().addingTimeInterval(Self.cooldown)
             }
         }

@@ -33,13 +33,13 @@ public final class UserLearningStore {
         public var id: String { key + "|" + text }
     }
 
-    private struct Persisted: Codable {
+    private struct Persisted: Codable, Sendable {
         var counts: [String: Int]
         var phrases: [Phrase]
         var next: [String: [String: Int]]
     }
 
-    private struct UserDictionary: Codable {
+    private struct UserDictionary: Codable, Sendable {
         /// 拼音 -> 词 -> 选过几次
         var words: [String: [String: Int]]
         var phrases: [Phrase]
@@ -57,6 +57,7 @@ public final class UserLearningStore {
 
     private let store: SharedStore
     private let blob: SharedBlob
+    private let persistenceQueue = DispatchQueue(label: "com.moyu.user-learning.persistence")
     private let lock = NSLock()
     private var counts: [String: Int]
     private var phrases: [Phrase]
@@ -69,7 +70,19 @@ public final class UserLearningStore {
     private var pendingWrites = 0
 
     /// 关闭后不再记录新内容（已有数据还在，在 App 的个人词库里清除）。
-    public var isEnabled = true
+    private var learningEnabled = true
+    public var isEnabled: Bool {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return learningEnabled
+        }
+        set {
+            lock.lock()
+            learningEnabled = newValue
+            lock.unlock()
+        }
+    }
 
     public init(store: SharedStore) {
         self.store = store
@@ -206,8 +219,12 @@ public final class UserLearningStore {
     /// 每一段都记进个人词库（这个拼音下选了这个词）；多段组成的句子再记成一条用户短语。
     /// - Parameter segments: 组成这次上屏的各段（词 + 拼音）。
     public func record(segments: [(text: String, key: String)]) {
-        guard isEnabled, !segments.isEmpty else { return }
+        guard !segments.isEmpty else { return }
         lock.lock()
+        guard learningEnabled else {
+            lock.unlock()
+            return
+        }
         for segment in segments {
             counts[segment.text, default: 0] += 1
             if !segment.key.isEmpty, segment.text.count <= 12 {
@@ -239,14 +256,18 @@ public final class UserLearningStore {
         let shouldFlush = pendingWrites >= Self.flushEvery
         lock.unlock()
         if shouldFlush {
-            flush()
+            enqueueFlush()
         }
     }
 
     /// 记住「打的是这几个字母，要的是这个词」。简拼（wcgl -> 我吃过了）下次直接排第一。
     public func recordTyped(_ items: [(text: String, typed: String)]) {
-        guard isEnabled, !items.isEmpty else { return }
+        guard !items.isEmpty else { return }
         lock.lock()
+        guard learningEnabled else {
+            lock.unlock()
+            return
+        }
         for item in items where !item.typed.isEmpty && item.text.count <= 16 {
             let isNew = userWords[item.typed]?[item.text] == nil
             userWords[item.typed, default: [:]][item.text, default: 0] += 1
@@ -260,8 +281,12 @@ public final class UserLearningStore {
 
     /// 记录相邻两次上屏的先后关系（上一次上屏的词 -> 这一次）。
     public func recordFollow(previous: String, current: String) {
-        guard isEnabled, !previous.isEmpty, !current.isEmpty, previous.count <= 8, current.count <= 8 else { return }
+        guard !previous.isEmpty, !current.isEmpty, previous.count <= 8, current.count <= 8 else { return }
         lock.lock()
+        guard learningEnabled else {
+            lock.unlock()
+            return
+        }
         next[previous, default: [:]][current, default: 0] += 1
         trimLocked()
         pendingWrites += 1
@@ -294,33 +319,38 @@ public final class UserLearningStore {
         }
     }
 
-    /// 写盘。键盘收起时也会调一次。
-    public func flush() {
+    private func enqueueFlush() {
         lock.lock()
-        guard pendingWrites > 0 else {
-            lock.unlock()
-            return
-        }
+        defer { lock.unlock() }
+        guard pendingWrites > 0 else { return }
         pendingWrites = 0
+        revision += 1
         let usage = Persisted(counts: counts, phrases: [], next: next)
         let dictionary = UserDictionary(words: userWords, phrases: phrases, revision: revision)
-        lock.unlock()
-        if let data = try? JSONEncoder().encode(usage) {
-            store.setData(data, forKey: Self.storageKey)
+        persistenceQueue.async { [store, blob] in
+            if let data = try? JSONEncoder().encode(usage) {
+                store.setData(data, forKey: Self.storageKey)
+            }
+            if let data = try? JSONEncoder().encode(dictionary) {
+                blob.set(data, forKey: Self.dictionaryKey)
+            }
         }
-        if let data = try? JSONEncoder().encode(dictionary) {
-            blob.set(data, forKey: Self.dictionaryKey)
-        }
+    }
+
+    /// 键盘收起时把剩下的记录写完。
+    public func flush() {
+        enqueueFlush()
+        persistenceQueue.sync {}
     }
 
     // MARK: - 个人词库管理（App 里用）
 
     /// App 改过词库的话重新读。键盘每次弹出时调。
     public func reloadIfChanged() {
-        guard let dictionary = Self.readDictionary(blob) else { return }
         lock.lock()
         defer { lock.unlock() }
-        guard dictionary.revision != revision else { return }
+        guard let dictionary = persistenceQueue.sync(execute: { Self.readDictionary(blob) }),
+              dictionary.revision != revision else { return }
         userWords = dictionary.words
         phrases = dictionary.phrases
         revision = dictionary.revision
@@ -337,8 +367,8 @@ public final class UserLearningStore {
         userWords[cleanKey, default: [:]][cleanText] = max(userWords[cleanKey]?[cleanText] ?? 0, 3)
         revision += 1
         rebuildIndexes()
+        writeDictionaryLocked()
         lock.unlock()
-        writeDictionary()
     }
 
     /// 删一条。
@@ -351,16 +381,16 @@ public final class UserLearningStore {
         phrases.removeAll { $0.text == text && $0.key == key }
         revision += 1
         rebuildIndexes()
+        writeDictionaryLocked()
         lock.unlock()
-        writeDictionary()
     }
 
-    private func writeDictionary() {
-        lock.lock()
+    private func writeDictionaryLocked() {
         let dictionary = UserDictionary(words: userWords, phrases: phrases, revision: revision)
-        lock.unlock()
-        if let data = try? JSONEncoder().encode(dictionary) {
-            blob.set(data, forKey: Self.dictionaryKey)
+        persistenceQueue.sync {
+            if let data = try? JSONEncoder().encode(dictionary) {
+                blob.set(data, forKey: Self.dictionaryKey)
+            }
         }
     }
 
@@ -374,9 +404,8 @@ public final class UserLearningStore {
         revision += 1
         rebuildIndexes()
         pendingWrites = 0
-        let dictionary = UserDictionary(words: [:], phrases: [], revision: revision)
+        persistenceQueue.sync { store.setData(nil, forKey: Self.storageKey) }
+        writeDictionaryLocked()
         lock.unlock()
-        store.setData(nil, forKey: Self.storageKey)
-        blob.set(try? JSONEncoder().encode(dictionary), forKey: Self.dictionaryKey)
     }
 }

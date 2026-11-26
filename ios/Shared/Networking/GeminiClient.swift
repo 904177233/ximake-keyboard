@@ -177,16 +177,14 @@ public final class GeminiClient: LLMClient, @unchecked Sendable {
 
         var parser = SSEParser()
         var didEmitContent = false
-        for try await line in bytes.lines {
+        for try await byte in bytes {
+            guard let event = parser.feed(byte: byte) else { continue }
             try Task.checkCancellation()
-            let events = parser.feed(Data((line + "\n").utf8))
-            for event in events {
-                if event.isDone { break }
-                guard let text = parseStreamText(event.data) else { continue }
-                if !text.isEmpty {
-                    didEmitContent = true
-                    continuation.yield(ChatDelta(text: text, isFinal: false))
-                }
+            if event.isDone { break }
+            guard let text = parseStreamText(event.data) else { continue }
+            if !text.isEmpty {
+                didEmitContent = true
+                continuation.yield(ChatDelta(text: text, isFinal: false))
             }
         }
         for event in parser.flush() {

@@ -146,14 +146,16 @@ final class SettingsModel: ObservableObject {
 
     /// 导入 App 发来的配置。
     func importFromApp() {
-        guard let payload = PasteboardBridge.importEnvelope() else {
+        guard let raw = PasteboardBridge.pasteboardString(), let payload = try? PasteboardBridge.decodeEnvelope(raw) else {
             session.showToast("没找到配置。先在墨语 App 里点「把配置发给键盘」")
             return
         }
-        session.saveConfig(payload.snapshot)
-        for (id, key) in payload.apiKeys ?? [:] {
-            try? KeychainStore.shared.setAPIKey(key, for: id)
+        guard payload.applyAPIKeys() == (payload.apiKeys?.count ?? 0) else {
+            session.showToast("有 API Key 没存上，请再导入一次")
+            return
         }
+        session.saveConfig(payload.snapshot)
+        PasteboardBridge.clearImported(raw)
         session.showToast("配置已导入")
     }
 }
@@ -315,7 +317,6 @@ struct SettingsPanelView: View {
                 var snapshot = session.snapshot
                 snapshot.enableClipboardHistory = value
                 session.saveConfig(snapshot)
-                session.kit.clipboard.setEnabled(value)
             }
             toggleRow("记住我打过的词", isOn: session.snapshot.enableLearning) { value in
                 var snapshot = session.snapshot
@@ -581,7 +582,7 @@ struct SettingsPanelView: View {
     private var maskedKey: String {
         let key = settings.keyDraft
         guard !key.isEmpty else { return "点这里粘贴" }
-        return "••••••" + String(key.suffix(4))
+        return key.count > 8 ? "••••••" + String(key.suffix(4)) : "••••••"
     }
 
     // MARK: - 小部件
@@ -669,7 +670,8 @@ struct FieldEditView: View {
     }
 
     private var display: String {
-        if session.fieldEdit?.isSecret == true, session.draft.count > 8 {
+        if session.fieldEdit?.isSecret == true, !session.draft.isEmpty {
+            guard session.draft.count > 8 else { return "••••••" }
             return String(repeating: "•", count: 6) + String(session.draft.suffix(4))
         }
         return session.draft.isEmpty ? " " : session.draft

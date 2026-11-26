@@ -59,6 +59,8 @@ public struct SSEEvent: Equatable, Sendable {
 public struct SSEParser {
     /// 未处理完的字节缓冲。
     private var buffer: [UInt8] = []
+    private var skipLineFeed = false
+    private var isFirstLine = true
     /// 当前正在累积的字段。
     private var currentEvent: String?
     private var currentDataLines: [String] = []
@@ -75,34 +77,37 @@ public struct SSEParser {
     /// 喂入一段字节，返回本次能完整解析出的事件数组（可能为空）。
     @discardableResult
     public mutating func feed(_ data: Data) -> [SSEEvent] {
-        guard !data.isEmpty else { return [] }
-        buffer.append(contentsOf: data)
         var events: [SSEEvent] = []
-        while let endOffset = nextLineEndOffset() {
-            let lineBytes = Array(buffer[0..<endOffset])
-            buffer.removeFirst(endOffset)
-            let line = SSEParser.decodeLine(lineBytes)
-            if line.isEmpty {
-                // 空行 = 事件边界，派发。
-                if let event = dispatchEvent() {
-                    events.append(event)
-                }
-                continue
-            }
-            if line.hasPrefix(":") {
-                // 注释行（常用于 keep-alive），直接忽略。
-                continue
-            }
-            parseField(line)
+        for byte in data {
+            if let event = feed(byte: byte) { events.append(event) }
         }
         return events
+    }
+
+    mutating func feed(byte: UInt8) -> SSEEvent? {
+        if skipLineFeed {
+            skipLineFeed = false
+            if byte == 0x0A { return nil }
+        }
+        guard byte == 0x0A || byte == 0x0D else {
+            buffer.append(byte)
+            return nil
+        }
+        skipLineFeed = byte == 0x0D
+        let bytes = buffer
+        let line = decodeLine(bytes)
+        buffer.removeAll(keepingCapacity: true)
+        if line.isEmpty { return dispatchEvent() }
+        if !line.hasPrefix(":") { parseField(line) }
+        return nil
     }
 
     /// 流结束时调用：把残留的半行与未派发的事件冲刷出来。
     public mutating func flush() -> [SSEEvent] {
         var events: [SSEEvent] = []
         if !buffer.isEmpty {
-            let line = SSEParser.decodeLine(buffer)
+            let remaining = buffer
+            let line = decodeLine(remaining)
             buffer.removeAll(keepingCapacity: false)
             if !line.isEmpty && !line.hasPrefix(":") {
                 parseField(line)
@@ -116,6 +121,8 @@ public struct SSEParser {
 
     /// 重置解析器状态（复用于下一次请求）。
     public mutating func reset() {
+        isFirstLine = true
+        skipLineFeed = false
         buffer.removeAll(keepingCapacity: false)
         currentEvent = nil
         currentDataLines.removeAll(keepingCapacity: false)
@@ -125,45 +132,15 @@ public struct SSEParser {
 
     // MARK: - 内部实现
 
-    /// 找到 buffer 中第一个换行的结束偏移（返回的偏移是"该行含换行符"之后的位置）。
-    ///
-    /// 若遇到位于缓冲末尾的单独 `\r`（可能下一个 chunk 补 `\n`），保守等待，返回 nil。
-    private func nextLineEndOffset() -> Int? {
-        var index = 0
-        while index < buffer.count {
-            let byte = buffer[index]
-            if byte == 0x0A { // \n
-                return index + 1
+    /// 第一行可能带 UTF-8 标记。正文中的同一字符要保留。
+    private mutating func decodeLine(_ bytes: [UInt8]) -> String {
+        if isFirstLine {
+            isFirstLine = false
+            if bytes.starts(with: [0xEF, 0xBB, 0xBF]) {
+                return String(decoding: bytes.dropFirst(3), as: UTF8.self)
             }
-            if byte == 0x0D { // \r
-                let nextIndex = index + 1
-                if nextIndex < buffer.count, buffer[nextIndex] == 0x0A {
-                    return nextIndex + 1
-                }
-                if nextIndex == buffer.count {
-                    // \r 在缓冲末尾，等下一个 chunk 再判断是不是 \r\n。
-                    return nil
-                }
-                return nextIndex
-            }
-            index += 1
         }
-        return nil
-    }
-
-    /// 把一行字节解码成字符串并去掉行尾换行符（含 `\r`）。
-    ///
-    /// 非法 UTF-8 时用替换字符兜底（不让整条流失败）。
-    private static func decodeLine(_ bytes: [UInt8]) -> String {
-        var data = Data(bytes)
-        // 去掉行尾 \n / \r\n / \r。
-        while let last = data.last, last == 0x0A || last == 0x0D {
-            data.removeLast()
-        }
-        if let text = String(data: data, encoding: .utf8) {
-            return text
-        }
-        return String(decoding: data, as: UTF8.self)
+        return String(decoding: bytes, as: UTF8.self)
     }
 
     /// 解析一行 `field: value`。

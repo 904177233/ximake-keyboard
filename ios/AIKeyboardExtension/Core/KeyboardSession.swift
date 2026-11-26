@@ -145,6 +145,7 @@ final class KeyboardSession: ObservableObject {
     lazy var settings = SettingsModel(session: self)
 
     init() {
+        VoiceBridge.cleanupLegacyNotifyData()
         let prefs = KeyboardPrefs.load()
         self.prefs = prefs
         self.snapshot = ConfigStore().load()
@@ -168,8 +169,9 @@ final class KeyboardSession: ObservableObject {
         KeychainStore.shared.invalidateCache()
         SyncStatus.publish(.keyboard)
         prefs = KeyboardPrefs.load()
+        mascotImage = loadMascotImage()
         snapshot = loadedSnapshot()
-        kit.learning.isEnabled = snapshot.enableLearning
+        applyPrivacySettings()
         kit.reloadPhrases()
         _ = FuzzyPinyinSettings.shared.setEnabled(prefs.fuzzyPinyin)
         refreshPalette()
@@ -273,10 +275,15 @@ final class KeyboardSession: ObservableObject {
             updateAutoCapitalization()
             return
         }
+        lastWord = ""
         documentIdentifier = identifier
         resetComposition()
+        suggest.cancel()
         predictions = []
         aiSuggestions = []
+        englishWord = ""
+        showingEnglishCompletions = false
+        autoSpaceInserted = false
         showingTools = true
         if page != .chat, page != .field, page != .settings {
             page = .keys
@@ -400,7 +407,9 @@ final class KeyboardSession: ObservableObject {
     }
 
     /// 小形象图片。
-    var mascotImage: UIImage? {
+    private(set) var mascotImage: UIImage?
+
+    private func loadMascotImage() -> UIImage? {
         if let name = prefs.mascot.systemName {
             return UIImage(systemName: name, withConfiguration: UIImage.SymbolConfiguration(pointSize: 18))
         }
@@ -545,8 +554,14 @@ final class KeyboardSession: ObservableObject {
 
     /// 点了英文补全：把正在打的词换成整个词，后面加空格。
     private func chooseEnglishCompletion(_ word: String) {
+        guard let proxy = host?.documentProxy, proxy.documentIdentifier == documentIdentifier,
+              proxy.selectedText?.isEmpty != false, !englishWord.isEmpty,
+              proxy.documentContextBeforeInput?.hasSuffix(englishWord) == true else {
+            endEnglishWord()
+            return
+        }
         for _ in englishWord {
-            host?.documentProxy.deleteBackward()
+            proxy.deleteBackward()
         }
         insert(word + " ")
         englishWord = ""
@@ -573,7 +588,6 @@ final class KeyboardSession: ObservableObject {
 
     /// 打了别的字以后，上一轮的联想就过时了。
     private func clearPredictions() {
-        guard !predictions.isEmpty || !aiSuggestions.isEmpty else { return }
         predictions = []
         aiSuggestions = []
         showingEnglishCompletions = false
@@ -658,9 +672,7 @@ final class KeyboardSession: ObservableObject {
             finishField(save: true)
         default:
             host?.documentProxy.insertText("\n")
-            predictions = []
-            aiSuggestions = []
-            showingTools = true
+            clearPredictions()
             updateAutoCapitalization()
         }
     }
@@ -683,7 +695,11 @@ final class KeyboardSession: ObservableObject {
     /// 空格滑动移光标。
     func moveCursor(by offset: Int) {
         guard canMoveCursor, offset != 0 else { return }
+        endEnglishWord()
+        autoSpaceInserted = false
+        clearPredictions()
         host?.documentProxy.adjustTextPosition(byCharacterOffset: offset)
+        render()
     }
 
     /// 英文模式下按输入框要求自动大写。
@@ -758,16 +774,7 @@ final class KeyboardSession: ObservableObject {
             render()
             return
         }
-        let consumed = min(max(candidate.consumed, 1), raw.count)
-        selected.append(Segment(text: candidate.text, key: candidate.key, raw: Array(raw.prefix(consumed))))
-        raw.removeFirst(consumed)
-        // 选定字母和分词位置跟着前移
-        var movedLocks: [Int: UInt8] = [:]
-        for (position, byte) in locks where position >= consumed {
-            movedLocks[position - consumed] = byte
-        }
-        locks = movedLocks
-        breaks = Set(breaks.compactMap { $0 > consumed ? $0 - consumed : nil })
+        consume(candidate)
 
         if raw.isEmpty {
             finishComposition()
@@ -780,12 +787,26 @@ final class KeyboardSession: ObservableObject {
         render()
     }
 
+    private func consume(_ candidate: IMECandidate) {
+        let consumed = min(max(candidate.consumed, 1), raw.count)
+        selected.append(Segment(text: candidate.text, key: candidate.key, raw: Array(raw.prefix(consumed))))
+        raw.removeFirst(consumed)
+        // 选定字母和分词位置跟着前移
+        var movedLocks: [Int: UInt8] = [:]
+        for (position, byte) in locks where position >= consumed {
+            movedLocks[position - consumed] = byte
+        }
+        locks = movedLocks
+        breaks = Set(breaks.compactMap { $0 > consumed ? $0 - consumed : nil })
+    }
+
     /// 全部选完：上屏并学习。
     private func finishComposition() {
         let segments = selected
         let text = segments.map { $0.text }.joined()
         resetComposition()
         insert(text)
+        if page == .field, fieldEdit?.isSecret == true { return }
         kit.engine.learn(segments: segments.filter { !$0.key.isEmpty }.map { (text: $0.text, key: $0.key) })
         // 简拼时按打的字母也记一份，下次打同样的字母直接排第一
         var typed: [(text: String, typed: String)] = []
@@ -835,9 +856,7 @@ final class KeyboardSession: ObservableObject {
 
     /// 上屏首选（打标点、切键盘时）。
     private func commitTopCandidate() {
-        var guardCount = 0
-        while !raw.isEmpty, guardCount < 32 {
-            guardCount += 1
+        while !raw.isEmpty {
             guard let top = conversion.candidates.first else {
                 commitLiteral()
                 return
@@ -846,9 +865,7 @@ final class KeyboardSession: ObservableObject {
                 commitLiteral()
                 return
             }
-            let consumed = min(max(top.consumed, 1), raw.count)
-            selected.append(Segment(text: top.text, key: top.key, raw: Array(raw.prefix(consumed))))
-            raw.removeFirst(consumed)
+            consume(top)
             if raw.isEmpty {
                 finishComposition()
                 return
@@ -899,10 +916,10 @@ final class KeyboardSession: ObservableObject {
             render()
             return
         }
-        insert(word)
-        if index < aiSuggestions.count {
+        if index < aiSuggestions.count, snapshot.enableLearning {
             suggest.recordAccepted(word)
         }
+        insert(word)
         didCommit(word)
         render()
     }
@@ -918,6 +935,7 @@ final class KeyboardSession: ObservableObject {
     }
 
     func showTools() {
+        suggest.cancel()
         showingTools = true
         predictions = []
         aiSuggestions = []
@@ -928,6 +946,9 @@ final class KeyboardSession: ObservableObject {
 
     func setPage(_ target: Page) {
         guard page != target else { return }
+        if target != .keys, target != .numbers {
+            suggest.cancel()
+        }
         if page == .voice {
             voiceTask?.cancel()
             voiceTask = nil
@@ -1042,6 +1063,7 @@ final class KeyboardSession: ObservableObject {
             return
         }
         setUpVoiceSignals()
+        VoiceBridge.registerKeyboardReader()
         voiceText = ""
         if isAppVoiceAlive {
             VoiceSignals.post(.start)
@@ -1064,6 +1086,7 @@ final class KeyboardSession: ObservableObject {
     /// 键盘弹出时看看语音那边怎么样了。
     private func resumeVoice() {
         guard host?.hostHasFullAccess == true else { return }
+        VoiceBridge.registerKeyboardReader()
         if let text = VoiceBridge.takeFinishedText() {
             deliverVoice(text)
             return
@@ -1085,7 +1108,7 @@ final class KeyboardSession: ObservableObject {
         voiceTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 350_000_000)
-                guard let self, self.page == .voice else { return }
+                guard !Task.isCancelled, let self, self.page == .voice else { return }
                 self.pollVoice()
             }
         }
@@ -1111,10 +1134,12 @@ final class KeyboardSession: ObservableObject {
 
     /// 刚弹出时输入框还没接好，等一下再写。
     private func deliverVoice(_ text: String) {
+        guard let target = host?.documentProxy.documentIdentifier else { return }
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: 300_000_000)
-            guard let self else { return }
-            self.host?.documentProxy.insertText(text)
+            guard let self, self.isActive, let proxy = self.host?.documentProxy,
+                  proxy.documentIdentifier == target else { return }
+            proxy.insertText(text)
             self.showToast("已放进输入框")
         }
     }
@@ -1157,6 +1182,7 @@ final class KeyboardSession: ObservableObject {
             return
         }
         setUpVoiceSignals()
+        VoiceBridge.registerKeyboardReader()
         if isComposing {
             commitTopCandidate()
         }
@@ -1170,7 +1196,7 @@ final class KeyboardSession: ObservableObject {
         holdTask = Task { [weak self] in
             // 等一下 App 的回应：没开着就跳过去开
             try? await Task.sleep(nanoseconds: 700_000_000)
-            guard let self, self.voiceHold != .off else { return }
+            guard !Task.isCancelled, let self, self.voiceHold != .off else { return }
             guard self.isAppVoiceAlive else {
                 self.voiceHold = .off
                 self.render()
@@ -1211,10 +1237,10 @@ final class KeyboardSession: ObservableObject {
         holdTask = Task { [weak self] in
             for _ in 0..<40 {
                 try? await Task.sleep(nanoseconds: 200_000_000)
-                guard let self, self.voiceHold == .transcribing else { return }
+                guard !Task.isCancelled, let self, self.voiceHold == .transcribing else { return }
                 if self.takeVoiceResult() { return }
             }
-            guard let self, self.voiceHold == .transcribing else { return }
+            guard !Task.isCancelled, let self, self.voiceHold == .transcribing else { return }
             self.voiceHold = .off
             self.render()
             self.showToast("没等到结果，再说一次")
@@ -1224,9 +1250,19 @@ final class KeyboardSession: ObservableObject {
     /// App 说结果好了。
     private func voiceResultReady() {
         if voiceHold == .transcribing {
-            _ = takeVoiceResult()
+            if !takeVoiceResult(), !VoiceBridge.canShareLive {
+                voiceHold = .off
+                render()
+                showToast("语音识别没有完成，请再试一次")
+            }
         } else if page == .voice {
             pollVoice()
+            if page == .voice, !VoiceBridge.canShareLive {
+                voiceTask?.cancel()
+                voiceTask = nil
+                voiceState = .failed("语音识别没有完成，请再试一次")
+                render()
+            }
         }
     }
 
@@ -1291,6 +1327,8 @@ final class KeyboardSession: ObservableObject {
     // MARK: - 设置项编辑
 
     func beginField(title: String, value: String, isSecret: Bool, preferEnglish: Bool, onDone: @escaping (String) -> Void) {
+        clearPredictions()
+        endEnglishWord()
         fieldEdit = FieldEdit(title: title, isSecret: isSecret, onDone: onDone)
         resetComposition()
         draft = value
@@ -1307,6 +1345,7 @@ final class KeyboardSession: ObservableObject {
         let value = draft
         let edit = fieldEdit
         fieldEdit = nil
+        endEnglishWord()
         draft = ""
         resetComposition()
         isChinese = true
@@ -1342,17 +1381,30 @@ final class KeyboardSession: ObservableObject {
     // MARK: - 偏好与配置
 
     func updatePrefs(_ change: (inout KeyboardPrefs) -> Void) {
+        let oldMascot = prefs.mascot
         change(&prefs)
+        if prefs.mascot != oldMascot { mascotImage = loadMascotImage() }
         prefs.save()
         refreshPalette()
         render()
     }
 
     func saveConfig(_ updated: ConfigSnapshot) {
+        if snapshot != updated {
+            aiSuggestions = []
+            suggest.cancel()
+        }
         configStore.save(updated)
         snapshot = updated
-        kit.learning.isEnabled = updated.enableLearning
+        applyPrivacySettings()
         render()
+    }
+
+    private func applyPrivacySettings() {
+        kit.learning.isEnabled = snapshot.enableLearning
+        if kit.clipboard.isEnabled != snapshot.enableClipboardHistory {
+            kit.clipboard.setEnabled(snapshot.enableClipboardHistory)
+        }
     }
 
     // MARK: - 提示

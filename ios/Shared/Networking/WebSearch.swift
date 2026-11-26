@@ -28,9 +28,10 @@ public enum WebSearch {
     /// 搜。失败或没结果返回空数组，不抛错：联网只是锦上添花。
     public static func search(_ query: String, limit: Int = 5, session: URLSession? = nil) async -> [WebSearchResult] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return [] }
+        guard !trimmed.isEmpty, limit > 0 else { return [] }
         let urlSession = session ?? HTTPTransport.makeSession(timeout: 10)
         for base in ["https://cn.bing.com/search", "https://www.bing.com/search"] {
+            guard !Task.isCancelled else { return [] }
             guard var components = URLComponents(string: base) else { continue }
             components.queryItems = [
                 URLQueryItem(name: "q", value: String(trimmed.prefix(120))),

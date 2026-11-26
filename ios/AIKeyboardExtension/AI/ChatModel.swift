@@ -430,7 +430,7 @@ final class ChatModel: ObservableObject {
                 self.messages[index].text = prompt
                 self.messages[index].imageID = item?.id
                 self.messages[index].image = item.flatMap { ImageHistory.shared.thumbnail(for: $0.id, side: 220) }
-                    ?? UIImage(data: first.data)
+                    ?? ImageHistory.thumbnail(data: first.data, side: 220)
                 self.messages[index].isStreaming = false
                 self.phase = .idle
                 self.task = nil

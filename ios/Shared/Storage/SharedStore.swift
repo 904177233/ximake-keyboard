@@ -175,7 +175,7 @@ public final class SharedStore: @unchecked Sendable {
         setSyncedData(value, forKey: key)
     }
 
-    /// 同时写进本地（或 App Group）、钥匙串、系统通知，每份都带写的时间。
+    /// 同时写进本地（或 App Group）、钥匙串和允许的临时通知通道，每份都带写的时间。
     public func setSyncedData(_ value: Data?, forKey key: String) {
         let revision = SharedSync.now()
         if let value {
@@ -196,7 +196,7 @@ public final class SharedStore: @unchecked Sendable {
     public func syncedData(forKey key: String) -> Data? {
         var candidates: [(revision: UInt64, priority: Int, data: Data)] = []
         if let local = defaults.data(forKey: scopedKey(key)) {
-            let revision = UInt64(max(defaults.double(forKey: scopedKey(key) + ".rev"), 0))
+            let revision = UInt64(exactly: defaults.double(forKey: scopedKey(key) + ".rev")) ?? 0
             candidates.append((revision, isAppGroupAvailable ? 2 : 0, local))
         }
         if SharedVault.shared.isAvailable, let stored = SharedVault.shared.data(forKey: key) {

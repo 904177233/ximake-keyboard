@@ -55,6 +55,12 @@ struct RootTabs: View {
                 model.reload()
             }
         }
+        .alert("把配置和 API Key 复制到剪贴板？", isPresented: $model.showingKeyExportConfirmation) {
+            Button("取消", role: .cancel) {}
+            Button("复制") { model.sendConfigToKeyboard() }
+        } message: {
+            Text("其他 App 在导入前可能读到明文密钥。请在五分钟内到键盘设置导入。")
+        }
         .onOpenURL { url in
             if url.scheme == "moyu", url.host == "voice" {
                 voiceRequest = VoiceRequest()

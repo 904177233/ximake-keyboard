@@ -67,7 +67,7 @@ struct AIServicesView: View {
                 }
 
                 SectionLabel(text: "打字时")
-                LineRow(title: "AI 猜下一句", detail: "打完一句后，根据输入框里的话猜你接下来想说什么。会用掉一点额度。") {
+                LineRow(title: "AI 猜下一句", detail: "上屏后会把光标前的最近一句发给你配置的 AI 服务商，用少量额度生成联想。") {
                     Toggle("", isOn: Binding(get: { model.snapshot.enableAISuggestion },
                                              set: { value in model.update { $0.enableAISuggestion = value } }))
                         .labelsHidden()
@@ -82,7 +82,7 @@ struct AIServicesView: View {
                         .fixedSize()
                 }
                 if !model.isSharedWithKeyboard {
-                    SecondaryButton(title: "把这些配置发给键盘") { model.sendConfigToKeyboard() }
+                    SecondaryButton(title: "把这些配置发给键盘") { model.showingKeyExportConfirmation = true }
                         .padding(.top, 16)
                 }
             }

@@ -143,7 +143,7 @@ public enum HTTPTransport {
                 seconds = date.timeIntervalSinceNow
             }
         }
-        guard let seconds else { return nil }
+        guard let seconds, seconds.isFinite else { return nil }
         return min(max(seconds, 1), 120)
     }
 

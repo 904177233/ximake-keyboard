@@ -85,15 +85,10 @@ public final class KeychainStore: @unchecked Sendable {
     public func apiKey(for providerID: String) -> String? {
         guard !providerID.isEmpty else { return nil }
         cacheLock.lock()
-        if let cached = cache[providerID] {
-            cacheLock.unlock()
-            return cached
-        }
-        cacheLock.unlock()
+        defer { cacheLock.unlock() }
+        if let cached = cache[providerID] { return cached }
         let found = readAPIKey(for: providerID)
-        cacheLock.lock()
         cache[providerID] = .some(found)
-        cacheLock.unlock()
         return found
     }
 
@@ -101,12 +96,6 @@ public final class KeychainStore: @unchecked Sendable {
     public func invalidateCache() {
         cacheLock.lock()
         cache.removeAll()
-        cacheLock.unlock()
-    }
-
-    private func remember(_ key: String?, for providerID: String) {
-        cacheLock.lock()
-        cache[providerID] = .some(key)
         cacheLock.unlock()
     }
 
@@ -166,11 +155,8 @@ public final class KeychainStore: @unchecked Sendable {
         guard let data = trimmed.data(using: .utf8) else {
             throw KeychainError.encodingFailed
         }
-        remember(trimmed, for: providerID)
-        SharedVault.shared.set(data, forKey: Self.vaultAccount(providerID))
-        if SharedStore.shared.isAppGroupAvailable {
-            SharedStore.shared.defaults.set(trimmed, forKey: Self.groupAccount(providerID))
-        }
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
 
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -184,17 +170,19 @@ public final class KeychainStore: @unchecked Sendable {
 
         // 先尝试更新；不存在则新增（避免 errSecDuplicateItem）。
         let updateStatus = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
-        if updateStatus == errSecSuccess { return }
-        guard updateStatus == errSecItemNotFound else {
+        if updateStatus == errSecItemNotFound {
+            var addQuery = query
+            addQuery.merge(attributes) { _, new in new }
+            let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+            guard addStatus == errSecSuccess else { throw KeychainError.unexpectedStatus(addStatus) }
+        } else if updateStatus != errSecSuccess {
             throw KeychainError.unexpectedStatus(updateStatus)
         }
-
-        var addQuery = query
-        addQuery.merge(attributes) { _, new in new }
-        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
-        guard addStatus == errSecSuccess else {
-            throw KeychainError.unexpectedStatus(addStatus)
+        SharedVault.shared.set(data, forKey: Self.vaultAccount(providerID))
+        if SharedStore.shared.isAppGroupAvailable {
+            SharedStore.shared.defaults.set(trimmed, forKey: Self.groupAccount(providerID))
         }
+        cache[providerID] = .some(trimmed)
     }
 
     /// 删除某个服务商的 API Key（不存在时不报错）。
@@ -203,11 +191,8 @@ public final class KeychainStore: @unchecked Sendable {
     /// - Throws: `KeychainError.unexpectedStatus`（除「未找到」之外的非成功状态）。
     public func deleteAPIKey(for providerID: String) throws {
         guard !providerID.isEmpty else { return }
-        remember(nil, for: providerID)
-        SharedVault.shared.set(nil, forKey: Self.vaultAccount(providerID))
-        if SharedStore.shared.isAppGroupAvailable {
-            SharedStore.shared.defaults.removeObject(forKey: Self.groupAccount(providerID))
-        }
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -217,6 +202,11 @@ public final class KeychainStore: @unchecked Sendable {
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw KeychainError.unexpectedStatus(status)
         }
+        SharedVault.shared.set(nil, forKey: Self.vaultAccount(providerID))
+        if SharedStore.shared.isAppGroupAvailable {
+            SharedStore.shared.defaults.removeObject(forKey: Self.groupAccount(providerID))
+        }
+        cache[providerID] = .some(nil)
     }
 
     /// 清空本 service 下的全部 API Key（「重置所有服务商」用）。

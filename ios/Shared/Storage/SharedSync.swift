@@ -10,19 +10,15 @@
 //  1. 本地存储（有 App Group 时就是 App Group）
 //  2. 钥匙串访问组（SharedVault）
 //  3. 系统通知的状态值（NotifyChannel）：不需要任何权限，App 和键盘一定都能读写。
-//     只放小的、不含密钥的设置（键盘偏好、AI 对话偏好、服务列表），重启手机后清空，打开一次 App 又会写上。
+//     只放键盘外观和打字偏好，重启手机后清空。
 //
 
 import Foundation
 
 enum SharedSync {
 
-    /// 走系统通知的设置。这条路上别的 App 理论上也能读到，所以不放 API Key、短语这类东西。
-    static let notifyKeys: Set<String> = [
-        SharedStoreKey.keyboardPrefs,
-        SharedStoreKey.configSnapshot,
-        "moyu.ai.prefs.v1"
-    ]
+    // 服务地址、请求头和用户写的人设都只能从私有存储读。
+    private static let notifyKeys: Set<String> = [SharedStoreKey.keyboardPrefs]
 
     private static let magic = Data("MYS1".utf8)
 
@@ -48,17 +44,6 @@ enum SharedSync {
         UInt64(Date().timeIntervalSince1970 * 1000)
     }
 
-    /// 配置里有自定义请求头时不走系统通知（请求头里可能有密钥）。
-    static func safeForNotify(_ data: Data, key: String) -> Bool {
-        guard notifyKeys.contains(key) else { return false }
-        if key == SharedStoreKey.configSnapshot,
-           let text = String(data: data, encoding: .utf8),
-           text.contains("\"extraHeaders\":{\"") {
-            return false
-        }
-        return true
-    }
-
     static func notifyName(_ key: String) -> String {
         "moyu.sync." + key
     }
@@ -79,13 +64,12 @@ enum SharedSync {
 
     /// 写进系统通知：压缩后放得下才放。
     static func writeNotify(_ data: Data?, key: String, revision: UInt64) {
-        guard let data else {
+        guard notifyKeys.contains(key) else { return }
+        guard let data, let packed = compress(data) else {
             NotifyChannel.write(nil, name: notifyName(key))
             return
         }
-        guard safeForNotify(data, key: key), let packed = compress(data) else { return }
         let envelope = wrap(packed, revision: revision)
-        guard envelope.count <= NotifyChannel.maxBytes else { return }
         NotifyChannel.write(envelope, name: notifyName(key))
     }
 
@@ -155,7 +139,7 @@ public enum SyncStatus {
         } else if let mine, mine.vault && other.vault {
             route = "走钥匙串同步"
         } else {
-            route = "只能走系统通知同步（API Key 要在键盘里再填一次）"
+            route = "键盘偏好走系统通知，AI 服务可在键盘里设置或从 App 导入"
         }
         return "\(selfName)：\(mineText)｜\(otherName)：\(describe(other))｜\(route)"
     }
