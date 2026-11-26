@@ -69,10 +69,7 @@ public final class PinyinEngine {
     static let maxTileLength = 24
     /// 候选总数上限。
     static let maxCandidates = 120
-    /// 句末语气词以小幅加分参与路径竞争。
-    static let endingParticleBonus = 8.0
-
-    /// 可参加句末词频竞争的语气词。
+    /// 整句最后一个音是这些时，换成语气词。
     ///
     /// 我们没有上下文模型，句尾的 ma 按词频会选「嘛」、ba 会选「把」。
     /// 这条规则只动整句候选的最后一个字，普通候选不受影响。
@@ -600,11 +597,9 @@ public final class PinyinEngine {
                               fullPinyin: fullPinyin, dictionary: dictionary)
                 : t9Tiles(query: query, start: start, previous: nil, previousSyllable: nil, dictionary: dictionary)
             for tile in tiles {
-                let endingBonus = endingParticleBonus(tile: tile, count: count, previousTile: back[start]?.tile)
                 let value = best[start] + tile.score
                     + contextBonus(previous: previous, previousSyllable: previousSyllable,
                                    tile: tile, dictionary: dictionary)
-                    + endingBonus
                 if value > best[tile.end] {
                     best[tile.end] = value
                     back[tile.end] = (start, tile)
@@ -652,12 +647,10 @@ public final class PinyinEngine {
                 let previous = state.lastText ?? (start == 0 ? query.leftContext : nil)
                 let previousSyllable = state.lastSyllable
                 for tile in tiles {
-                    let endingBonus = endingParticleBonus(tile: tile, count: count, previousTile: state.tile)
                     let text = state.text + tile.text
                     let score = state.score + tile.score
                         + contextBonus(previous: previous, previousSyllable: previousSyllable,
                                        tile: tile, dictionary: dictionary)
-                        + endingBonus
                     var bucket = states[tile.end]
                     if let existing = bucket.firstIndex(where: {
                         (nodes[$0].lastText == tile.text
@@ -708,14 +701,6 @@ public final class PinyinEngine {
     ///
     /// 两层：第 0 层没纠过，第 1 层纠过一次。纠过以后不再收简拼和没打完的词，
     /// 纠完还有对不上的就不算纠好。返回纠过一次的最好结果。
-    /// 句末语气词加分。前一块必须是打全了的拼音：简拼拆出来的碎块（woxiangchifna 的 f、n）
-    /// 后面接「啊」不算语气词，否则乱拆的句子会压过纠错结果。三种解码共用，分数才可比。
-    private func endingParticleBonus(tile: Tile, count: Int, previousTile: Tile?) -> Double {
-        guard tile.end == count, let previousTile, !previousTile.isLoose,
-              Self.endingParticles[tile.key] == tile.text else { return 0 }
-        return Self.endingParticleBonus
-    }
-
     private func solveCorrected(query: IMEQuery, dictionary: MoyuDictionary) -> (path: [Tile], score: Double)? {
         let count = query.input.count
         guard count > 0 else { return nil }
@@ -742,7 +727,6 @@ public final class PinyinEngine {
                     let value = best[layer][start] + tile.score
                         + contextBonus(previous: previous, previousSyllable: previousSyllable,
                                        tile: tile, dictionary: dictionary)
-                        + endingParticleBonus(tile: tile, count: count, previousTile: step?.tile)
                     if value > best[target][tile.end] {
                         best[target][tile.end] = value
                         back[target][tile.end] = (start, layer, tile)
@@ -873,15 +857,21 @@ public final class PinyinEngine {
     }
 
     private func sentenceText(_ path: [Tile]) -> String {
-        path.map(\.text).joined()
+        sentenceSegments(path).map(\.text).joined()
     }
 
     private func sentenceSegments(_ path: [Tile]) -> [IMEWordSegment] {
         var start = 0
-        return path.map { tile in
+        var segments = path.map { tile in
             defer { start = tile.end }
             return IMEWordSegment(text: tile.text, key: tile.key, consumed: tile.end - start)
         }
+        // 句末的 ma/ba/ne 换成语气词（3.0.10 的做法）。按分数竞争时，乱拆的句子靠语气词加分
+        // 会压过纠错结果（woxiangchifna -> 我想吃发你啊）。
+        if segments.count >= 2, let last = path.last?.key, let particle = Self.endingParticles[last] {
+            segments[segments.count - 1].text = particle
+        }
+        return segments
     }
 
     /// 26 键的候选列表。
