@@ -56,6 +56,11 @@ for r, row in enumerate(ROWS):
         ADJ[ch] = n
 
 class Engine(b.Eval):
+    def __init__(self, builder, narrow=False):
+        super().__init__(builder)
+        self.exact_limit = b.DP_EXACT_ENTRY_LIMIT if narrow else b.EXACT_ENTRY_LIMIT
+        self.initial_limit = b.DP_INITIAL_KEY_LIMIT if narrow else b.INITIAL_KEY_LIMIT
+
     def solve(self, query, previous=None):
         n = len(query)
         best = [-math.inf] * (n + 1)
@@ -77,7 +82,7 @@ class Engine(b.Eval):
                             penalty += b.FULL_PINYIN_INITIALS_PENALTY
                         if len(sub) >= 2:
                             penalty += b.INITIALS_VOWEL_PENALTY * sum(c in "aeo" for c in sub)
-                        for freq, text, key in self.init.get(sub, [])[:b.INITIAL_KEY_LIMIT]:
+                        for freq, text, key in self.init.get(sub, [])[:self.initial_limit]:
                             junction = b.JUNCTION_BONUS if prev and prev[-1] + text[0] in self.two_char else 0.0
                             pair = b.BIGRAM_BONUS if prev and text in self.pairs.get(prev, ()) else 0.0
                             score = (math.log(freq + 1) - b.TILE_PENALTY - penalty + junction + pair
@@ -89,7 +94,7 @@ class Engine(b.Eval):
                 first = (b.segment(sub) or [sub])[0]
                 extra = -20.0 if first in b.UNLIKELY_SINGLE else 0.0
                 one = sub in b.SYL_SET
-                for text, freq, syl, _ in rows[:b.EXACT_ENTRY_LIMIT]:
+                for text, freq, syl, _ in rows[:self.exact_limit]:
                     pair = b.BIGRAM_BONUS if prev and text in self.pairs.get(prev, ()) else 0.0
                     bonus = 0.0 if one else b.SYLLABLE_BONUS * (syl - 1)
                     score = math.log(freq + 1) - b.TILE_PENALTY + bonus + extra + pair
@@ -146,8 +151,8 @@ def edits(sub, at_end):
 
 
 class DP(Engine):
-    def __init__(self, builder, max_input=40):
-        super().__init__(builder)
+    def __init__(self, builder, max_input=40, narrow=False):
+        super().__init__(builder, narrow=narrow)
         self.max_input = max_input
 
     def tiles_at(self, query, i, prev, full_pinyin, allow_edit):
@@ -160,7 +165,7 @@ class DP(Engine):
                 one = sub in b.SYL_SET
                 first = (b.segment(sub) or [sub])[0]
                 extra = -20.0 if first in b.UNLIKELY_SINGLE else 0.0
-                for text, freq, syl, _ in rows[:b.EXACT_ENTRY_LIMIT]:
+                for text, freq, syl, _ in rows[:self.exact_limit]:
                     pair = b.BIGRAM_BONUS if prev and text in self.pairs.get(prev, ()) else 0.0
                     bonus = 0.0 if one else b.SYLLABLE_BONUS * (syl - 1)
                     res.append((j, text, math.log(freq + 1) - b.TILE_PENALTY + bonus + extra + pair, False, False))
@@ -170,7 +175,7 @@ class DP(Engine):
                     penalty += b.FULL_PINYIN_INITIALS_PENALTY
                 if len(sub) >= 2:
                     penalty += b.INITIALS_VOWEL_PENALTY * sum(c in "aeo" for c in sub)
-                for freq, text, key in self.init.get(sub, [])[:b.INITIAL_KEY_LIMIT]:
+                for freq, text, key in self.init.get(sub, [])[:self.initial_limit]:
                     junction = b.JUNCTION_BONUS if prev and prev[-1] + text[0] in self.two_char else 0.0
                     pair = b.BIGRAM_BONUS if prev and text in self.pairs.get(prev, ()) else 0.0
                     res.append((j, text, math.log(freq + 1) - b.TILE_PENALTY - penalty + junction + pair
@@ -243,7 +248,7 @@ def main():
     cache = _P(__file__).with_name("builder.pkl")
     builder = pickle.loads(cache.read_bytes()) if cache.exists() else b.collect()
     before = DP(builder, max_input=40)
-    after = DP(builder, max_input=80)
+    after = DP(builder, max_input=80, narrow=True)
     full = lambda s: "".join(lazy_pinyin(s))
     ini = lambda s: "".join(p[0] for p in lazy_pinyin(s, style=Style.NORMAL))
     sentences = FRESH + b.UNSEEN + b.HOLDOUT + BOUNDARY
@@ -303,7 +308,7 @@ def main():
     print("after ", after_stats, after_buckets)
     print("改前打对输入被纠", before_bad, "条，放第一", len(before_bad_first))
     print("改后打对输入被纠", after_bad, "条，放第一", len(after_bad_first))
-    for q in ["nihaohaoma", "nizaiganshenmo", "wohaixiangqu", "xiexienihaoma"]:
+    for q in ["woxiangchifna", "nihaohaoma", "jintianhebmang", "nizaiganshenmo", "wohaixiangqu", "xiexienihaoma"]:
         print("   例", q, after.correct(q))
     for line in after_shown: print("   没纠对：", line)
 

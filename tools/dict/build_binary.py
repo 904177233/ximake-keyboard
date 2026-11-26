@@ -866,6 +866,9 @@ INITIAL_TOP_K = 3
 INITIAL_KEY_LIMIT = 60
 INITIAL_ENTRY_LIMIT = 3
 EXACT_ENTRY_LIMIT = 40
+DP_INITIAL_KEY_LIMIT = 12
+DP_INITIAL_ENTRY_LIMIT = 2
+DP_EXACT_ENTRY_LIMIT = 3
 #: 前一个词的最后一个字和这个词的第一个字连起来是个词（吃 + 过了 -> 吃过），加分。
 JUNCTION_BONUS = 2.0
 #: 简拼每多一个字母加的分：一下对上四个字母的词比拆成两段可信得多。
@@ -960,7 +963,7 @@ class Eval:
                             penalty += FULL_PINYIN_INITIALS_PENALTY
                         if len(sub) >= 2:
                             penalty += INITIALS_VOWEL_PENALTY * sum(c in "aeo" for c in sub)
-                        for freq, text, key in self.init.get(sub, [])[:INITIAL_KEY_LIMIT]:
+                        for freq, text, key in self.init.get(sub, [])[:DP_INITIAL_KEY_LIMIT]:
                             junction = JUNCTION_BONUS if previous and previous[-1] + text[0] in self.two_char else 0.0
                             pair = BIGRAM_BONUS if previous and text in self.pairs.get(previous, ()) else 0.0
                             value = (best[i] + math.log(freq + 1) - TILE_PENALTY - penalty + junction + pair
@@ -972,7 +975,7 @@ class Eval:
                 first = (segment(sub) or [sub])[0]
                 extra = -20.0 if first in UNLIKELY_SINGLE else 0.0
                 one_syllable = sub in SYL_SET
-                for text, freq, syllables, _ in rows[:EXACT_ENTRY_LIMIT]:
+                for text, freq, syllables, _ in rows[:DP_EXACT_ENTRY_LIMIT]:
                     pair = BIGRAM_BONUS if previous and text in self.pairs.get(previous, ()) else 0.0
                     bonus = 0.0 if one_syllable else SYLLABLE_BONUS * (syllables - 1)
                     value = best[i] + math.log(freq + 1) - TILE_PENALTY + bonus + extra + pair

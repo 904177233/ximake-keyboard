@@ -34,9 +34,9 @@ public final class PinyinEngine {
     static let initialsPenalty = 3.0
     /// 简拼每一段试几个词（tools/dict/build_binary.py 的 INITIAL_TOP_K 要一起改）。
     static let initialTopK = 3
-    static let initialKeyLimit = 60
-    static let initialEntryLimit = 3
-    static let exactEntryLimit = 40
+    static let initialKeyLimit = 12
+    static let initialEntryLimit = 2
+    static let exactEntryLimit = 3
     /// 简拼每多一个字母加的分：一下对上四个字母的词比拆成两段可信得多。
     static let initialsLengthBonus = 3.0
     /// 前一个词的最后一个字和这个词的第一个字连起来是个常用词（吃 + 过了 -> 吃过），加分。
@@ -88,6 +88,8 @@ public final class PinyinEngine {
     private let nextWords: NextWordIndex
     /// 最近输入串的局部前缀状态，供逐键长串纠错复用。
     private var typoPrefixStateCache: [String: [Range<Int>]] = [:]
+    /// 词界衔接查询只依赖这几个音节和字，不随键入状态变化。
+    private var junctionCache: [String: Bool] = [:]
     /// 发版以后从仓库拉到的新词，补在词库后面。
     public var hotWords: HotWordStore?
 
@@ -146,12 +148,8 @@ public final class PinyinEngine {
         var isPartial = false
         /// 纠过错的词块。
         var isEdited = false
-    }
-
-    /// 在相同输入位置保留有限个不同的前词状态。
-    private struct DecodeState {
-        let path: [Tile]
-        let score: Double
+        /// 简拼词块用于计算前后词衔接分。
+        var firstSyllable: String? = nil
     }
 
     /// 取一个键下最适合用来拼句子的词：词频最高的正常词，学过的词优先。
@@ -179,12 +177,31 @@ public final class PinyinEngine {
         guard let previous, let last = previous.last, let first = text.first,
               let previousSyllable, let firstSyllable else { return 0 }
         let pair = String(last) + String(first)
+        let cacheKey = previousSyllable + "|" + firstSyllable + "|" + pair
+        if let cached = junctionCache[cacheKey] {
+            return cached ? Self.junctionBonus : 0
+        }
         for index in dictionary.exactRange(Array((previousSyllable + firstSyllable).utf8)) {
             for entry in dictionary.entries(key: index, limit: 8) where entry.text == pair && entry.frequency >= 200 {
+                junctionCache[cacheKey] = true
                 return Self.junctionBonus
             }
         }
+        junctionCache[cacheKey] = false
         return 0
+    }
+
+    /// 词块本身只生成一次，前词相关的分数在 DP 扩展时附加。
+    private func contextBonus(previous: String?, previousSyllable: String?, tile: Tile,
+                              dictionary: MoyuDictionary) -> Double {
+        guard let previous else { return 0 }
+        var bonus = nextWords.isCommonPair(previous, tile.text) ? Self.bigramBonus : 0
+        if tile.isLoose {
+            bonus += junctionBonus(previous: previous, previousSyllable: previousSyllable,
+                                   text: tile.text, firstSyllable: tile.firstSyllable,
+                                   dictionary: dictionary)
+        }
+        return bonus
     }
 
     /// 个人词库里的词：比词库里很常用的词还高一点，选得越多越高。
@@ -294,7 +311,8 @@ public final class PinyinEngine {
                             + junctionBonus(previous: previous, previousSyllable: previousSyllable,
                                             text: entry.text, firstSyllable: syllables.first, dictionary: dictionary)
                         tiles.append(Tile(end: position, text: entry.text, key: dictionary.keyString(key: index),
-                                          score: score, syllables: nil, lastSyllable: syllables.last, isLoose: true))
+                                          score: score, syllables: nil, lastSyllable: syllables.last, isLoose: true,
+                                          firstSyllable: syllables.first))
                     }
                 }
                 for word in hotWords?.words(forInitials: subString).prefix(Self.initialTopK) ?? [] {
@@ -302,7 +320,8 @@ public final class PinyinEngine {
                         - penalty
                         + Self.initialsLengthBonus * Double(sub.count - 1)
                     tiles.append(Tile(end: position, text: word.text, key: word.key,
-                                      score: score, syllables: nil, lastSyllable: word.syllables.last, isLoose: true))
+                                      score: score, syllables: nil, lastSyllable: word.syllables.last, isLoose: true,
+                                      firstSyllable: word.syllables.first))
                 }
             }
             tailHasExact = matchedExact
@@ -523,7 +542,8 @@ public final class PinyinEngine {
                         + junctionBonus(previous: previous, previousSyllable: previousSyllable,
                                         text: entry.text, firstSyllable: syllables.first, dictionary: dictionary)
                     tiles.append(Tile(end: position, text: entry.text, key: dictionary.keyString(key: index),
-                                      score: score, syllables: nil, lastSyllable: syllables.last, isLoose: true))
+                                      score: score, syllables: nil, lastSyllable: syllables.last, isLoose: true,
+                                      firstSyllable: syllables.first))
                 }
             }
 
@@ -576,13 +596,16 @@ public final class PinyinEngine {
             let previous = start == 0 ? query.leftContext : back[start]?.tile.text
             let previousSyllable = back[start]?.tile.lastSyllable
             let tiles = query.mode == .qwerty
-                ? qwertyTiles(query: query, start: start, previous: previous, previousSyllable: previousSyllable,
+                ? qwertyTiles(query: query, start: start, previous: nil, previousSyllable: nil,
                               fullPinyin: fullPinyin, dictionary: dictionary)
-                : t9Tiles(query: query, start: start, previous: previous, previousSyllable: previousSyllable, dictionary: dictionary)
+                : t9Tiles(query: query, start: start, previous: nil, previousSyllable: nil, dictionary: dictionary)
             for tile in tiles {
                 let endingBonus = tile.end == count && start > 0 && Self.endingParticles[tile.key] == tile.text
                     ? Self.endingParticleBonus : 0
-                let value = best[start] + tile.score + endingBonus
+                let value = best[start] + tile.score
+                    + contextBonus(previous: previous, previousSyllable: previousSyllable,
+                                   tile: tile, dictionary: dictionary)
+                    + endingBonus
                 if value > best[tile.end] {
                     best[tile.end] = value
                     back[tile.end] = (start, tile)
@@ -604,37 +627,62 @@ public final class PinyinEngine {
         let count = query.input.count
         guard count > 0 else { return [] }
         let fullPinyin = isFullPinyin(query)
-        var states = [[DecodeState]](repeating: [], count: count + 1)
-        states[0] = [DecodeState(path: [], score: 0)]
+        struct Node {
+            let previous: Int?
+            let tile: Tile?
+            let text: String
+            let lastText: String?
+            let lastSyllable: String?
+            let score: Double
+        }
+        var nodes = [Node(previous: nil, tile: nil, text: "", lastText: nil, lastSyllable: nil, score: 0)]
+        var states = [[Int]](repeating: [], count: count + 1)
+        states[0] = [0]
+        let stateLimit = 4
 
         for start in 0..<count {
             guard !states[start].isEmpty else { continue }
-            for state in states[start] {
-                let previous = state.path.last?.text ?? (state.path.isEmpty ? query.leftContext : nil)
-                let previousSyllable = state.path.last?.lastSyllable
-                let tiles = query.mode == .qwerty
-                    ? qwertyTiles(query: query, start: start, previous: previous,
-                                  previousSyllable: previousSyllable, fullPinyin: fullPinyin,
-                                  dictionary: dictionary)
-                    : t9Tiles(query: query, start: start, previous: previous,
-                              previousSyllable: previousSyllable, dictionary: dictionary)
+            let tiles = query.mode == .qwerty
+                ? qwertyTiles(query: query, start: start, previous: nil,
+                              previousSyllable: nil, fullPinyin: fullPinyin,
+                              dictionary: dictionary)
+                : t9Tiles(query: query, start: start, previous: nil,
+                          previousSyllable: nil, dictionary: dictionary)
+            for stateIndex in states[start] {
+                let state = nodes[stateIndex]
+                let previous = state.lastText ?? (start == 0 ? query.leftContext : nil)
+                let previousSyllable = state.lastSyllable
                 for tile in tiles {
                     let endingBonus = tile.end == count && start > 0
                         && Self.endingParticles[tile.key] == tile.text ? Self.endingParticleBonus : 0
-                    let next = DecodeState(path: state.path + [tile], score: state.score + tile.score + endingBonus)
+                    let text = state.text + tile.text
+                    let score = state.score + tile.score
+                        + contextBonus(previous: previous, previousSyllable: previousSyllable,
+                                       tile: tile, dictionary: dictionary)
+                        + endingBonus
                     var bucket = states[tile.end]
-                    let text = sentenceText(next.path)
-                    if let existing = bucket.firstIndex(where: { sentenceText($0.path) == text }) {
-                        if bucket[existing].score >= next.score { continue }
+                    if let existing = bucket.firstIndex(where: {
+                        (nodes[$0].lastText == tile.text
+                            && nodes[$0].lastSyllable == tile.lastSyllable)
+                            || nodes[$0].text == text
+                    }) {
+                        if nodes[bucket[existing]].score >= score { continue }
                         bucket.remove(at: existing)
                     }
-                    bucket.append(next)
-                    bucket.sort { lhs, rhs in
-                        lhs.score == rhs.score ? sentenceText(lhs.path) < sentenceText(rhs.path) : lhs.score > rhs.score
+                    if bucket.count >= stateLimit,
+                       let worst = bucket.last, nodes[worst].score >= score {
+                        continue
                     }
-                    if bucket.count > 16 {
-                        bucket.removeLast(bucket.count - 16)
+                    let nodeIndex = nodes.count
+                    nodes.append(Node(previous: stateIndex, tile: tile, text: text,
+                                      lastText: tile.text, lastSyllable: tile.lastSyllable, score: score))
+                    bucket.append(nodeIndex)
+                    bucket.sort {
+                        let lhs = nodes[$0]
+                        let rhs = nodes[$1]
+                        return lhs.score == rhs.score ? lhs.text < rhs.text : lhs.score > rhs.score
                     }
+                    if bucket.count > stateLimit { bucket.removeLast(bucket.count - stateLimit) }
                     states[tile.end] = bucket
                 }
             }
@@ -642,10 +690,16 @@ public final class PinyinEngine {
 
         var results: [(path: [Tile], score: Double)] = []
         var seen: Set<String> = []
-        for state in states[count] {
-            let text = sentenceText(state.path)
-            if seen.insert(text).inserted {
-                results.append((state.path, state.score))
+        for index in states[count] {
+            let node = nodes[index]
+            if seen.insert(node.text).inserted {
+                var path: [Tile] = []
+                var cursor: Int? = index
+                while let current = cursor, let tile = nodes[current].tile {
+                    path.append(tile)
+                    cursor = nodes[current].previous
+                }
+                results.append((Array(path.reversed()), node.score))
                 if results.count >= limit { break }
             }
         }
@@ -664,19 +718,24 @@ public final class PinyinEngine {
         var back = [[(from: Int, layer: Int, tile: Tile)?]](repeating: [(from: Int, layer: Int, tile: Tile)?](repeating: nil, count: count + 1), count: 2)
         best[0][0] = 0
         for start in 0..<count {
+            guard best[0][start] > -.infinity || best[1][start] > -.infinity else { continue }
+            let regularTiles = qwertyTiles(query: query, start: start, previous: nil,
+                                           previousSyllable: nil, fullPinyin: fullPinyin,
+                                           dictionary: dictionary)
+            let edited = best[0][start] > -.infinity
+                ? editedTiles(query: query, start: start, previous: nil, dictionary: dictionary)
+                : []
             for layer in 0..<2 where best[layer][start] > -.infinity {
                 let step = back[layer][start]
                 let previous = start == 0 ? query.leftContext : step?.tile.text
-                var tiles = qwertyTiles(query: query, start: start, previous: previous,
-                                        previousSyllable: step?.tile.lastSyllable,
-                                        fullPinyin: fullPinyin, dictionary: dictionary)
-                if layer == 0 {
-                    tiles += editedTiles(query: query, start: start, previous: previous, dictionary: dictionary)
-                }
+                let previousSyllable = step?.tile.lastSyllable
+                let tiles = layer == 0 ? regularTiles + edited : regularTiles
                 for tile in tiles {
                     let target = tile.isEdited ? 1 : layer
                     if target == 1, tile.isLoose { continue }
                     let value = best[layer][start] + tile.score
+                        + contextBonus(previous: previous, previousSyllable: previousSyllable,
+                                       tile: tile, dictionary: dictionary)
                     if value > best[target][tile.end] {
                         best[target][tile.end] = value
                         back[target][tile.end] = (start, layer, tile)
@@ -716,13 +775,8 @@ public final class PinyinEngine {
 
         var builder = CandidateBuilder(limit: Self.maxCandidates)
         let count = query.input.count
-        let solved = solveScored(query: query, dictionary: dictionary)
-        var alternatives = solveAlternatives(query: query, dictionary: dictionary, limit: 4)
-        if let solved {
-            let primaryText = sentenceText(solved.path)
-            alternatives.removeAll { sentenceText($0.path) == primaryText }
-            alternatives.insert(solved, at: 0)
-        }
+        let alternatives = solveAlternatives(query: query, dictionary: dictionary, limit: 3)
+        let solved = alternatives.first
         let path = solved?.path
 
         // 打头的是整句（或一整个词）
@@ -737,7 +791,7 @@ public final class PinyinEngine {
                                      kind: path.count > 1 ? .sentence : .word,
                                      segments: sentenceSegments(path)))
         }
-        for alternative in alternatives.dropFirst() {
+        for alternative in alternatives.dropFirst() where !singleAbbreviation {
             let alternativePath = alternative.path
             builder.add(IMECandidate(text: sentenceText(alternativePath),
                                      key: alternativePath.map(\.key).joined(), consumed: count,
@@ -751,6 +805,14 @@ public final class PinyinEngine {
             addT9Lists(query: query, dictionary: dictionary, into: &builder)
         }
 
+        // 完整拼音直接命中一个词时，优先于拆成多个单字的同音整句。
+        if query.mode == .qwerty, query.breaks.isEmpty,
+           let exactWord = builder.candidates.first(where: {
+               $0.consumed == count && $0.key == typedString && $0.kind == .word
+           }) {
+            builder.promote(exactWord, to: 0)
+        }
+
         // 余串的左上下文是用户刚确认的词。已有真实词对时，先让对应候选进入首位，
         // 例如「把」之后的「钥匙」不能被「要是」的单词频挤掉。
         if let leftContext = query.leftContext,
@@ -761,13 +823,12 @@ public final class PinyinEngine {
         // 个人词库：这串拼音选过的词放第一个
         let typed = String(decoding: query.input, as: UTF8.self)
         if query.mode == .qwerty {
-            if let favorite = learning.userWords(forKey: typed).first,
-               learning.isPinnedUserWord(text: favorite.text, key: typed) {
+            if let favorite = learning.userWords(forKey: typed).first(where: { $0.count > 0 }) {
                 builder.promote(IMECandidate(text: favorite.text, key: typed, consumed: count), to: 0)
             }
         } else if let favorite = learning.userWords(forT9: typed).first(where: {
-            matchesLocks(keyBytes: Array($0.key.utf8), at: 0, locks: query.locks)
-        }), learning.isPinnedUserWord(text: favorite.text, key: favorite.key) {
+            $0.count > 0 && matchesLocks(keyBytes: Array($0.key.utf8), at: 0, locks: query.locks)
+        }) {
             builder.promote(IMECandidate(text: favorite.text, key: favorite.key, consumed: count), to: 0)
         }
 
@@ -1148,14 +1209,14 @@ public final class PinyinEngine {
         let isExclamation = text.last.map(Self.exclaimEndings.contains) == true
         if !isWordContinuation {
             if isQuestion {
-                add(["？"], score: 2.0)
-                add(["。"], score: 1.1)
+                add(["？"], score: 10.0)
+                add(["。"], score: 8.0)
             } else if isExclamation {
-                add(["！"], score: 1.8)
-                add(["。"], score: 1.0)
+                add(["！"], score: 10.0)
+                add(["。"], score: 8.0)
             } else if text.count >= 4 {
-                add(["，"], score: 0.55)
-                add(["。"], score: 0.45)
+                add(["，"], score: 5.0)
+                add(["。"], score: 4.5)
             }
         }
 

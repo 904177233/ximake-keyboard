@@ -161,7 +161,7 @@ class Decoder:
                     particle = b.ENDING_PARTICLES.get(key) if start and end == n else None
                     for index, (word, frequency, _) in enumerate(entries):
                         ending = not self.old and particle == word
-                        if index < (8 if self.old else 40) or ending:
+                        if index < (8 if self.old else b.DP_EXACT_ENTRY_LIMIT) or ending:
                             score = math.log1p(frequency) - 14 + bonus - penalty
                             transitions.append((word, score, key, ending))
 
@@ -178,8 +178,8 @@ class Decoder:
                     initial_groups = (
                         self.di if digits else self.initials
                     ).get(sub, ())
-                    group_limit = 3 if digits else 60
-                    entry_limit = 1 if digits else 3
+                    group_limit = 3 if digits else b.DP_INITIAL_KEY_LIMIT
+                    entry_limit = 1 if digits else b.DP_INITIAL_ENTRY_LIMIT
                     for frequency, key, _syllables, entries in initial_groups[:group_limit]:
                         for word, entry_frequency, _ in entries[:entry_limit]:
                             transitions.append(
@@ -303,11 +303,11 @@ def predictions(decoder: Decoder, text: str, last: str, phrases: dict[str, list[
     exclaim = text[-1] in "\u554a\u54c7\u5566\u54c7\u54c8\u563f\u54ce"
     if len(text) >= 3 and (question or exclaim or len(text) >= 4):
         if question:
-            add(["\uff1f"], 10 if decoder.old else 2.0)
+            add(["\uff1f"], 10 if decoder.old else 10.0)
         elif exclaim:
             add(["\uff01"], 10 if decoder.old else 1.8)
         else:
-            add(["\uff0c"], 10 if decoder.old else 0.55)
+            add(["\uff0c"], 10 if decoder.old else 5.0)
         add(["\u3002"], 10 if decoder.old else (1.1 if question else 1.0 if exclaim else 0.45))
 
     anchor = text if decoder.old else last

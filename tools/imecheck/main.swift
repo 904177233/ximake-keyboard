@@ -280,6 +280,7 @@ check("常选的词往前排", afterLearning.contains("握"), "\(afterLearning)"
 
 print("个人词库")
 let beforeChoice = texts(qwerty("shiyong"), 10)
+check("shiyong 无个人学习时首选完整词使用", beforeChoice.first == "使用", "\(beforeChoice)")
 learning.record(segments: [(text: "试用", key: "shiyong")])
 check("选过「试用」后 shiyong 首选是试用", qwerty("shiyong").candidates.first?.text == "试用", "\(beforeChoice) -> \(texts(qwerty("shiyong")))")
 learning.record(segments: [(text: "睡觉了", key: "shuijiaole")])
@@ -288,6 +289,8 @@ learning.recordTyped([(text: "我吃过了", typed: "wcgl")])
 check("简拼选过一次后排第一", qwerty("wcgl").candidates.first?.text == "我吃过了", "\(texts(qwerty("wcgl")))")
 learning.record(segments: [(text: "弱强度词", key: "ruoqiangdu")], strength: 0.2)
 let weakLearningCount = learning.userWords(forKey: "ruoqiangdu").first?.count ?? 0
+check("一次自动接受不会把词提到第一", qwerty("ruoqiangdu").candidates.first?.text != "弱强度词",
+      "\(texts(qwerty("ruoqiangdu")))")
 learning.record(segments: [(text: "弱强度词", key: "ruoqiangdu")], strength: 1.0)
 let strongLearningCount = learning.userWords(forKey: "ruoqiangdu").first?.count ?? 0
 check("显式选择强度高于自动接受", strongLearningCount > weakLearningCount,
@@ -322,21 +325,21 @@ for _ in 0..<50 {
 }
 let perCall = Date().timeIntervalSince(started) / 50 * 1000
 print(String(format: "  长句每次转换 %.2f 毫秒", perCall))
-check("长句转换不超过 16 毫秒", perCall < 16)
+check("38 字母长句转换不超过 3 毫秒", perCall < 3)
 let longerStarted = Date()
 for _ in 0..<20 {
     _ = qwerty("nixianbashoujiandizhifageiwowojintianxiabanqianjichuqu")
 }
 let longerPerCall = Date().timeIntervalSince(longerStarted) / 20 * 1000
 print(String(format: "  54 个字母的长句每次转换 %.2f 毫秒", longerPerCall))
-check("54 个字母的长句不超过 30 毫秒", longerPerCall < 30)
+check("54 个字母的长句不超过 6 毫秒", longerPerCall < 6)
 let typoStarted = Date()
 for _ in 0..<20 {
     _ = typed("jintiantianqihenhaowomenyiqichuquwamba")
 }
 let typoPerCall = Date().timeIntervalSince(typoStarted) / 20 * 1000
 print(String(format: "  长句打错一处（带纠错）每次转换 %.2f 毫秒", typoPerCall))
-check("带纠错的长句不超过 40 毫秒", typoPerCall < 40)
+check("带纠错的长句不超过 15 毫秒", typoPerCall < 15)
 
 print("整句准确率（没有参与调词频的句子）")
 let holdout: [(String, String)] = [
