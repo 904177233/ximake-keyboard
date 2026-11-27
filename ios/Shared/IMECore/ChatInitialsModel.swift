@@ -53,7 +53,7 @@ final class ChatInitialsModel {
         return -36
     }
 
-    func candidates(_ input: [UInt8]) -> [IMECandidate] {
+    func candidates(_ input: [UInt8], languageModel: LibimeLanguageModel?) -> [IMECandidate] {
         struct Path {
             let score: Int
             let id: Int
@@ -95,9 +95,33 @@ final class ChatInitialsModel {
                 }
             }
         }
+        let original = states[input.count]
+        var finalists = original
+        if let model = languageModel {
+            // 原模型保留口语召回池；只对最终的 24 条路径查通用三元概率。
+            finalists = finalists.enumerated().map { item -> (Int, Double, Path) in
+                var older = -1, previous = -1
+                var score = Double(item.element.score)
+                for segment in item.element.segments {
+                    let id = model.id(segment.text)
+                    score += 48 * model.feature(model.history(older, previous), id)
+                    older = previous
+                    previous = id
+                }
+                return (item.offset, score, item.element)
+            }.sorted { $0.1 == $1.1 ? $0.0 < $1.0 : $0.1 > $1.1 }.map { $0.2 }
+        }
+        let ordered: [Path]
+        if languageModel != nil {
+            var naturalTexts: Set<String> = []
+            let natural = original.filter { naturalTexts.insert($0.segments.map(\.text).joined()).inserted }
+            ordered = Array(finalists.prefix(1)) + Array(natural.prefix(2)) + Array(finalists.dropFirst())
+        } else {
+            ordered = finalists
+        }
         var seen: Set<String> = []
         var result: [IMECandidate] = []
-        for path in states[input.count] {
+        for path in ordered {
             let text = path.segments.map(\.text).joined()
             if seen.insert(text).inserted {
                 result.append(IMECandidate(text: text, key: path.segments.map(\.key).joined(), consumed: input.count,

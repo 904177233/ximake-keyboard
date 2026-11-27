@@ -57,10 +57,11 @@ def compare(paths):
                 print("  开/关纠错：抢首选、占第二、挤掉自然第二目标、目标跌出前三", first, second, displaced, lost3, "/", len(rows))
                 if rows is group[-1] and any((first, second, displaced, lost3)):
                     errors.append("正确全拼受到纠错干扰")
+        if metrics3[2][0] < metrics3[1][0]:
+            errors.append(name + "首选低于 build 84")
         if name in {"正确全拼合计", "简拼整句", "中文模式英文词", "冻结长句盲集"}:
-            for index in (0, 2):
-                if metrics3[2][index] < metrics3[1][index]:
-                    errors.append(name + ("首选" if index == 0 else "前三") + "低于 build 84")
+            if metrics3[2][2] < metrics3[1][2]:
+                errors.append(name + "前三低于 build 84")
     if errors:
         raise SystemExit("评测未通过：" + "、".join(errors))
 

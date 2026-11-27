@@ -34,6 +34,17 @@ func check(_ name: String, _ condition: Bool, _ detail: @autoclosure () -> Strin
     }
 }
 
+check("缺少模型时读取器可回退", LibimeLanguageModel(url: nil) == nil)
+check("语言模型映射成功", engine.languageModel != nil)
+if let model = engine.languageModel {
+    let me = model.id("我"), like = model.id("喜欢"), you = model.id("你")
+    check("读取三元概率", model.probability(model.history(me, like), you) == -1)
+    check("缺少三元时累加二元历史的回退权重",
+          model.probability(model.history(me, model.id("找")), model.id("钥匙")) == -3.875)
+    check("二元也缺失时回退到一元",
+          model.probability(model.history(model.id("饭"), model.id("手机")), model.id("钥匙")) == -5.1875)
+}
+
 func qwerty(_ text: String) -> IMEConversion {
     engine.convert(IMEQuery(mode: .qwerty, input: Array(text.utf8)), rawText: text, fuzzy: .off, typoCorrection: false)
 }
@@ -94,8 +105,12 @@ correctedFirst("nihap", "你好")
 correctedFirst("jintianhebmang", "今天很忙")
 correctedFirst("woxiangchifna", "我想吃饭")
 correctedFirst("zhegewenttizenmebanne", "这个问题怎么办呢")
-// nu 和 hao 都是合法读音；保留同一个纠错目标可选，同时保护原拼音前三。
-for (input, expected) in [("xiexienu", "谢谢你"), ("nihaohaoma", "你还好吗")] {
+// 可切全拼的弱路径允许被大分差纠错超过。自然问句仍须保住前三。
+correctedFirst("xiexienu", "谢谢你")
+correctedFirst("taihaoke", "太好了")
+correctedFirst("xioaxi", "消息")
+correctedFirst("shengrikuiale", "生日快乐")
+for (input, expected) in [("nihaohaoma", "你还好吗")] {
     let got = typed(input)
     let natural = qwerty(input)
     check("\(input) 原文前三不动且第四位仍可纠成\(expected)",
@@ -266,6 +281,12 @@ check("简拼 94 的喜欢有真实名次", likedRank.map { $0 < 24 } == true, "
 let remainder = engine.convert(IMEQuery(mode: .qwerty, input: Array("yaoshi".utf8), leftContext: "把"),
                               rawText: "yaoshi", fuzzy: .off, typoCorrection: false)
 check("把之后的余串首选钥匙", remainder.candidates.first?.text == "钥匙", "\(texts(remainder, 8))")
+
+for (left, key, word) in [("找", "yaoshi", "钥匙"), ("喝", "doujiang", "豆浆"), ("免费", "shiyong", "试用")] {
+    let got = engine.convert(IMEQuery(mode: .qwerty, input: Array(key.utf8), leftContext: left),
+                             rawText: key, typoCorrection: false)
+    check("选过\(left)后余串首选\(word)", got.candidates.first?.text == word, "\(texts(got))")
+}
 
 print("原文")
 engine.english = EnglishLexicon(url: URL(fileURLWithPath: CommandLine.arguments[1])

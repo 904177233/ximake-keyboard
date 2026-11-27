@@ -1045,6 +1045,12 @@ def main() -> int:
         models.append(metadata())
         model_files[chat_model_path.name] = {"bytes": chat_model_path.stat().st_size,
                                             "sha256": hashlib.sha256(chat_model_path.read_bytes()).hexdigest()}
+    lm_path = OUT_DIR / "libime_sc.bin"
+    if lm_path.exists():
+        from build_lm import metadata as lm_metadata
+        models.append(lm_metadata())
+        model_files[lm_path.name] = {"bytes": lm_path.stat().st_size,
+                                     "sha256": hashlib.sha256(lm_path.read_bytes()).hexdigest()}
     (OUT_DIR / "dict_meta.json").write_text(json.dumps({
         "version": DICT_VERSION,
         "generated_at": GENERATED_DATE,

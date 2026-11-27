@@ -27,3 +27,9 @@ Because the bundled lexicon is derived from rime-ice data (GPL-3.0), distributio
 服务商的名字（DeepSeek、通义千问、Kimi、智谱、豆包、即梦、通义万相、OpenAI、Anthropic、OpenRouter、硅基流动、Gemini 等）只用来说明墨语能连接哪些接口，墨语和这些公司没有任何关联。
 
 Provider names are used only to describe which APIs Moyu can connect to. Moyu is not affiliated with any of these companies.
+
+## fcitx5 libime 简体中文语言模型
+
+上游数据文件为 `lm_sc.arpa-20260629.tar.zst`，SHA-256 为 `06808333b9173e5374cf2cb5afc12d08f5625bf9abb536489cac376fc05f2e7f`。版权声明为 **2022~2026 CSSlayer <wengxt@gmail.com>**。上游 REUSE.toml 将该数据标为 **LGPL-2.1-or-later**。[数据下载](https://download.fcitx-im.org/data/lm_sc.arpa-20260629.tar.zst) · [上游授权声明](https://github.com/fcitx/libime/blob/master/REUSE.toml) · [许可证全文](LICENSES/LGPL-2.1-or-later.txt)
+
+墨语分发的 `libime_sc.bin` 是该数据的修改版，沿用 LGPL-2.1-or-later。构建时与墨语词表取交集，按回退导致的概率损失剪枝，将对数概率及回退权重量化，并按整数词 ID 排序。解压上述快照后可用公开脚本重新生成或替换模型。[构建脚本](tools/dict/build_lm.py) · [版本和校验值](ios/Shared/dict/dict_meta.json)

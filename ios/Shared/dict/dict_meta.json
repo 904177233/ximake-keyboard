@@ -24,6 +24,19 @@
       "license": "CC BY 2.0 FR（句子）；模型仅含统计与现有词典词条",
       "source_sha256": "262a48cacb7693f6e47a2c4c42f216a5c45dd28b9b62014b159628cc908e8fcc",
       "build": "tools/dict/chat_model.py --write"
+    },
+    {
+      "name": "libime_sc",
+      "format": "MLM1",
+      "version": "20260629",
+      "status": "shipped",
+      "url": "https://download.fcitx-im.org/data/lm_sc.arpa-20260629.tar.zst",
+      "source_sha256": "06808333b9173e5374cf2cb5afc12d08f5625bf9abb536489cac376fc05f2e7f",
+      "arpa_sha256": "9cbfd115c139162fbafc54a1b7a2dbd03d16ac7cd1bb127b2bfbbbfc78436dfa",
+      "license": "LGPL-2.1-or-later",
+      "copyright": "2022~2026 CSSlayer <wengxt@gmail.com>",
+      "build": "python tools/dict/build_lm.py",
+      "profile": "medium"
     }
   ],
   "files": {
@@ -38,6 +51,10 @@
     "chat_initials.bin": {
       "bytes": 2221743,
       "sha256": "a1613baa3ab34bca14da14104969dc3fae9975f8c8a760f843a2bfd828501b62"
+    },
+    "libime_sc.bin": {
+      "bytes": 10927756,
+      "sha256": "24d6a44d832e5822eecae1bffd101a44bbf28339135778674146a1a7d9beda21"
     }
   },
   "sources": [

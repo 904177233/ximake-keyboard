@@ -52,6 +52,8 @@ on:
       - "tools/dict/ime_bench.tsv"
       - "tools/dict/long_sentence_blind.tsv"
       - "tools/dict/chat_model.py"
+      - "tools/dict/build_lm.py"
+      - "tools/dict/lm_eval.py"
       - "tools/apicheck/**"
       - ".github/workflows/build.yml"
 
@@ -158,7 +160,7 @@ jobs:
             echo "::error::ios/Shared/dict/ 不存在 —— 词库没落盘，拼音候选只能用内置极小词表。"
             exit 1
           fi
-          for f in moyu.dict phrases.tsv dict_meta.json; do
+          for f in moyu.dict phrases.tsv dict_meta.json libime_sc.bin; do
             if [ ! -f "ios/Shared/dict/$f" ]; then
               echo "::error::ios/Shared/dict/$f 缺失"
               exit 1
@@ -235,7 +237,7 @@ jobs:
               ./run ios/Shared/dict "$corpus" "$blind" "$out/$label.json"
             )
           done
-          xcrun --sdk macosx swiftc -O -swift-version 5 "${sources[@]}" ios/Shared/IMECore/ChatInitialsModel.swift "$bench/Benchmark.swift" "$bench/main.swift" -o "$out/imecheck"
+          xcrun --sdk macosx swiftc -O -swift-version 5 "${sources[@]}" ios/Shared/IMECore/ChatInitialsModel.swift ios/Shared/IMECore/LibimeLanguageModel.swift "$bench/Benchmark.swift" "$bench/main.swift" -o "$out/imecheck"
           dict=ios/Shared/dict
           status=0
           "$out/imecheck" "$dict/moyu.dict" "$dict/next.tsv" "$dict/en_words.tsv" "$dict/hot_words.tsv" "$dict/phrases.tsv" "$corpus" "$blind" "$out/current.json" || status=$?
@@ -459,6 +461,9 @@ jobs:
             ls -la "${APPEX}" || true
             exit 1
           fi
+          for bundle in "${BUILD_DIR}/Payload/AIKeyboard.app" "${APPEX}"; do
+            cmp ios/Shared/dict/libime_sc.bin "$bundle/dict/libime_sc.bin"
+          done
           echo "---- 词库文件 ----"
           ls -la "${BUILD_DIR}/Payload/AIKeyboard.app/dict" || true
           ls -la "${APPEX}/dict" || true
