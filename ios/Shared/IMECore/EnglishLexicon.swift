@@ -56,6 +56,34 @@ public final class EnglishLexicon {
     /// 本项目补录的技术名称，不伪造 wordfreq 次数。
     private static let technical = ["chatgpt"]
 
+    /// 直接在已排序的文件里二分到行首，首次触摸也只读少量行。
+    func hasWordPrefix(_ lower: String) -> Bool {
+        if Self.technical.contains(where: { $0.hasPrefix(lower) }) { return true }
+        guard !lower.isEmpty, let mapped else { return false }
+        let bytes = UnsafeRawBufferPointer(start: mapped.bytes, count: mapped.length)
+        var low = 0, high = bytes.count
+        while low < high {
+            var start = (low + high) / 2
+            while start > low && bytes[start - 1] != 10 { start -= 1 }
+            var pos = start
+            var difference = 0
+            for letter in lower.utf8 {
+                let byte = pos < bytes.count ? bytes[pos] : 0
+                difference = Int(byte) - Int(letter)
+                if difference != 0 { break }
+                pos += 1
+            }
+            if difference == 0 { return true }
+            if difference > 0 {
+                high = start
+            } else {
+                while pos < high && bytes[pos] != 10 { pos += 1 }
+                low = min(pos + 1, high)
+            }
+        }
+        return false
+    }
+
     func mixedCompletion(_ typed: String) -> String? {
         let key = typed.lowercased()
         guard (2...32).contains(key.utf8.count) else { return nil }

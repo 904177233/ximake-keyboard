@@ -92,8 +92,11 @@ class Model:
 
 
 class Replay:
-    def __init__(self):
+    def __init__(self, *, match_swift_beam=False):
+        self.match_swift_beam = match_swift_beam
         self.d = Decoder()
+        from character_model import CharacterModel, FILE
+        self.characters = CharacterModel() if (OUT / FILE).exists() else None
         self.chat = defaultdict(list)
         self.pairs = {}
         data = (OUT / "chat_initials.bin").read_bytes()
@@ -223,20 +226,45 @@ class Replay:
             positions.append(tiles)
         return positions
 
-    def paths(self, raw, digits, left, full, model, weight, editing=False):
+    @staticmethod
+    def keep_full_path(bucket, node, final, characters):
+        """逐条入桶，保留 Swift 词历史；字模型启用时，只有到句尾才按显示文字去重。"""
+        if len(bucket) == 4 and node[0] <= bucket[-1][0]:
+            return
+        for index, old in enumerate(bucket):
+            same_history = old[2:4] == node[2:4]
+            if characters:
+                same = old[1] == node[1] if final else same_history and old[1][-2:] == node[1][-2:]
+            else:
+                same = old[1] == node[1] or same_history
+            if same:
+                if old[0] >= node[0]:
+                    return
+                bucket.pop(index)
+                break
+        bucket.append(node)
+        bucket.sort(key=lambda p: (-p[0], p[1]))
+        del bucket[4:]
+
+    def paths(self, raw, digits, left, full, model, weight, editing=False, use_characters=True):
         key = raw.replace("'", "")
         n = len(key)
+        chars = self.characters if model and full and not digits and not left and not editing and use_characters and "'" not in raw and not self.d.exact.get(key) else None
+        online = self.match_swift_beam and model and full and not digits and not left and not editing and "'" not in raw and not self.d.exact.get(key)
         states = [[[] for _ in range(n+1)] for _ in range(2 if editing else 1)]
         states[0][0] = [(0, "", "", left, (), "", False)]
         for i, tiles in enumerate(self.lattice(raw, digits, full, bool(model), editing)):
             for layer, buckets in enumerate(states):
-                unique = {}
-                for state in sorted(buckets[i], key=lambda x:(-x[0], x[1])):
-                    hist = (state[2] if model else "", state[3])
-                    unique.setdefault(hist, state)
-                    if len(unique)>= (1 if editing else 4):
-                        break
-                for s,text,older,prev,words,_,mismatch in unique.values():
+                active = buckets[i]
+                if not online:
+                    unique = {}
+                    for state in sorted(active, key=lambda x:(-x[0], x[1])):
+                        hist = (state[2] if model else "", state[3])
+                        unique.setdefault(hist, state)
+                        if len(unique)>= (1 if editing else 4):
+                            break
+                    active = unique.values()
+                for s,text,older,prev,words,_,mismatch in active:
                     for j,w,k,base,kind in tiles:
                         target = layer + (kind=="edit")
                         if target>=len(states):
@@ -248,8 +276,24 @@ class Replay:
                             if kind=="initial" and prev and self.d.freq.get(prev[-1]+w[0],0)>=200:
                                 ctx+=2
                         out = b.ENDING_PARTICLES.get(k,w) if i and j==n else w
-                        states[target][j].append((s+base+ctx,text+out,prev,w,words+(w,),kind,mismatch or kind=="initial"))
+                        if chars:
+                            length_weight = -1.5 if i == 0 and k in b.SYL_SET else 1.5
+                            ctx += .75 * chars.extend(text,out,j==n,residual=True) + length_weight * (len(w)-1)
+                            if j == n and i and len(w) > 1 and k in b.SYL_SET:
+                                ctx += 3
+                        combined = text + (w if online and not chars else out)
+                        node = (s+base+ctx,combined,prev,w,words+(w,),kind,mismatch or kind=="initial")
+                        bucket = states[target][j]
+                        if not online:
+                            bucket.append(node)
+                            continue
+                        if j == n:
+                            node += (text + out,)
+                        self.keep_full_path(bucket, node, j == n, chars)
         ranked = sorted(states[-1][-1], key=lambda x:(-x[0],x[1]))
+        if online:
+            # 旧版按路径原字去重，输出时才替换最后一个语气词。
+            return [(p[0], p[7], *p[2:7]) for p in ranked[:3]]
         unique = {}
         histories = set()
         for p in ranked:
@@ -285,7 +329,14 @@ class Replay:
                 if not model:
                     return p[0]
                 words = ("","")+p[2]
-                return p[0] + 48 * sum(model.feature(*words[i:i+3]) for i in range(len(p[2])))
+                text = "".join(p[2])
+                extra = 0
+                if self.characters:
+                    extra = 16*self.characters.extend("",text,True) + 144*(top[:1] == [text])
+                    for left_word, right_word in zip(p[2],p[2][1:]):
+                        if right_word in self.d.cols[0].get(left_word, ()):
+                            extra += 96 * min(2, len(right_word))
+                return p[0] + extra + 48 * sum(model.feature(*words[i:i+3]) for i in range(len(p[2])))
             chat_paths = self.chat_paths(key)
             chat = list(dict.fromkeys("".join(p[2]) for p in sorted(chat_paths,key=chat_score,reverse=True)))[:3]
             if model and chat_paths:
@@ -310,8 +361,9 @@ class Replay:
         if (correct and not digits and not chat and "'" not in raw and 2<=len(key)<=80 and set(key)&set("aeiouv")
                 and (not full or (len(key)<= (18 if model else 12) and not exact))):
             alt = self.paths(raw,False,left,True,model,weight,True)
-            if alt and (not paths or alt[0][1]!=paths[0][1]):
-                gain = alt[0][0]-paths[0][0] if paths else 100
+            reference = self.paths(raw,False,left,full,model,weight,use_characters=False) if self.characters and model and full and alt else paths
+            if alt and (not reference or alt[0][1]!=reference[0][1]):
+                gain = alt[0][0]-reference[0][0] if reference else 100
                 mismatch = paths[0][6] if paths else True
                 if full:
                     pos = 0 if model and gain>2.5 else 3
@@ -351,8 +403,12 @@ def main():
     parser.add_argument("--dev",action="store_true")
     parser.add_argument("--tier",default=DEFAULT)
     parser.add_argument("--pages", action="store_true", help="估计三条性能用例访问的文件页")
+    parser.add_argument("--characters", action="store_true", help="比较 build 87 词模型与第五轮字词模型")
     args = parser.parse_args()
-    engine = Replay()
+    engine = Replay(match_swift_beam=args.characters)
+    characters = engine.characters
+    if not args.characters:
+        engine.characters = None
     if args.dev:
         for tier in TIERS:
             m = Model(SOURCE.parent/(tier+".bin"))
@@ -378,8 +434,11 @@ def main():
             print(key, len(pages), "个 16 KiB 页")
         return
     samples = fixtures("ime_bench.tsv") + [["冻结长句盲集",*row[1:]] for row in fixtures("long_sentence_blind.tsv")]
+    if args.characters:
+        samples.extend([["长句开发集",*r[1:]] for r in fixtures("long_sentence_dev.tsv")])
     baseline = {}
-    for name,m in [("改前",None),("改后",model)]:
+    for index, (name,m) in enumerate([("改前",model if args.characters else None),("改后",model)]):
+        engine.characters = characters if args.characters and index else None
         interference = [0] * 4
         stats = defaultdict(Counter)
         for row in samples:
@@ -389,7 +448,7 @@ def main():
             c = stats[category]
             c["样本"]+=1
             c["首选"]+=rank==1
-            if m:
+            if index:
                 c["修回"] += rank==1 and baseline[tuple(row)]!=1
                 c["新错"] += rank!=1 and baseline[tuple(row)]==1
             else:

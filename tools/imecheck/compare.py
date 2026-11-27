@@ -19,6 +19,12 @@ def compare(paths):
     errors = []
     protected = {"全拼词", "短句", "长句", "歧义切分", "余串"}
     edits = {"邻键替换", "漏字母", "多字母", "相邻交换"}
+    # build 87 的同一冻结语料、同一 Swift 驱动的首选/前三。
+    build87 = {"中文模式英文词": (38,41), "九宫格": (30,37), "余串": (32,32),
+               "全拼词": (74,79), "冻结长句盲集": (12,15), "多字母": (11,11),
+               "正确全拼合计": (188,205), "歧义切分": (35,40), "漏字母": (10,11),
+               "相邻交换": (12,12), "短句": (35,41), "简拼": (20,36),
+               "简拼整句": (28,35), "邻键替换": (11,11), "长句": (12,13)}
     for name in sorted({k[0] for k in keys} | {"正确全拼合计"}):
         group = [[r for r in rows if r["category"] == name or
                   (name == "正确全拼合计" and r["category"] in protected)] for rows in versions]
@@ -57,6 +63,9 @@ def compare(paths):
                 print("  开/关纠错：抢首选、占第二、挤掉自然第二目标、目标跌出前三", first, second, displaced, lost3, "/", len(rows))
                 if rows is group[-1] and any((first, second, displaced, lost3)):
                     errors.append("正确全拼受到纠错干扰")
+        floor1, floor3 = build87[name]
+        if metrics3[2][0] < floor1 or metrics3[2][2] < floor3:
+            errors.append(f"{name} 低于 build 87 的首选 {floor1} 或前三 {floor3}")
         if metrics3[2][0] < metrics3[1][0]:
             errors.append(name + "首选低于 build 84")
         if name in {"正确全拼合计", "简拼整句", "中文模式英文词", "冻结长句盲集"}:

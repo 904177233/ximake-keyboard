@@ -33,3 +33,5 @@ Provider names are used only to describe which APIs Moyu can connect to. Moyu is
 上游数据文件为 `lm_sc.arpa-20260629.tar.zst`，SHA-256 为 `06808333b9173e5374cf2cb5afc12d08f5625bf9abb536489cac376fc05f2e7f`。版权声明为 **2022~2026 CSSlayer <wengxt@gmail.com>**。上游 REUSE.toml 将该数据标为 **LGPL-2.1-or-later**。[数据下载](https://download.fcitx-im.org/data/lm_sc.arpa-20260629.tar.zst) · [上游授权声明](https://github.com/fcitx/libime/blob/master/REUSE.toml) · [许可证全文](LICENSES/LGPL-2.1-or-later.txt)
 
 墨语分发的 `libime_sc.bin` 是该数据的修改版，沿用 LGPL-2.1-or-later。构建时与墨语词表取交集，按回退导致的概率损失剪枝，将对数概率及回退权重量化，并按整数词 ID 排序。解压上述快照后可用公开脚本重新生成或替换模型。[构建脚本](tools/dict/build_lm.py) · [版本和校验值](ios/Shared/dict/dict_meta.json)
+
+第五轮的 `ios/Shared/dict/chat_chars.bin` 使用上述 Tatoeba 中文贡献者的同一份 CC BY 2.0 FR 快照，统计简化后汉字的相邻二元和三元次数，裁剪并量化为回退概率。构建脚本为 `tools/dict/character_model.py`，快照摘要记录在词库构建清单中。

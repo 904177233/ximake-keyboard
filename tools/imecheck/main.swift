@@ -67,6 +67,29 @@ check("单打 m 首选不是嗯、唔、呣", !["嗯", "唔", "呣"].contains(fi
 check("wbzd 是我不知道", qwerty("wbzd").candidates.first?.text == "我不知道", "\(texts(qwerty("wbzd")))")
 
 print("整句和词")
+check("字级模型映射成功", engine.characterModel != nil)
+if let model = engine.characterModel {
+    var cache: [UInt64: CharacterLanguageModel.Step] = [:]
+    var state = CharacterLanguageModel.State()
+    let first = model.append("今", final: false, state: &state, cache: &cache, residual: false)
+    let tail = model.append("天", final: true, state: &state, cache: &cache, residual: false)
+    check("字级三元跨词块累计且包含句末", first + tail == -10.375)
+    state = .init()
+    let bounded = model.append("今天", final: true, state: &state, cache: &cache, residual: true)
+    check("缓存同时保留全拼和简拼的打分", bounded == -2.501953125)
+    state = .init()
+    let fallback = model.append("龘", final: true, state: &state, cache: &cache, residual: false)
+    check("未收录的字对回退", fallback == -23.04296875)
+}
+for (input, expected) in [("biaogetianhaole", "表格填好了"), ("jintianshuizhiban", "今天谁值班"),
+                          ("nixiandiancai", "你先点菜"), ("nitiaogerizi", "你挑个日子"),
+                          ("xianchidiandongxi", "先吃点东西"),
+                          ("whmcf", "我还没吃饭"), ("wmmtj", "我们明天见"), ("jtcsm", "今天吃什么")] {
+    let result = typed(input)
+    let top = result.candidates.first
+    check("\(input) 的整句首选是\(expected)", top?.text == expected && top?.consumed == input.utf8.count,
+          "\(texts(result, 5))")
+}
 check("woxihuanni 首选是整句", qwerty("woxihuanni").candidates.first?.text == "我喜欢你", "\(texts(qwerty("woxihuanni")))")
 check("nihao 首选你好", qwerty("nihao").candidates.first?.text == "你好", "\(texts(qwerty("nihao")))")
 check("shi 首选是", qwerty("shi").candidates.first?.text == "是", "\(texts(qwerty("shi")))")
@@ -403,6 +426,7 @@ print("  完全正确 \(right)/\(holdout.count)（这一项只报告，不算失
 
 if CommandLine.arguments.count >= 9 {
     let args = CommandLine.arguments.map { URL(fileURLWithPath: $0) }
+    try runTouchBenchmark(dictionary: dictionary, resources: args[1].deletingLastPathComponent(), corpus: args[6])
     try runBenchmark(dictionary: dictionary, resources: args[1].deletingLastPathComponent(),
                      corpus: args[6], blind: args[7], output: args[8])
 }

@@ -227,7 +227,13 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
 
     /// 这一页应有的尺寸。
     private var nominalMetrics: KeyboardMetrics {
-        let metrics = KeyboardMetrics(height: session.prefs.height, isLandscape: session.isLandscape)
+        let height: KeyboardMetrics.Height
+        switch session.prefs.height {
+        case .low: height = .low
+        case .standard: height = .standard
+        case .tall: height = .tall
+        }
+        let metrics = KeyboardMetrics(height: height, isLandscape: session.isLandscape)
         if !session.isLandscape, let custom = session.prefs.customSurfaceHeight {
             return metrics.resized(toSurfaceHeight: CGFloat(custom))
         }
@@ -408,7 +414,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
                 let layout = KeyLayoutBuilder.build(state: visual,
                                                     size: CGSize(width: width, height: metrics.surfaceHeight),
                                                     metrics: metrics)
-                surface.configure(layout: layout, palette: palette, mascot: session.mascotImage)
+                surface.configure(layout: layout, gaps: metrics.keyGaps, palette: palette, mascot: session.mascotImage)
                 appliedVisualState = visual
                 appliedWidth = width
                 appliedPrefs = session.prefs
@@ -527,6 +533,12 @@ final class KeyboardViewController: UIInputViewController, KeyboardHost, KeySurf
     #endif
 
     // MARK: - KeySurfaceDelegate
+
+    var keyHitContext: KeyHitContext { session.keyHitContext }
+
+    func protectsEnglishPrefix(_ word: String) -> Bool {
+        session.kit.english.hasWordPrefix(word)
+    }
 
     func keySurface(_ surface: KeySurfaceView, didTrigger action: KeyAction) {
         session.handle(action)

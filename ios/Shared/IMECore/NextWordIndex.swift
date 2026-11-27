@@ -91,6 +91,11 @@ public final class NextWordIndex {
         authoredSets[previous]?.contains(next) == true || strongSets[previous]?.contains(next) == true
     }
 
+    /// 简拼整句只使用完全匹配的人工搭配，避免把弱关联也算作口语证据。
+    func isAuthoredPair(_ left: String, _ right: String) -> Bool {
+        authoredSets[left]?.contains(right) == true
+    }
+
     /// 手工整理的下一个词：优先按最长的结尾匹配。
     public func authoredWords(after text: String) -> [String] {
         lookup(text, in: authored)

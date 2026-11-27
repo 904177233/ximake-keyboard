@@ -16,6 +16,8 @@ import UIKit
 /// 键区事件接收方。
 @MainActor
 protocol KeySurfaceDelegate: AnyObject {
+    var keyHitContext: KeyHitContext { get }
+    func protectsEnglishPrefix(_ word: String) -> Bool
     /// 键被按下或抬起时触发一个动作。
     func keySurface(_ surface: KeySurfaceView, didTrigger action: KeyAction)
     /// 空格键滑动移动光标。
@@ -44,6 +46,7 @@ final class KeySurfaceView: UIView, UIInputViewAudioFeedback {
     var enableInputClicksWhenVisible: Bool { true }
 
     private(set) var keys: [KeyDef] = []
+    private var keyGaps: CGSize = .zero
     private var palette = MoyuPalette(theme: .ink, dark: false)
     private var mascot: UIImage?
     private var cornerRadius: CGFloat = 9
@@ -52,6 +55,7 @@ final class KeySurfaceView: UIView, UIInputViewAudioFeedback {
     /// 正在按着的键。
     private final class Press {
         var keyIndex: Int
+        var hasSlid = false
         let startPoint: CGPoint
         var isAlternate = false
         var didLongPress = false
@@ -101,12 +105,13 @@ final class KeySurfaceView: UIView, UIInputViewAudioFeedback {
     }
 
     /// 更新键位和外观。
-    func configure(layout: KeyboardLayoutResult, palette: MoyuPalette, mascot: UIImage?) {
+    func configure(layout: KeyboardLayoutResult, gaps: CGSize, palette: MoyuPalette, mascot: UIImage?) {
         // 键的数量变了说明换了页，正按着的键已经没有意义
         if layout.keys.count != keys.count {
             cancelAllPresses()
         }
         self.keys = layout.keys
+        self.keyGaps = gaps
         self.palette = palette
         self.mascot = mascot
         imageCache.removeAll()
@@ -295,25 +300,6 @@ final class KeySurfaceView: UIView, UIInputViewAudioFeedback {
 
     // MARK: - 找键
 
-    /// 离手指最近的键。手指落在缝里也能接住。
-    private func keyIndex(at point: CGPoint) -> Int? {
-        var best: Int?
-        var bestDistance = CGFloat.greatestFiniteMagnitude
-        for (index, key) in keys.enumerated() {
-            if key.frame.contains(point) {
-                return index
-            }
-            let dx = max(key.frame.minX - point.x, 0, point.x - key.frame.maxX)
-            let dy = max(key.frame.minY - point.y, 0, point.y - key.frame.maxY)
-            let distance = dx * dx + dy * dy
-            if distance < bestDistance {
-                bestDistance = distance
-                best = index
-            }
-        }
-        return best
-    }
-
     private func redraw(keyIndex index: Int) {
         guard keys.indices.contains(index) else { return }
         setNeedsDisplay(keys[index].frame.insetBy(dx: -2, dy: -2))
@@ -332,7 +318,10 @@ final class KeySurfaceView: UIView, UIInputViewAudioFeedback {
         }
         for touch in touches {
             let point = touch.location(in: self)
-            guard let index = keyIndex(at: point) else { continue }
+            let index = KeyHitResolver.resolve(point, keys: keys, gaps: keyGaps, context: delegate?.keyHitContext ?? .empty) { word in
+                self.delegate?.protectsEnglishPrefix(word) == true
+            }
+            guard let index else { continue }
             let press = Press(keyIndex: index, startPoint: point)
             presses[ObjectIdentifier(touch)] = press
             begin(press)
@@ -463,7 +452,9 @@ final class KeySurfaceView: UIView, UIInputViewAudioFeedback {
                 }
                 // 手指滑到别的键上：换键，和系统键盘一样
                 if !press.isAlternate, !key.frame.insetBy(dx: -6, dy: -8).contains(point),
-                   let index = keyIndex(at: point), index != press.keyIndex {
+                   (press.hasSlid || KeyHitResolver.canSlide(from: press.startPoint, to: point, keyWidth: key.frame.width)),
+                   let index = KeyHitResolver.geometric(point, keys: keys), index != press.keyIndex {
+                    press.hasSlid = true
                     press.holdTask?.cancel()
                     redraw(keyIndex: press.keyIndex)
                     press.keyIndex = index

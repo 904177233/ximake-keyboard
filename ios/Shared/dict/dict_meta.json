@@ -37,6 +37,16 @@
       "copyright": "2022~2026 CSSlayer <wengxt@gmail.com>",
       "build": "python tools/dict/build_lm.py",
       "profile": "medium"
+    },
+    {
+      "name": "chat_chars",
+      "status": "shipped",
+      "format": "MCC1",
+      "source": "Tatoeba 中文贡献者；连续汉字片段的字符统计",
+      "url": "https://downloads.tatoeba.org/exports/per_language/cmn/",
+      "license": "CC BY 2.0 FR（句子）；模型仅含统计与现有词典词条",
+      "source_sha256": "262a48cacb7693f6e47a2c4c42f216a5c45dd28b9b62014b159628cc908e8fcc",
+      "build": "tools/dict/character_model.py"
     }
   ],
   "files": {
@@ -55,6 +65,10 @@
     "libime_sc.bin": {
       "bytes": 10927756,
       "sha256": "24d6a44d832e5822eecae1bffd101a44bbf28339135778674146a1a7d9beda21"
+    },
+    "chat_chars.bin": {
+      "bytes": 1587224,
+      "sha256": "9cea464cd5e354c21db2fd8c2d2bef916f343b8440656209530b6bab45a76dc5"
     }
   },
   "sources": [

@@ -53,7 +53,9 @@ final class ChatInitialsModel {
         return -36
     }
 
-    func candidates(_ input: [UInt8], languageModel: LibimeLanguageModel?) -> [IMECandidate] {
+    func candidates(_ input: [UInt8], languageModel: LibimeLanguageModel?,
+                    characterModel: CharacterLanguageModel?, dictionaryFirst: String?,
+                    nextWords: NextWordIndex) -> [IMECandidate] {
         struct Path {
             let score: Int
             let id: Int
@@ -102,6 +104,7 @@ final class ChatInitialsModel {
             // 拆成几步写：一长串闭包链会让编译器类型推断超时。
             var rescored: [(index: Int, score: Double, path: Path)] = []
             rescored.reserveCapacity(finalists.count)
+            var charCache: [UInt64: CharacterLanguageModel.Step] = [:]
             for (index, path) in finalists.enumerated() {
                 var older = -1
                 var previous = -1
@@ -113,6 +116,20 @@ final class ChatInitialsModel {
                     score += 48.0 * feature
                     older = previous
                     previous = id
+                }
+                if let characterModel {
+                    let text = path.segments.map(\.text).joined()
+                    var state = CharacterLanguageModel.State()
+                    let evidence = characterModel.append(text, final: true, state: &state, cache: &charCache, residual: false)
+                    score += 16 * evidence
+                    if text == dictionaryFirst { score += 144 }
+                    var left = ""
+                    for segment in path.segments {
+                        if nextWords.isAuthoredPair(left, segment.text) {
+                            score += 96 * Double(min(2, segment.text.count))
+                        }
+                        left = segment.text
+                    }
                 }
                 rescored.append((index: index, score: score, path: path))
             }

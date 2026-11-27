@@ -1045,6 +1045,12 @@ def main() -> int:
         models.append(metadata())
         model_files[chat_model_path.name] = {"bytes": chat_model_path.stat().st_size,
                                             "sha256": hashlib.sha256(chat_model_path.read_bytes()).hexdigest()}
+    char_path = OUT_DIR / "chat_chars.bin"
+    if char_path.exists():
+        from character_model import metadata as char_metadata
+        models.append(char_metadata())
+        model_files[char_path.name] = {"bytes": char_path.stat().st_size,
+                                      "sha256": hashlib.sha256(char_path.read_bytes()).hexdigest()}
     lm_path = OUT_DIR / "libime_sc.bin"
     if lm_path.exists():
         from build_lm import metadata as lm_metadata

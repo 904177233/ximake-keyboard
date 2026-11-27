@@ -18,6 +18,7 @@
 		EEDFD8E08289CC30C11E3D6A /* StartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5DB5B3FB43356FDF16FEFD8 /* StartView.swift */; };
 		9CA6BA87A27BAB51297D2469 /* VoiceSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 889A79DF32EF3C5280B1378F /* VoiceSessionView.swift */; };
 		10F0A718116F7ECC50E30CEB /* AISuggestionPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0072B30A6D8C1B911E482BEF /* AISuggestionPrompt.swift */; };
+		C36B0DF025321095C2C38C76 /* CharacterLanguageModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B17203DEFDF2B73A636D17DC /* CharacterLanguageModel.swift */; };
 		C8AD5FD8E3EE435EEDBCD394 /* ChatInitialsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48A206E93C0846608E093CF8 /* ChatInitialsModel.swift */; };
 		3EFAC17AD45DE3F75A743760 /* ContextualSeedTemplates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9939316CA31AB3076553567F /* ContextualSeedTemplates.swift */; };
 		95D7CA40851062E930CDE30F /* ContextualSuggestion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80072FDA1FC064C72F38FC69 /* ContextualSuggestion.swift */; };
@@ -88,6 +89,7 @@
 		5FCD42FE57AEE55B89117769 /* HotWordUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F5B7E87127B28791077E14C /* HotWordUpdater.swift */; };
 		541ED14A00F120C42E0F3585 /* KeyboardSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4088504AFC6B41895A4BFE1 /* KeyboardSession.swift */; };
 		8E0E03FE617E5E36CC0406D4 /* KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9CE88DC41453664A66FD8C /* KeyboardViewController.swift */; };
+		9169BEC0A9A9C5016473D85A /* KeyHitResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3DDA95D69E27E1D7B93BB32 /* KeyHitResolver.swift */; };
 		ED30A19BA5299FE58EA2EDF5 /* KeyLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1981E98BFAFF621979DD8DD4 /* KeyLayout.swift */; };
 		C928B0B22B348EA3EAFC238F /* KeySurfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26888F753B522A2290E21398 /* KeySurfaceView.swift */; };
 		21F6BD0904564D4B1DA117FA /* AIPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 567314043DAFF0F39E88714C /* AIPanelView.swift */; };
@@ -97,6 +99,7 @@
 		8E45630282DD93734E0DBA0E /* SettingsPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0645590BEA5C5ECBC6AB296E /* SettingsPanelView.swift */; };
 		07B639B4FA2A239FE72A8059 /* SymbolPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DB25E8AF940AE743C339B63 /* SymbolPanelView.swift */; };
 		7E7ACB7EEB03ED7ABBD67DC8 /* AISuggestionPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0072B30A6D8C1B911E482BEF /* AISuggestionPrompt.swift */; };
+		F693B4D81E6D0CF1620FAEB6 /* CharacterLanguageModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B17203DEFDF2B73A636D17DC /* CharacterLanguageModel.swift */; };
 		1670299CEAC777B7FD29A08E /* ChatInitialsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48A206E93C0846608E093CF8 /* ChatInitialsModel.swift */; };
 		2648174532A42FC94FECE735 /* ContextualSeedTemplates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9939316CA31AB3076553567F /* ContextualSeedTemplates.swift */; };
 		F8E8C4B0FEFCFBC236229136 /* ContextualSuggestion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80072FDA1FC064C72F38FC69 /* ContextualSuggestion.swift */; };
@@ -208,6 +211,7 @@
 		8F5B7E87127B28791077E14C /* HotWordUpdater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Core/HotWordUpdater.swift; sourceTree = SOURCE_ROOT; };
 		D4088504AFC6B41895A4BFE1 /* KeyboardSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Core/KeyboardSession.swift; sourceTree = SOURCE_ROOT; };
 		2C9CE88DC41453664A66FD8C /* KeyboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/KeyboardViewController.swift; sourceTree = SOURCE_ROOT; };
+		E3DDA95D69E27E1D7B93BB32 /* KeyHitResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Keys/KeyHitResolver.swift; sourceTree = SOURCE_ROOT; };
 		1981E98BFAFF621979DD8DD4 /* KeyLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Keys/KeyLayout.swift; sourceTree = SOURCE_ROOT; };
 		26888F753B522A2290E21398 /* KeySurfaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Keys/KeySurfaceView.swift; sourceTree = SOURCE_ROOT; };
 		567314043DAFF0F39E88714C /* AIPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIKeyboardExtension/Panels/AIPanelView.swift; sourceTree = SOURCE_ROOT; };
@@ -229,6 +233,7 @@
 		DCD4D069D0B5DF79008B0142 /* 扩展心跳契约.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "Config/扩展心跳契约.md"; sourceTree = SOURCE_ROOT; };
 		2B8A8F20CB99CE391C782335 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Resources/Assets.xcassets; sourceTree = SOURCE_ROOT; };
 		0072B30A6D8C1B911E482BEF /* AISuggestionPrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/AISuggestionPrompt.swift; sourceTree = SOURCE_ROOT; };
+		B17203DEFDF2B73A636D17DC /* CharacterLanguageModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/CharacterLanguageModel.swift; sourceTree = SOURCE_ROOT; };
 		48A206E93C0846608E093CF8 /* ChatInitialsModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/ChatInitialsModel.swift; sourceTree = SOURCE_ROOT; };
 		9939316CA31AB3076553567F /* ContextualSeedTemplates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/ContextualSeedTemplates.swift; sourceTree = SOURCE_ROOT; };
 		80072FDA1FC064C72F38FC69 /* ContextualSuggestion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/ContextualSuggestion.swift; sourceTree = SOURCE_ROOT; };
@@ -391,6 +396,7 @@
 		87C4012AD090DBD3DF50269D /* Keys */ = {
 			isa = PBXGroup;
 			children = (
+				E3DDA95D69E27E1D7B93BB32 /* KeyHitResolver.swift */,
 				1981E98BFAFF621979DD8DD4 /* KeyLayout.swift */,
 				26888F753B522A2290E21398 /* KeySurfaceView.swift */,
 			);
@@ -455,6 +461,7 @@
 			isa = PBXGroup;
 			children = (
 				0072B30A6D8C1B911E482BEF /* AISuggestionPrompt.swift */,
+				B17203DEFDF2B73A636D17DC /* CharacterLanguageModel.swift */,
 				48A206E93C0846608E093CF8 /* ChatInitialsModel.swift */,
 				9939316CA31AB3076553567F /* ContextualSeedTemplates.swift */,
 				80072FDA1FC064C72F38FC69 /* ContextualSuggestion.swift */,
@@ -698,6 +705,7 @@
 				EEDFD8E08289CC30C11E3D6A /* StartView.swift in Sources */,
 				9CA6BA87A27BAB51297D2469 /* VoiceSessionView.swift in Sources */,
 				10F0A718116F7ECC50E30CEB /* AISuggestionPrompt.swift in Sources */,
+				C36B0DF025321095C2C38C76 /* CharacterLanguageModel.swift in Sources */,
 				C8AD5FD8E3EE435EEDBCD394 /* ChatInitialsModel.swift in Sources */,
 				3EFAC17AD45DE3F75A743760 /* ContextualSeedTemplates.swift in Sources */,
 				95D7CA40851062E930CDE30F /* ContextualSuggestion.swift in Sources */,
@@ -775,6 +783,7 @@
 				5FCD42FE57AEE55B89117769 /* HotWordUpdater.swift in Sources */,
 				541ED14A00F120C42E0F3585 /* KeyboardSession.swift in Sources */,
 				8E0E03FE617E5E36CC0406D4 /* KeyboardViewController.swift in Sources */,
+				9169BEC0A9A9C5016473D85A /* KeyHitResolver.swift in Sources */,
 				ED30A19BA5299FE58EA2EDF5 /* KeyLayout.swift in Sources */,
 				C928B0B22B348EA3EAFC238F /* KeySurfaceView.swift in Sources */,
 				21F6BD0904564D4B1DA117FA /* AIPanelView.swift in Sources */,
@@ -784,6 +793,7 @@
 				8E45630282DD93734E0DBA0E /* SettingsPanelView.swift in Sources */,
 				07B639B4FA2A239FE72A8059 /* SymbolPanelView.swift in Sources */,
 				7E7ACB7EEB03ED7ABBD67DC8 /* AISuggestionPrompt.swift in Sources */,
+				F693B4D81E6D0CF1620FAEB6 /* CharacterLanguageModel.swift in Sources */,
 				1670299CEAC777B7FD29A08E /* ChatInitialsModel.swift in Sources */,
 				2648174532A42FC94FECE735 /* ContextualSeedTemplates.swift in Sources */,
 				F8E8C4B0FEFCFBC236229136 /* ContextualSuggestion.swift in Sources */,

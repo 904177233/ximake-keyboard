@@ -5,7 +5,7 @@
 //  算出每个键的位置和含义。这里只有数据和几何，不碰绘制和触摸。
 //
 
-import UIKit
+import Foundation
 
 /// 按键动作。
 enum KeyAction: Equatable {
@@ -96,11 +96,14 @@ struct KeyboardMetrics {
     let isLandscape: Bool
 
     let columnGap: CGFloat = 5
+    var keyGaps: CGSize { CGSize(width: columnGap, height: rowGap) }
     let sidePadding: CGFloat = 3
     let topPadding: CGFloat = 6
     let bottomPadding: CGFloat = 4
 
-    init(height: KeyboardPrefs.Height, isLandscape: Bool) {
+    enum Height { case low, standard, tall }
+
+    init(height: Height, isLandscape: Bool) {
         self.isLandscape = isLandscape
         if isLandscape {
             capHeight = 33

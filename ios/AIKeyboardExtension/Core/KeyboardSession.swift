@@ -749,12 +749,22 @@ final class KeyboardSession: ObservableObject {
                         leftContext: selected.last?.words.last?.text)
     }
 
+    private var pinyinHitContext = KeyHitContext.empty
+
+    var keyHitContext: KeyHitContext {
+        guard isChinese, !usesNineKey, shift == .off else { return .empty }
+        return pinyinHitContext
+    }
+
     private func recompute() {
         guard !raw.isEmpty else {
+            pinyinHitContext = .empty
             conversion = .empty
             return
         }
-        var result = kit.engine.convert(makeQuery(),
+        let query = makeQuery()
+        pinyinHitContext = query.mode == .qwerty ? KeyHitContext(input: query.input, breaks: query.breaks) : .empty
+        var result = kit.engine.convert(query,
                                         rawText: usesNineKey ? nil : String(raw),
                                         fuzzy: FuzzyPinyinSettings.shared.options,
                                         typoCorrection: snapshot.enableTypoCorrection)
@@ -767,6 +777,7 @@ final class KeyboardSession: ObservableObject {
     }
 
     private func resetComposition() {
+        pinyinHitContext = .empty
         raw = []
         selected = []
         locks = [:]

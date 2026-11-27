@@ -237,7 +237,9 @@ jobs:
               ./run ios/Shared/dict "$corpus" "$blind" "$out/$label.json"
             )
           done
-          xcrun --sdk macosx swiftc -O -swift-version 5 "${sources[@]}" ios/Shared/IMECore/ChatInitialsModel.swift ios/Shared/IMECore/LibimeLanguageModel.swift "$bench/Benchmark.swift" "$bench/main.swift" -o "$out/imecheck"
+          xcrun --sdk macosx swiftc -O -swift-version 5 "${sources[@]}" ios/Shared/IMECore/ChatInitialsModel.swift ios/Shared/IMECore/LibimeLanguageModel.swift \
+            ios/Shared/IMECore/CharacterLanguageModel.swift ios/AIKeyboardExtension/Keys/KeyLayout.swift \
+            ios/AIKeyboardExtension/Keys/KeyHitResolver.swift "$bench/TouchBenchmark.swift" "$bench/Benchmark.swift" "$bench/main.swift" -o "$out/imecheck"
           dict=ios/Shared/dict
           status=0
           "$out/imecheck" "$dict/moyu.dict" "$dict/next.tsv" "$dict/en_words.tsv" "$dict/hot_words.tsv" "$dict/phrases.tsv" "$corpus" "$blind" "$out/current.json" || status=$?
