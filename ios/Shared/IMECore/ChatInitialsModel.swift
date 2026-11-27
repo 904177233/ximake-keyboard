@@ -99,17 +99,28 @@ final class ChatInitialsModel {
         var finalists = original
         if let model = languageModel {
             // 原模型保留口语召回池；只对最终的 24 条路径查通用三元概率。
-            finalists = finalists.enumerated().map { item -> (Int, Double, Path) in
-                var older = -1, previous = -1
-                var score = Double(item.element.score)
-                for segment in item.element.segments {
+            // 拆成几步写：一长串闭包链会让编译器类型推断超时。
+            var rescored: [(index: Int, score: Double, path: Path)] = []
+            rescored.reserveCapacity(finalists.count)
+            for (index, path) in finalists.enumerated() {
+                var older = -1
+                var previous = -1
+                var score = Double(path.score)
+                for segment in path.segments {
                     let id = model.id(segment.text)
-                    score += 48 * model.feature(model.history(older, previous), id)
+                    let history = model.history(older, previous)
+                    let feature: Double = model.feature(history, id)
+                    score += 48.0 * feature
                     older = previous
                     previous = id
                 }
-                return (item.offset, score, item.element)
-            }.sorted { $0.1 == $1.1 ? $0.0 < $1.0 : $0.1 > $1.1 }.map { $0.2 }
+                rescored.append((index: index, score: score, path: path))
+            }
+            rescored.sort { lhs, rhs in
+                if lhs.score != rhs.score { return lhs.score > rhs.score }
+                return lhs.index < rhs.index
+            }
+            finalists = rescored.map { $0.path }
         }
         let ordered: [Path]
         if languageModel != nil {
