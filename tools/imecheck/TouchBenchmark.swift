@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 import Dispatch
 
 /// 固定 SplitMix64 和 Box–Muller，旧、新键区收到逐点相同的轨迹。

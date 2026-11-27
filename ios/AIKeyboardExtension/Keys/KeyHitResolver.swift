@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 /// 对可达的音节尾部求并集。每次组字更新算一次，触摸时按位查询。
 struct KeyHitContext {

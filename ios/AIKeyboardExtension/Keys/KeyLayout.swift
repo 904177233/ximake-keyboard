@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import CoreGraphics
 
 /// 按键动作。
 enum KeyAction: Equatable {
