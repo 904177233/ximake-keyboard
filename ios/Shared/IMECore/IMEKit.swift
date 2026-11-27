@@ -17,7 +17,7 @@ public final class IMEKit {
     public let clipboard: ClipboardHistory
     public let contextual: LocalSuggestionIndex
     /// 英文补全词表，第一次用到时才读。
-    public private(set) lazy var english = EnglishLexicon()
+    public var english: EnglishLexicon { engine.english }
 
     private let store: SharedStore
 

@@ -35,6 +35,7 @@ public final class MoyuDictionary: @unchecked Sendable {
     private static let keyRecordSize = 20
     private static let entryRecordSize = 12
 
+    let resourceDirectory: URL
     private let storage: NSData
     private let base: UnsafeRawPointer
     private let offKeys: Int
@@ -99,6 +100,7 @@ public final class MoyuDictionary: @unchecked Sendable {
             Int(pointer.load(fromByteOffset: 4 + index * 4, as: UInt32.self))
         }
         guard header(0) == 1 else { return nil }
+        resourceDirectory = url.deletingLastPathComponent()
         storage = data
         base = pointer
         entryCount = header(1)

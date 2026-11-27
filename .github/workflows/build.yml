@@ -43,11 +43,15 @@ on:
     branches:
       - main
       - redesign-v3
+      - ime-experience
     paths:
       - "ios/**"
       - "scripts/gen_xcodeproj.py"
       - "scripts/validate_project.py"
       - "tools/imecheck/**"
+      - "tools/dict/ime_bench.tsv"
+      - "tools/dict/long_sentence_blind.tsv"
+      - "tools/dict/chat_model.py"
       - "tools/apicheck/**"
       - ".github/workflows/build.yml"
 
@@ -88,7 +92,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
 
       # ---------------------------------------------------------------------
       # 1) 环境自检：Xcode 版本 / Python 版本
@@ -188,31 +192,55 @@ jobs:
       - name: IME core check
         run: |
           set -euo pipefail
-          mkdir -p "${BUILD_DIR}"
-          xcrun --sdk macosx swiftc -O -swift-version 5 \
-            -o "${BUILD_DIR}/imecheck" \
-            ios/Shared/IMECore/IMECandidate.swift \
-            ios/Shared/IMECore/MoyuDictionary.swift \
-            ios/Shared/IMECore/PinyinEngine.swift \
-            ios/Shared/IMECore/NextWordIndex.swift \
-            ios/Shared/IMECore/PinyinSyllables.swift \
-            ios/Shared/IMECore/PhraseSuggestion.swift \
-            ios/Shared/IMECore/FuzzyPinyin.swift \
-            ios/Shared/IMECore/TypoCorrector.swift \
-            ios/Shared/IMECore/UserLearningStore.swift \
-            ios/Shared/IMECore/HotWordStore.swift \
-            ios/Shared/IMECore/EnglishLexicon.swift \
-            ios/Shared/IMECore/SmartPunctuation.swift \
-            ios/Shared/Storage/SharedStore.swift \
-            ios/Shared/Storage/SharedVault.swift \
-            ios/Shared/Models/ChatMessage.swift \
-            ios/Shared/Models/ChatRequest.swift \
-            ios/Shared/Storage/AIPrefs.swift \
-            ios/Shared/Storage/SharedBlob.swift \
-            ios/Shared/Storage/SharedSync.swift \
-            ios/Shared/Voice/NotifyChannel.swift \
-            tools/imecheck/main.swift
-          "${BUILD_DIR}/imecheck" ios/Shared/dict/moyu.dict ios/Shared/dict/next.tsv ios/Shared/dict/en_words.tsv ios/Shared/dict/hot_words.tsv ios/Shared/dict/phrases.tsv
+          root="$PWD"
+          out="$root/${BUILD_DIR}"
+          bench="$root/tools/imecheck"
+          corpus="$root/tools/dict/ime_bench.tsv"
+          blind="$root/tools/dict/long_sentence_blind.tsv"
+          mkdir -p "$out"
+          sources=(
+            ios/Shared/IMECore/IMECandidate.swift
+            ios/Shared/IMECore/MoyuDictionary.swift
+            ios/Shared/IMECore/PinyinEngine.swift
+            ios/Shared/IMECore/NextWordIndex.swift
+            ios/Shared/IMECore/PinyinSyllables.swift
+            ios/Shared/IMECore/PhraseSuggestion.swift
+            ios/Shared/IMECore/FuzzyPinyin.swift
+            ios/Shared/IMECore/TypoCorrector.swift
+            ios/Shared/IMECore/UserLearningStore.swift
+            ios/Shared/IMECore/HotWordStore.swift
+            ios/Shared/IMECore/EnglishLexicon.swift
+            ios/Shared/IMECore/SmartPunctuation.swift
+            ios/Shared/Storage/SharedStore.swift
+            ios/Shared/Storage/SharedVault.swift
+            ios/Shared/Models/ChatMessage.swift
+            ios/Shared/Models/ChatRequest.swift
+            ios/Shared/Storage/AIPrefs.swift
+            ios/Shared/Storage/SharedBlob.swift
+            ios/Shared/Storage/SharedSync.swift
+            ios/Shared/Voice/NotifyChannel.swift
+          )
+          # 同一个驱动编译三次，源码与词库都取对应提交。历史查询没有的字段用编译开关隔离。
+          for spec in '3.0.10 ead215aef2eec4febe18562b8f517753a9c9d7ed' 'build84 bc29905b94e0f4e31eb79944eb9338c294370c4e'; do
+            read -r label rev <<< "$spec"
+            tmp="$(mktemp -d)"
+            git archive "$rev" ios/Shared | tar -x -C "$tmp"
+            cp "$bench/history/main.swift" "$tmp/main.swift"
+            flags=(-D HISTORICAL)
+            if [[ "$label" == 3.0.10 ]]; then flags+=(-D LEGACY_QUERY); fi
+            (
+              cd "$tmp"
+              xcrun --sdk macosx swiftc -O -swift-version 5 "${flags[@]}" "${sources[@]}" "$bench/Benchmark.swift" main.swift -o run
+              echo "Swift 基线 $label ($rev)"
+              ./run ios/Shared/dict "$corpus" "$blind" "$out/$label.json"
+            )
+          done
+          xcrun --sdk macosx swiftc -O -swift-version 5 "${sources[@]}" ios/Shared/IMECore/ChatInitialsModel.swift "$bench/Benchmark.swift" "$bench/main.swift" -o "$out/imecheck"
+          dict=ios/Shared/dict
+          status=0
+          "$out/imecheck" "$dict/moyu.dict" "$dict/next.tsv" "$dict/en_words.tsv" "$dict/hot_words.tsv" "$dict/phrases.tsv" "$corpus" "$blind" "$out/current.json" || status=$?
+          python3 "$bench/compare.py" "$out/3.0.10.json" "$out/build84.json" "$out/current.json"
+          exit "$status"
 
       - name: API logic check
         run: |

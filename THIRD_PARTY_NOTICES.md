@@ -16,6 +16,10 @@ The lexicon files `ios/Shared/dict/moyu.dict` and `ios/Shared/dict/next.tsv` are
 
 二元模型实验从雾凇基础库的多字词切分并计数，使用墨语词典的整数词 ID。模型遵循 GPL-3.0，源文件摘要与分发状态记录在随包的 dict_meta.json 中。续词表的 t 标记保留 Tatoeba 观测次数，r 标记表示从雾凇短语推导。长句评测和本人续写例句由本项目编写，按仓库 GPL-3.0 发布。
 
+随包的 `chat_initials.bin` 使用另一份训练数据。墨语把 Tatoeba 中文贡献者提供的句子转成简体，用现有词典切词，保存词条、读音、量化的一元分数与二元统计。训练输入为 `cmn_sentences.tsv.bz2`，快照摘要与生成脚本见 `ios/Shared/dict/dict_meta.json`。模型没有逐句分发原文。贡献者和逐句作者信息可在 Tatoeba 原站及带作者的导出中查询。[中文语料与作者数据](https://downloads.tatoeba.org/exports/per_language/cmn/) · [文本使用条款](https://en.wiki.tatoeba.org/articles/show/using-the-tatoeba-corpus) · [CC BY 2.0 FR](https://creativecommons.org/licenses/by/2.0/fr/)
+
+中文键盘的英文候选共用已有的 wordfreq 英文表。缺失的技术名称 `chatgpt` 由墨语按公开产品名称手工补录。第三轮评测用例由项目编写，含反馈指定的按键与期望，随仓库按 GPL-3.0 发布。
+
 因为安装包里带了由 rime-ice 数据生成的词库，带词库分发的墨语整体按 GPL-3.0 处理；本仓库的代码也以 GPL-3.0 发布，见 [LICENSE](LICENSE)。
 
 Because the bundled lexicon is derived from rime-ice data (GPL-3.0), distributions of Moyu that include it are covered by GPL-3.0. The code in this repository is also released under GPL-3.0; see [LICENSE](LICENSE).

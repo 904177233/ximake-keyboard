@@ -94,11 +94,14 @@ correctedFirst("nihap", "你好")
 correctedFirst("jintianhebmang", "今天很忙")
 correctedFirst("woxiangchifna", "我想吃饭")
 correctedFirst("zhegewenttizenmebanne", "这个问题怎么办呢")
-correctedFirst("xiexienu", "谢谢你")
-// 打成了另一句也通顺的话（你好好嘛），纠成常用短语的那句排在前两个里
-let haiHao = typed("nihaohaoma")
-check("nihaohaoma 前两个里有纠错的你还好吗",
-      haiHao.candidates.prefix(2).contains { $0.text == "你还好吗" && $0.kind == .corrected }, "\(texts(haiHao))")
+// nu 和 hao 都是合法读音；保留同一个纠错目标可选，同时保护原拼音前三。
+for (input, expected) in [("xiexienu", "谢谢你"), ("nihaohaoma", "你还好吗")] {
+    let got = typed(input)
+    let natural = qwerty(input)
+    check("\(input) 原文前三不动且第四位仍可纠成\(expected)",
+          texts(got, 3) == texts(natural, 3) && got.candidates.dropFirst(3).first?.text == expected
+              && got.candidates.dropFirst(3).first?.kind == .corrected, "\(texts(got))")
+}
 let clean = typed("wozhen")
 check("拼对了不出纠错", !clean.candidates.prefix(3).contains { $0.kind == .corrected }, "\(texts(clean))")
 for input in ["jintianhenmang", "woxihuanni", "nichifanlema", "zhegedongxihenhaoyong"] {
@@ -265,7 +268,21 @@ let remainder = engine.convert(IMEQuery(mode: .qwerty, input: Array("yaoshi".utf
 check("把之后的余串首选钥匙", remainder.candidates.first?.text == "钥匙", "\(texts(remainder, 8))")
 
 print("原文")
-check("hello 最后有原文", qwerty("hello").candidates.last?.text == "hello", "\(texts(qwerty("hello")))")
+engine.english = EnglishLexicon(url: URL(fileURLWithPath: CommandLine.arguments[1])
+    .deletingLastPathComponent().appendingPathComponent("en_words.tsv"))
+for key in ["hello", "claude", "chatgpt", "iphone", "github", "python", "wifi", "ok", "app"] {
+    let got = typed(key)
+    check("中文模式直接选英文 \(key)", got.candidates.prefix(3).contains { $0.text == key && $0.kind == .english }, "\(texts(got))")
+}
+check("claude 首选直接上屏", typed("claude").candidates.first?.text == "claude")
+check("英文前缀 claud 可选 claude", texts(typed("claud"), 3).contains("claude"))
+check("合法音节 can 仍以中文为首选", typed("can").candidates.first?.kind != .english && texts(typed("can"), 3).contains("can"))
+check("英文原文兜底", qwerty("qqqqqq").candidates.last?.text == "qqqqqq")
+for (key, want) in [("nzgsm", "你在干什么"), ("ncflm", "你吃饭了吗")] {
+    let got = typed(key)
+    check("\(key) 首选及逐字声母", got.candidates.first?.text == want
+          && got.spelling == key.map(String.init).joined(separator: "'"), "\(got.spelling) \(texts(got))")
+}
 check("没有词的字母串也有候选", !qwerty("qqqqqq").candidates.isEmpty)
 
 print("学习")
@@ -362,6 +379,12 @@ for (input, expected) in holdout {
     }
 }
 print("  完全正确 \(right)/\(holdout.count)（这一项只报告，不算失败）")
+
+if CommandLine.arguments.count >= 9 {
+    let args = CommandLine.arguments.map { URL(fileURLWithPath: $0) }
+    try runBenchmark(dictionary: dictionary, resources: args[1].deletingLastPathComponent(),
+                     corpus: args[6], blind: args[7], output: args[8])
+}
 
 print(failures == 0 ? "全部通过" : "有 \(failures) 项失败")
 exit(failures == 0 ? 0 : 1)

@@ -268,7 +268,7 @@ def short_rows(sentences: list[str]):
     return [("qwerty", "".join(lazy_pinyin(sentence)), "", sentence, sentence) for sentence in sentences]
 
 
-def segmented(text: str, frequency: dict[str, int]) -> list[str]:
+def segmented(text: str, frequency: dict[str, int], penalty: float = 12) -> list[str]:
     best = [None] * (len(text) + 1)
     best[0] = (0.0, [])
     for start in range(len(text)):
@@ -279,7 +279,7 @@ def segmented(text: str, frequency: dict[str, int]) -> list[str]:
             value = frequency.get(word)
             if value is None:
                 continue
-            score = best[start][0] + math.log1p(value) - 12
+            score = best[start][0] + math.log1p(value) - penalty
             if best[end] is None or score > best[end][0]:
                 best[end] = (score, best[start][1] + [word])
     return best[-1][1] if best[-1] else []

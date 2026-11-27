@@ -33,6 +33,8 @@ public struct IMECandidate: Identifiable, Sendable, Equatable {
         case emoji
         /// 用户打的原文（hello）。
         case raw
+        /// 中文模式中的英文词或补全。
+        case english
         /// 模糊音命中。
         case fuzzy
         /// 打错字纠正后命中。

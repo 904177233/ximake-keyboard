@@ -14,6 +14,16 @@
       "license": "GPL-3.0",
       "source_sha256": "551cad93c2e74c7325599e0d23afbf71c2d2e57df9af3f8f6fa16d87e60290a3",
       "distribution_note": "未进入 GPL-3.0 安装包；盲集净收益不为正，仅启用多候选"
+    },
+    {
+      "name": "chat_initials",
+      "status": "shipped",
+      "format": "MCB1",
+      "source": "Tatoeba cmn_sentences.tsv.bz2，中文贡献者；词条读音沿用当前 moyu.dict",
+      "url": "https://downloads.tatoeba.org/exports/per_language/cmn/",
+      "license": "CC BY 2.0 FR（句子）；模型仅含统计与现有词典词条",
+      "source_sha256": "262a48cacb7693f6e47a2c4c42f216a5c45dd28b9b62014b159628cc908e8fcc",
+      "build": "tools/dict/chat_model.py --write"
     }
   ],
   "files": {
@@ -24,6 +34,10 @@
     "next.tsv": {
       "bytes": 489617,
       "sha256": "8d3120cb286868d6868bbd2012ebaaa57b3c812cd3b86904df29449eaaebfb61"
+    },
+    "chat_initials.bin": {
+      "bytes": 2221743,
+      "sha256": "a1613baa3ab34bca14da14104969dc3fae9975f8c8a760f843a2bfd828501b62"
     }
   },
   "sources": [

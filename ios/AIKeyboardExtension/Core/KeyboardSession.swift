@@ -827,12 +827,12 @@ final class KeyboardSession: ObservableObject {
         var typed: [(text: String, typed: String)] = []
         for segment in segments {
             let letters = String(segment.raw).lowercased()
-            if !letters.isEmpty, letters != segment.key, letters.allSatisfy({ $0.isASCII && $0.isLetter }) {
+            if !segment.key.isEmpty, !letters.isEmpty, letters != segment.key, letters.allSatisfy({ $0.isASCII && $0.isLetter }) {
                 typed.append((segment.text, letters))
             }
         }
         let allLetters = segments.map { String($0.raw) }.joined().lowercased()
-        if segments.count >= 2, allLetters.allSatisfy({ $0.isASCII && $0.isLetter }),
+        if segments.count >= 2, segments.allSatisfy({ !$0.key.isEmpty }), allLetters.allSatisfy({ $0.isASCII && $0.isLetter }),
            allLetters != segments.map(\.key).joined() {
             typed.append((text, allLetters))
         }

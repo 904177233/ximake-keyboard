@@ -18,6 +18,7 @@
 		EEDFD8E08289CC30C11E3D6A /* StartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5DB5B3FB43356FDF16FEFD8 /* StartView.swift */; };
 		9CA6BA87A27BAB51297D2469 /* VoiceSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 889A79DF32EF3C5280B1378F /* VoiceSessionView.swift */; };
 		10F0A718116F7ECC50E30CEB /* AISuggestionPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0072B30A6D8C1B911E482BEF /* AISuggestionPrompt.swift */; };
+		C8AD5FD8E3EE435EEDBCD394 /* ChatInitialsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48A206E93C0846608E093CF8 /* ChatInitialsModel.swift */; };
 		3EFAC17AD45DE3F75A743760 /* ContextualSeedTemplates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9939316CA31AB3076553567F /* ContextualSeedTemplates.swift */; };
 		95D7CA40851062E930CDE30F /* ContextualSuggestion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80072FDA1FC064C72F38FC69 /* ContextualSuggestion.swift */; };
 		3C3C8B2D2C0AE5FACCA6F2A1 /* EnglishLexicon.swift in Sources */ = {isa = PBXBuildFile; fileRef = F68A80DD5AFBC8EA6E279F4F /* EnglishLexicon.swift */; };
@@ -95,6 +96,7 @@
 		8E45630282DD93734E0DBA0E /* SettingsPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0645590BEA5C5ECBC6AB296E /* SettingsPanelView.swift */; };
 		07B639B4FA2A239FE72A8059 /* SymbolPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DB25E8AF940AE743C339B63 /* SymbolPanelView.swift */; };
 		7E7ACB7EEB03ED7ABBD67DC8 /* AISuggestionPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0072B30A6D8C1B911E482BEF /* AISuggestionPrompt.swift */; };
+		1670299CEAC777B7FD29A08E /* ChatInitialsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48A206E93C0846608E093CF8 /* ChatInitialsModel.swift */; };
 		2648174532A42FC94FECE735 /* ContextualSeedTemplates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9939316CA31AB3076553567F /* ContextualSeedTemplates.swift */; };
 		F8E8C4B0FEFCFBC236229136 /* ContextualSuggestion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80072FDA1FC064C72F38FC69 /* ContextualSuggestion.swift */; };
 		FD92F4D10CF44B5CCD7AB656 /* EnglishLexicon.swift in Sources */ = {isa = PBXBuildFile; fileRef = F68A80DD5AFBC8EA6E279F4F /* EnglishLexicon.swift */; };
@@ -225,6 +227,7 @@
 		DCD4D069D0B5DF79008B0142 /* 扩展心跳契约.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "Config/扩展心跳契约.md"; sourceTree = SOURCE_ROOT; };
 		2B8A8F20CB99CE391C782335 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Resources/Assets.xcassets; sourceTree = SOURCE_ROOT; };
 		0072B30A6D8C1B911E482BEF /* AISuggestionPrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/AISuggestionPrompt.swift; sourceTree = SOURCE_ROOT; };
+		48A206E93C0846608E093CF8 /* ChatInitialsModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/ChatInitialsModel.swift; sourceTree = SOURCE_ROOT; };
 		9939316CA31AB3076553567F /* ContextualSeedTemplates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/ContextualSeedTemplates.swift; sourceTree = SOURCE_ROOT; };
 		80072FDA1FC064C72F38FC69 /* ContextualSuggestion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/ContextualSuggestion.swift; sourceTree = SOURCE_ROOT; };
 		F68A80DD5AFBC8EA6E279F4F /* EnglishLexicon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/IMECore/EnglishLexicon.swift; sourceTree = SOURCE_ROOT; };
@@ -449,6 +452,7 @@
 			isa = PBXGroup;
 			children = (
 				0072B30A6D8C1B911E482BEF /* AISuggestionPrompt.swift */,
+				48A206E93C0846608E093CF8 /* ChatInitialsModel.swift */,
 				9939316CA31AB3076553567F /* ContextualSeedTemplates.swift */,
 				80072FDA1FC064C72F38FC69 /* ContextualSuggestion.swift */,
 				F68A80DD5AFBC8EA6E279F4F /* EnglishLexicon.swift */,
@@ -690,6 +694,7 @@
 				EEDFD8E08289CC30C11E3D6A /* StartView.swift in Sources */,
 				9CA6BA87A27BAB51297D2469 /* VoiceSessionView.swift in Sources */,
 				10F0A718116F7ECC50E30CEB /* AISuggestionPrompt.swift in Sources */,
+				C8AD5FD8E3EE435EEDBCD394 /* ChatInitialsModel.swift in Sources */,
 				3EFAC17AD45DE3F75A743760 /* ContextualSeedTemplates.swift in Sources */,
 				95D7CA40851062E930CDE30F /* ContextualSuggestion.swift in Sources */,
 				3C3C8B2D2C0AE5FACCA6F2A1 /* EnglishLexicon.swift in Sources */,
@@ -774,6 +779,7 @@
 				8E45630282DD93734E0DBA0E /* SettingsPanelView.swift in Sources */,
 				07B639B4FA2A239FE72A8059 /* SymbolPanelView.swift in Sources */,
 				7E7ACB7EEB03ED7ABBD67DC8 /* AISuggestionPrompt.swift in Sources */,
+				1670299CEAC777B7FD29A08E /* ChatInitialsModel.swift in Sources */,
 				2648174532A42FC94FECE735 /* ContextualSeedTemplates.swift in Sources */,
 				F8E8C4B0FEFCFBC236229136 /* ContextualSuggestion.swift in Sources */,
 				FD92F4D10CF44B5CCD7AB656 /* EnglishLexicon.swift in Sources */,

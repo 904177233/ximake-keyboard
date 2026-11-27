@@ -1037,6 +1037,14 @@ def main() -> int:
 
     dictionary_path = OUT_DIR / "moyu.dict"
     next_path = OUT_DIR / "next.tsv"
+    model_files = {}
+    models = []
+    chat_model_path = OUT_DIR / "chat_initials.bin"
+    if chat_model_path.exists():
+        from chat_model import metadata
+        models.append(metadata())
+        model_files[chat_model_path.name] = {"bytes": chat_model_path.stat().st_size,
+                                            "sha256": hashlib.sha256(chat_model_path.read_bytes()).hexdigest()}
     (OUT_DIR / "dict_meta.json").write_text(json.dumps({
         "version": DICT_VERSION,
         "generated_at": GENERATED_DATE,
@@ -1054,8 +1062,9 @@ def main() -> int:
                 "source_sha256": hashlib.sha256(RIME_ICE.read_bytes()).hexdigest() if RIME_ICE.exists() else None,
                 "distribution_note": "未进入 GPL-3.0 安装包；盲集净收益不为正，仅启用多候选",
             }
-        ],
+        ] + models,
         "files": {
+            **model_files,
             "moyu.dict": {"bytes": dictionary_path.stat().st_size,
                           "sha256": hashlib.sha256(dictionary_path.read_bytes()).hexdigest()},
             "next.tsv": {"bytes": next_path.stat().st_size,
